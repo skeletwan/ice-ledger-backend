@@ -56,12 +56,25 @@
   </style>
 </head>
 <body>
+  <section class="page on" id="authPage" style="padding:16px">
+    <h1>Ice <span style="color:var(--ice)">Ledger</span></h1>
+    <p class="muted">Create an account so the binder lives on the server, not only this phone.</p>
+    <label>Email</label>
+    <input id="email" type="email" autocomplete="email" />
+    <label>Password (6+ characters)</label>
+    <input id="password" type="password" autocomplete="new-password" />
+    <button id="signupBtn">Create account</button>
+    <button class="ghost" id="loginBtn">Sign in</button>
+    <p class="status" id="authStatus"></p>
+  </section>
+  <div id="appShell" class="hidden">
   <div class="ticker" id="ticker"></div>
   <header>
     <h1>Ice <span>Ledger</span></h1>
     <nav>
       <button class="ghost" id="tabScan">Scan</button>
       <button class="ghost" id="tabBind">Binder</button>
+      <button class="ghost" id="logoutBtn">Out</button>
     </nav>
   </header>
 
@@ -130,10 +143,46 @@
     <div id="list"></div>
     <button class="ghost" id="exportBtn">Export JSON</button>
   </section>
+  </div>
 
 <script>
 const $ = id => document.getElementById(id);
 const KEY = "ice-binder-v1";
+const TOK = "ice-token";
+function token(){ return localStorage.getItem(TOK) || ""; }
+function setToken(t){ if (t) localStorage.setItem(TOK, t); else localStorage.removeItem(TOK); }
+function showApp(){
+  $("authPage").classList.remove("on");
+  $("authPage").classList.add("hidden");
+  $("appShell").classList.remove("hidden");
+  paintTicker(); renderBinder();
+}
+async function authPost(path, body){
+  const r = await fetch(path, { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(body) });
+  const t = await r.text();
+  if (!r.ok) throw new Error(t.slice(0,180));
+  return JSON.parse(t);
+}
+async function pullCloud(){
+  if (!token()) return;
+  const r = await fetch("/cards", { headers:{ "x-token": token() } });
+  if (!r.ok) return;
+  const data = await r.json();
+  const remote = data.cards || [];
+  const local = load();
+  const map = {};
+  local.concat(remote).forEach(c => { if (c && c.id) map[c.id] = c; });
+  localStorage.setItem(KEY, JSON.stringify(Object.values(map)));
+}
+async function pushCard(card){
+  if (!token()) return;
+  await fetch("/cards", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json", "x-token": token() },
+    body: JSON.stringify({ card })
+  });
+}
+/* session restore runs at bottom */
 const dash = v => (v==null || v==="") ? "—" : String(v);
 const money = n => n==null || n==="" || isNaN(+n) ? "—" : "$"+Number(n).toLocaleString("en-CA",{minimumFractionDigits:0,maximumFractionDigits:0});
 let last = null, scanData = null, bindData = null, frontFile = null, backFile = null;
@@ -335,11 +384,14 @@ async function lookupComp(){
   const ct = await cr.text();
   if (!cr.ok) throw new Error(ct.slice(0,200));
   const c = JSON.parse(ct);
-  const sug = c.suggested_cad != null ? c.suggested_cad : c.suggested_usd;
+  let sug = c.suggested_cad != null ? c.suggested_cad : c.suggested_usd;
+  if (sug == null && c.low != null && c.high != null) sug = Math.round((+c.low + +c.high) / 2);
+  if (sug == null && c.low != null) sug = c.low;
   if (sug != null) $("comp").value = sug;
-  $("compNote").textContent = (c.summary || "") + (c.needs_review ? " — check this before you trust it." : "");
-  $("status").textContent = sug != null ? "Comps updated from the fields above. Save if it looks right." : "No number returned. Open Sold / 130point and type it.";
-  $("status").className = "status" + (c.needs_review ? " warn" : "");
+  const range = (c.low != null || c.high != null) ? (" Range " + (c.low ?? "?") + "–" + (c.high ?? "?") + ".") : "";
+  $("compNote").textContent = (c.summary || c.error || "") + range + (c.needs_review ? " Check before you trust it." : "");
+  $("status").textContent = sug != null ? "Sold comp filled. Edit if wrong, then Save." : "Still no auto price. Open Sold / 130point and type it.";
+  $("status").className = "status" + ((c.needs_review || !sug) ? " warn" : "");
 }
 $("refreshComp").onclick = async ev => {
   ev.preventDefault();
@@ -364,9 +416,11 @@ async function loadPhotos(){
     $("photoStrip").innerHTML = "<p class=\"muted\">No web photos found. Use your scan or paste a URL.</p>";
     return;
   }
-  $("photoStrip").innerHTML = imgs.map((im,i) =>
-    "<img data-url=\""+im.url.replace(/\"/g,"")+"\" src=\""+im.url.replace(/\"/g,"")+"\" alt=\""+(im.label||"card")+"\" />"
-  ).join("");
+  $("photoStrip").innerHTML = imgs.map(im => {
+    const u = String(im.url || "").replace(/"/g, "");
+    const src = "/img-proxy?url=" + encodeURIComponent(u);
+    return "<img data-url=\""+src+"\" data-orig=\""+u+"\" src=\""+src+"\" alt=\"ebay\" onerror=\"this.remove()\" />";
+  }).join("");
 }
 $("photoStrip").onclick = e => {
   const img = e.target.closest("img[data-url]");
@@ -400,6 +454,7 @@ $("saveBtn").onclick = () => {
     added: new Date().toISOString()
   });
   saveAll(cards);
+  pushCard(cards[0]).catch(()=>{});
   $("status").textContent = "Saved. Ticker updated.";
   clearIdFields();
   frontFile = null; backFile = null; scanData = null; bindData = null;
@@ -446,6 +501,7 @@ $("list").onclick = e => {
   if (!id) return;
   if (!confirm("Remove this card?")) return;
   saveAll(load().filter(c => c.id !== id));
+  if (token()) fetch("/cards/"+id, { method:"DELETE", headers:{ "x-token": token() } });
 };
 $("list").onchange = e => {
   const costId = e.target.getAttribute("data-cost");
@@ -471,6 +527,20 @@ $("exportBtn").onclick = () => {
   a.download = "ice-ledger-binder.json";
   a.click();
 };
+$("signupBtn").onclick = async () => {
+  try {
+    const d = await authPost("/signup", { email:$("email").value, password:$("password").value });
+    setToken(d.token); showApp(); await pullCloud(); paintTicker(); renderBinder();
+  } catch(e) { $("authStatus").textContent = e.message; $("authStatus").className = "status err"; }
+};
+$("loginBtn").onclick = async () => {
+  try {
+    const d = await authPost("/login", { email:$("email").value, password:$("password").value });
+    setToken(d.token); showApp(); await pullCloud(); paintTicker(); renderBinder();
+  } catch(e) { $("authStatus").textContent = e.message; $("authStatus").className = "status err"; }
+};
+$("logoutBtn").onclick = () => { setToken(""); location.reload(); };
+if (token()) { $("authPage").classList.add("hidden"); $("authPage").classList.remove("on"); showApp(); pullCloud().then(() => { paintTicker(); renderBinder(); }); }
 paintTicker();
 renderBinder();
 </script>
