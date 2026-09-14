@@ -1,7 +1,9 @@
 import os, json, base64, time
 from io import BytesIO
-from fastapi import FastAPI, UploadFile, File, Header, HTTPException
+from fastapi import FastAPI, UploadFile, File, Header, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, FileResponse
+from pathlib import Path
 from PIL import Image
 import httpx
 
@@ -49,9 +51,18 @@ If a field is not readable, use null. Do not invent a rare parallel.
 confidence is 0 to 1. Set needs_review true if any important field is under 0.7 or parallel is uncertain.
 """
 
+ROOT = Path(__file__).parent
+
 def check_secret(secret: str | None):
     if APP_SECRET and secret != APP_SECRET:
         raise HTTPException(401, "bad secret")
+
+@app.get("/", response_class=HTMLResponse)
+def home():
+    page = ROOT / "app.html"
+    if page.exists():
+        return FileResponse(page)
+    return HTMLResponse("<p>app.html missing</p>")
 
 def check_cap():
     day = time.strftime("%Y-%m-%d")
@@ -76,8 +87,9 @@ def health():
 async def identify(
     file: UploadFile = File(...),
     x_app_secret: str | None = Header(default=None),
+    secret: str | None = Form(default=None),
 ):
-    check_secret(x_app_secret)
+    check_secret(x_app_secret or secret)
     if not XAI_API_KEY:
         raise HTTPException(500, "XAI_API_KEY not set on server")
     check_cap()

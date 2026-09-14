@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ice Ledger Scan</title>
+  <style>
+    body { font-family:-apple-system,sans-serif; background:#0b0f14; color:#e8eef6; margin:0; padding:16px; }
+    input, button, pre { font:inherit; }
+    input { width:100%; padding:10px; margin:6px 0 12px; background:#121820; color:#fff; border:1px solid #2a3544; border-radius:8px; }
+    button { background:#3d8fb0; color:#fff; border:0; padding:12px; border-radius:8px; font-weight:700; width:100%; }
+    pre { white-space:pre-wrap; background:#171e28; padding:12px; border-radius:8px; }
+    .muted { color:#8b9bb0; font-size:13px; }
+  </style>
+</head>
+<body>
+  <h1>Ice Ledger Scan</h1>
+  <p class="muted">Open this page in Safari. Take the photo in Camera first, then choose it here.</p>
+  <label>App secret</label>
+  <input id="secret" value="UnderoathA1!" />
+  <input id="file" type="file" accept="image/*" />
+  <button id="go">Identify</button>
+  <p class="muted" id="status"></p>
+  <pre id="out"></pre>
+<script>
+const $ = id => document.getElementById(id);
+$("go").onclick = async () => {
+  const f = $("file").files[0];
+  if (!f) { $("status").textContent = "Pick a photo first."; return; }
+  $("status").textContent = "Working…";
+  $("out").textContent = "";
+  const fd = new FormData();
+  fd.append("file", f);
+  fd.append("secret", $("secret").value);
+  try {
+    const r = await fetch("/identify", { method:"POST", body: fd });
+    const t = await r.text();
+    $("status").textContent = r.ok ? "Done. Check the fields." : "Error " + r.status;
+    $("out").textContent = t;
+  } catch (e) {
+    $("status").textContent = "Failed: " + e.message;
+  }
+};
+</script>
+</body>
+</html>
