@@ -156,6 +156,10 @@ Return ONLY JSON, no markdown:
 {{
   "suggested_cad": number|null,
   "suggested_usd": number|null,
+  "raw_cad": number|null,
+  "psa8_cad": number|null,
+  "psa9_cad": number|null,
+  "psa10_cad": number|null,
   "low": number|null,
   "high": number|null,
   "currency": "CAD"|"USD"|null,
