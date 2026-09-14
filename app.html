@@ -17,11 +17,19 @@
     .spark { display:block; width:100%; height:88px; background:#10161d; }
     .ranges { display:flex; gap:4px; padding:4px 10px 8px; background:#10161d; border-bottom:1px solid var(--line); }
     .ranges button { width:auto; margin:0; padding:5px 8px; font-size:11px; letter-spacing:.04em; }
-    .ticker { display:grid; grid-template-columns:repeat(3,1fr); gap:0; border-bottom:0; background:#10161d; }
-    .tick { padding:10px 8px; text-align:center; border-right:1px solid var(--line); }
-    .tick:last-child { border-right:0; }
-    .tick b { display:block; font-size:16px; }
-    .tick span { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+    .ticker { padding:8px 14px 10px; background:#10161d; }
+    .quote { display:flex; align-items:flex-end; gap:12px; flex-wrap:wrap; }
+    .quote-last { font-size:32px; font-weight:700; letter-spacing:-0.03em; line-height:1; }
+    .quote-chg { font-size:16px; font-weight:700; padding-bottom:4px; }
+    .quote-meta { font-size:11px; color:var(--muted); margin-top:4px; }
+    .quote-stats { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-top:10px; }
+    .qs { background:#0e171e; border:1px solid var(--line); border-radius:10px; padding:8px 6px; text-align:center; }
+    .qs b { display:block; font-size:16px; }
+    .qs span { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+    .range-row { display:grid; grid-template-columns:auto 1fr auto; gap:8px; align-items:center; margin-top:10px; font-size:11px; color:var(--muted); }
+    .range-track { height:6px; background:#24303a; border-radius:99px; position:relative; }
+    .range-fill { position:absolute; left:0; top:0; bottom:0; background:#3d5a6a; border-radius:99px; }
+    .range-dot { position:absolute; top:-3px; width:12px; height:12px; margin-left:-6px; border-radius:50%; background:var(--ice); border:2px solid #10161d; }
     .pos { color:var(--good); } .neg { color:var(--bad); }
     header { padding:12px 16px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; }
     h1 { font-size:18px; margin:0; } h1 span { color:var(--ice); }
@@ -449,16 +457,32 @@ function paintTicker(){
   const t = totals();
   if (t.mktN) pushHist(t.mkt);
   const hist = loadHist();
+  const slice = histForRange();
   const prev = hist.length>=2 ? hist[hist.length-2].v : null;
   const ch = (t.mktN && prev!=null) ? t.mkt - prev : null;
   const pct = (ch!=null && prev) ? (ch/prev*100) : null;
   const chCls = ch==null ? "" : (ch>=0 ? "pos" : "neg");
-  const chTxt = ch==null ? "—" : ((ch>=0?"+":"")+money(Math.abs(ch))+(pct!=null?" ("+(pct>=0?"+":"")+pct.toFixed(1)+"%)":""));
+  const chTxt = ch==null ? "—" : ((ch>=0?"+":"−")+money(Math.abs(ch)).replace(/^C\$|^US\$/,"")+(pct!=null?"  "+(pct>=0?"+":"")+pct.toFixed(2)+"%":""));
+  const lows = slice.map(x => x.v);
+  const lo = lows.length ? Math.min.apply(null, lows) : t.mkt;
+  const hi = lows.length ? Math.max.apply(null, lows) : t.mkt;
+  const span = (hi-lo) || 1;
+  const pctPos = t.mktN ? Math.max(0, Math.min(100, ((t.mkt-lo)/span)*100)) : 50;
   const plCls = t.pl==null ? "" : (t.pl>=0 ? "pos" : "neg");
+  const last = t.mktN ? money(t.mkt) : "—";
   $("ticker").innerHTML =
-    "<div class=\"tick\"><b>"+(t.mktN?money(t.mkt):"—")+"</b><span>Book "+fx()+" · "+t.mktN+"/"+t.cards+"</span></div>"+
-    "<div class=\"tick\"><b class=\""+chCls+"\">"+chTxt+"</b><span>Change vs last snapshot</span></div>"+
-    "<div class=\"tick\"><b class=\""+plCls+"\">"+(t.pl==null?"—":money(t.pl))+"</b><span>P/L · paid "+(t.paidN?money(t.paid):"—")+"</span></div>";
+    "<div class=\"quote\"><div class=\"quote-last "+(chCls)+"\">"+last+"</div>"+
+    "<div class=\"quote-chg "+chCls+"\">"+chTxt+"</div></div>"+
+    "<div class=\"quote-stats\">"+
+    "<div class=\"qs\"><b>"+(t.mktN?money(t.mkt):"—")+"</b><span>Book · "+t.mktN+"/"+t.cards+"</span></div>"+
+    "<div class=\"qs\"><b>"+(t.paidN?money(t.paid):"—")+"</b><span>Paid · "+t.paidN+"/"+t.cards+"</span></div>"+
+    "<div class=\"qs\"><b class=\""+plCls+"\">"+(t.pl==null?"—":((t.pl>=0?"+":"")+money(Math.abs(t.pl))))+"</b><span>Up / down</span></div>"+
+    "</div>"+
+    "<div class=\"range-row\"><span>"+money(lo)+"</span>"+
+    "<div class=\"range-track\"><div class=\"range-fill\" style=\"width:"+pctPos+"%\"></div>"+
+    "<div class=\"range-dot\" style=\"left:"+pctPos+"%\"></div></div>"+
+    "<span>"+money(hi)+"</span></div>"+
+    "<div class=\"quote-meta\">"+rangeKey()+" range · dot is where the binder sits</div>";
   if ($("fxCAD")) {
     $("fxCAD").classList.toggle("on", fx()==="CAD");
     $("fxUSD").classList.toggle("on", fx()==="USD");
@@ -676,7 +700,12 @@ async function lookupComp(){
   let sug = c.suggested_cad != null ? c.suggested_cad : c.suggested_usd;
   if (sug == null && c.low != null && c.high != null) sug = Math.round((+c.low + +c.high) / 2);
   if (sug == null && c.low != null) sug = c.low;
-  if (sug != null) $("comp").value = sug;
+  const cardNo = parseFloat(String($("f_number").value||"").replace("#",""));
+  if (sug != null && !(cardNo && Math.abs(+sug - cardNo) < 0.001)) $("comp").value = sug;
+  else if (sug != null && cardNo && Math.abs(+sug - cardNo) < 0.001) {
+    $("comp").value = "";
+    c.summary = (c.summary||"") + " Ignored value that matched card #.";
+  }
   if (c.raw_cad != null) $("rawComp").value = c.raw_cad;
   if (c.psa8_cad != null) $("psa8Comp").value = c.psa8_cad;
   if (c.psa9_cad != null) $("psa9Comp").value = c.psa9_cad;
