@@ -26,12 +26,14 @@ PROMPT = """Identify this hockey trading card. Return ONLY JSON, no markdown.
 You may get a FRONT image and sometimes a BACK image. Use the back for year, set, card number, copyright line.
 If it is a graded slab, read the label first. If raw, use front for player/parallel and back for set/year/number.
 If a field is not readable, use null. Do not invent a rare parallel.
+insert examples: Young Guns, SP Authentic, Exclusives, Canvas, Clear Cut, base, insert.
 {
   "player": string|null,
   "year": string|null,
   "set": string|null,
   "number": string|null,
   "parallel": string|null,
+  "insert": string|null,
   "team": string|null,
   "grader": "Raw"|"PSA"|"BGS"|"SGC"|"CGC"|null,
   "grade": string|null,
@@ -42,6 +44,7 @@ If a field is not readable, use null. Do not invent a rare parallel.
     "set": number,
     "number": number,
     "parallel": number,
+    "insert": number,
     "grader": number,
     "grade": number,
     "cert": number
@@ -144,10 +147,10 @@ async def identify(
 
 
 COMP_MODEL = os.environ.get("COMP_MODEL", "grok-4-1-fast-reasoning")
-COMP_PROMPT = """Find recent SOLD prices (not asking prices) for this exact hockey card.
-Use eBay sold/completed and 130point if possible.
+COMP_PROMPT = """Search recent SOLD / completed hockey card sales for this exact card (not asking prices).
+Prefer eBay sold and 130point.com.
 Card: {card}
-Return ONLY JSON:
+Return ONLY JSON, no markdown:
 {{
   "suggested_cad": number|null,
   "suggested_usd": number|null,
@@ -160,25 +163,43 @@ Return ONLY JSON:
   "summary": string,
   "sources": [string]
 }}
-suggested_cad is your best single number in Canadian dollars if you can convert; otherwise null.
-Do not use listing ask prices. If solds don't match the parallel or grade, needs_review true and suggested_cad null.
+Give a number if you find any matching solds. Convert USD to CAD around 1.35 if needed for suggested_cad.
+If solds are mixed grades or parallels, still give a range and set needs_review true.
 """
 
 def _extract_response_text(body: dict) -> str:
-    if "output_text" in body and body["output_text"]:
+    if isinstance(body.get("output_text"), str) and body["output_text"]:
         return body["output_text"]
     chunks = []
     for item in body.get("output") or []:
+        if not isinstance(item, dict):
+            continue
         if item.get("type") == "message":
             for c in item.get("content") or []:
-                if c.get("type") in ("output_text", "text") and c.get("text"):
+                if isinstance(c, dict) and c.get("text"):
                     chunks.append(c["text"])
+        if item.get("type") == "output_text" and item.get("text"):
+            chunks.append(item["text"])
     if chunks:
         return "\n".join(chunks)
     try:
-        return body["choices"][0]["message"]["content"]
+        return body["choices"][0]["message"]["content"] or ""
     except Exception:
-        return ""
+        return json.dumps(body)[:2000]
+
+def _parse_json_blob(text: str) -> dict:
+    text = (text or "").strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[-1]
+        if text.endswith("```"):
+            text = text[: text.rfind("```")]
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        start, end = text.find("{"), text.rfind("}")
+        if start >= 0 and end > start:
+            return json.loads(text[start:end+1])
+        raise
 
 @app.post("/comp")
 async def comp(
@@ -189,31 +210,116 @@ async def comp(
     if not XAI_API_KEY:
         raise HTTPException(500, "XAI_API_KEY not set on server")
     check_cap()
-    card = {k: payload.get(k) for k in ("player","year","set","number","parallel","team","grader","grade","cert")}
+    card = {k: payload.get(k) for k in ("player","year","set","number","parallel","insert","team","grader","grade","cert")}
     label = ", ".join(f"{k}={v}" for k,v in card.items() if v)
-    req = {
-        "model": COMP_MODEL,
-        "tools": [{"type": "web_search", "allowed_domains": ["ebay.ca","ebay.com","130point.com","psacard.com"]}],
-        "input": COMP_PROMPT.format(card=label),
-    }
+    headers = {"Authorization": f"Bearer {XAI_API_KEY}", "Content-Type": "application/json"}
+    text = ""
+    used = COMP_MODEL
     async with httpx.AsyncClient(timeout=120) as client:
         r = await client.post(
             "https://api.x.ai/v1/responses",
-            headers={"Authorization": f"Bearer {XAI_API_KEY}", "Content-Type": "application/json"},
-            json=req,
+            headers=headers,
+            json={
+                "model": COMP_MODEL,
+                "tools": [{"type": "web_search"}],
+                "input": COMP_PROMPT.format(card=label),
+            },
         )
-    if r.status_code >= 400:
-        raise HTTPException(502, f"xAI comp error {r.status_code}: {r.text[:400]}")
-    text = _extract_response_text(r.json()).strip()
-    if text.startswith("```"):
-        text = text.split("\n", 1)[-1]
-        if text.endswith("```"):
-            text = text[: text.rfind("```")]
+        if r.status_code >= 400:
+            r2 = await client.post(
+                "https://api.x.ai/v1/chat/completions",
+                headers=headers,
+                json={
+                    "model": MODEL,
+                    "temperature": 0,
+                    "messages": [{"role": "user", "content": COMP_PROMPT.format(card=label)}],
+                },
+            )
+            if r2.status_code >= 400:
+                raise HTTPException(502, f"xAI comp error {r.status_code}: {r.text[:300]}")
+            used = MODEL
+            text = _extract_response_text(r2.json()).strip()
+        else:
+            text = _extract_response_text(r.json()).strip()
     try:
-        data = json.loads(text)
+        data = _parse_json_blob(text)
     except json.JSONDecodeError:
         raise HTTPException(502, "comp did not return JSON")
-    data["model"] = COMP_MODEL
+    data["model"] = used
     data["card"] = card
     return data
+
+
+PHOTO_PROMPT = """Search the web for listing photos of this exact hockey card.
+Card: {card}
+Return ONLY JSON:
+{{ "images": [ {{ "url": "https://...", "label": "short source" }} ] }}
+Give 6-10 direct image URLs (jpg/png/webp) of the card itself, not random players or logos.
+Prefer eBay listing photos and PSA slab photos. Skip ads.
+"""
+
+def _urls_from_obj(obj, found):
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if k in ("url", "image_url", "src") and isinstance(v, str) and v.startswith("http"):
+                found.append(v)
+            else:
+                _urls_from_obj(v, found)
+    elif isinstance(obj, list):
+        for v in obj:
+            _urls_from_obj(v, found)
+    elif isinstance(obj, str) and obj.startswith("http") and any(obj.lower().endswith(x) or x in obj.lower() for x in (".jpg", ".jpeg", ".png", ".webp", "ebayimg", "i.ebay")):
+        found.append(obj)
+
+@app.post("/photos")
+async def photos(
+    payload: dict,
+    x_app_secret: str | None = Header(default=None),
+):
+    check_secret(x_app_secret or payload.get("secret"))
+    if not XAI_API_KEY:
+        raise HTTPException(500, "XAI_API_KEY not set on server")
+    check_cap()
+    card = {k: payload.get(k) for k in ("player","year","set","number","parallel","insert","team","grader","grade","cert")}
+    label = ", ".join(f"{k}={v}" for k,v in card.items() if v)
+    headers = {"Authorization": f"Bearer {XAI_API_KEY}", "Content-Type": "application/json"}
+    async with httpx.AsyncClient(timeout=120) as client:
+        r = await client.post(
+            "https://api.x.ai/v1/responses",
+            headers=headers,
+            json={
+                "model": COMP_MODEL,
+                "tools": [{"type": "web_search", "enable_image_search": True}],
+                "input": PHOTO_PROMPT.format(card=label),
+            },
+        )
+    if r.status_code >= 400:
+        raise HTTPException(502, f"xAI photo error {r.status_code}: {r.text[:300]}")
+    body = r.json()
+    text = _extract_response_text(body)
+    images = []
+    try:
+        parsed = _parse_json_blob(text)
+        for item in parsed.get("images") or []:
+            if isinstance(item, str) and item.startswith("http"):
+                images.append({"url": item, "label": ""})
+            elif isinstance(item, dict) and str(item.get("url","")).startswith("http"):
+                images.append({"url": item["url"], "label": item.get("label") or ""})
+    except Exception:
+        pass
+    extra = []
+    _urls_from_obj(body, extra)
+    _urls_from_obj(text, extra)
+    for u in extra:
+        if u.startswith("http") and not any(x["url"] == u for x in images):
+            images.append({"url": u, "label": ""})
+    clean = []
+    for im in images:
+        u = im["url"].split("?")[0] if "google.com" in im["url"] else im["url"]
+        if any(bad in u.lower() for bad in ("logo", "favicon", "sprite", "1x1")):
+            continue
+        clean.append(im)
+        if len(clean) >= 12:
+            break
+    return {"images": clean, "query": label}
 

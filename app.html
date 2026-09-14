@@ -49,6 +49,9 @@
     .px { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin-top:8px; }
     .px label { margin-top:0; }
     .hidden { display:none; }
+    .strip { display:flex; gap:8px; overflow-x:auto; -webkit-overflow-scrolling:touch; padding:8px 0 12px; }
+    .strip img { width:88px; height:88px; object-fit:contain; background:#000; border-radius:8px; border:2px solid var(--line); flex:0 0 auto; }
+    .strip img.on { border-color: var(--ice); }
     .stale { font-size:11px; color:var(--warn); margin-top:6px; }
   </style>
 </head>
@@ -85,7 +88,8 @@
         <div class="field"><label>Year</label><input id="f_year" /></div>
         <div class="field"><label>Set</label><input id="f_set" /></div>
         <div class="field"><label>Number</label><input id="f_number" /></div>
-        <div class="field"><label>Parallel</label><input id="f_parallel" placeholder="Base, Young Guns, Gold /10…" /></div>
+        <div class="field"><label>Parallel</label><input id="f_parallel" placeholder="Gold /10, Rainbow, Base…" /></div>
+        <div class="field"><label>Insert / subset</label><input id="f_insert" placeholder="Young Guns, Canvas, SP…" /></div>
         <div class="field"><label>Team</label><input id="f_team" /></div>
         <div class="field"><label>Grader</label>
           <select id="f_grader"><option>Raw</option><option>PSA</option><option>BGS</option><option>SGC</option><option>CGC</option></select>
@@ -97,7 +101,13 @@
         <a class="ghost btn" id="gImg" target="_blank" rel="noopener">Google Images</a>
         <a class="ghost btn" id="ebay" target="_blank" rel="noopener">eBay sold</a>
       </div>
+      <a class="ghost btn" id="pt130" target="_blank" rel="noopener">130point sold</a>
       <a class="ghost btn hidden" id="psa" target="_blank" rel="noopener">PSA cert</a>
+      <button id="refreshComp">Update comps</button>
+      <label>Pick a web photo</label>
+      <p class="muted">Scroll sideways and tap one for the binder. Your scan stays unless you pick.</p>
+      <div class="strip" id="photoStrip"></div>
+      <button class="ghost" id="refreshPhotos">Find more photos</button>
       <label>Optional cleaner binder photo</label>
       <input id="bindFile" type="file" accept="image/*" />
       <label>Or image URL</label>
@@ -126,7 +136,7 @@ const $ = id => document.getElementById(id);
 const KEY = "ice-binder-v1";
 const dash = v => (v==null || v==="") ? "—" : String(v);
 const money = n => n==null || n==="" || isNaN(+n) ? "—" : "$"+Number(n).toLocaleString("en-CA",{minimumFractionDigits:0,maximumFractionDigits:0});
-let last = null, scanData = null, bindData = null, backFile = null;
+let last = null, scanData = null, bindData = null, frontFile = null, backFile = null;
 
 function load(){ try { return JSON.parse(localStorage.getItem(KEY)||"[]"); } catch(e){ return []; } }
 function saveAll(cards){ localStorage.setItem(KEY, JSON.stringify(cards)); paintTicker(); renderBinder(); }
@@ -160,7 +170,7 @@ function paintTicker(){
     "<div class=\"tick\"><b class=\""+plCls+"\">"+pl+"</b><span>P/L on known costs</span></div>";
 }
 function qstr(d){
-  return encodeURIComponent([d.year,d.player,d.set,d.number,d.parallel].filter(Boolean).join(" "));
+  return encodeURIComponent([d.year,d.player,d.set,d.number,d.insert,d.parallel].filter(Boolean).join(" "));
 }
 function daysAgo(iso){
   if (!iso) return null;
@@ -184,33 +194,39 @@ function toJpeg(file, max){
   });
 }
 
-function resetIdForm(){
+function clearIdFields(){
   last = null;
-  ["f_player","f_year","f_set","f_number","f_parallel","f_team","f_grade","f_cert","comp","cost","notes"].forEach(id => { if($(id)) $(id).value = ""; });
+  ["f_player","f_year","f_set","f_number","f_parallel","f_insert","f_team","f_grade","f_cert","comp","cost","notes"].forEach(id => { if($(id)) $(id).value = ""; });
   if ($("f_grader")) $("f_grader").value = "Raw";
   $("compNote").textContent = "";
   $("result").classList.add("hidden");
-  backFile = null;
-  if ($("backBox")) $("backBox").classList.add("hidden");
 }
 $("file").onchange = async () => {
   const f = $("file").files[0];
   if (!f) return;
-  resetIdForm();
+  frontFile = f;
+  clearIdFields();
   bindData = null;
   $("bindBox").classList.add("hidden");
   scanData = await toJpeg(f, 900);
-  $("scanImg").src = scanData;
+  $("scanImg").src = scanData || URL.createObjectURL(f);
   $("scanBox").classList.remove("hidden");
-  $("status").textContent = "Front loaded. Add the back on raws, then Identify.";
+  $("status").textContent = backFile
+    ? "New front loaded. Back is still attached. Identify when ready."
+    : "Front loaded. Add the back on raws, then Identify.";
+  $("file").value = "";
 };
 $("fileBack").onchange = async () => {
   const f = $("fileBack").files[0];
   if (!f) return;
   backFile = f;
   const data = await toJpeg(f, 900);
-  $("backImg").src = data;
+  $("backImg").src = data || URL.createObjectURL(f);
   $("backBox").classList.remove("hidden");
+  $("status").textContent = frontFile
+    ? "Back loaded. Front is still attached. Identify when ready."
+    : "Back loaded. Add the front, then Identify.";
+  $("fileBack").value = "";
 };
 $("bindFile").onchange = async () => {
   const f = $("bindFile").files[0];
@@ -234,15 +250,14 @@ $("useScan").onclick = ev => {
 };
 
 $("go").onclick = async () => {
-  const f = $("file").files[0];
-  if (!f) { $("status").textContent = "Pick a photo first."; $("status").className = "status err"; return; }
+  if (!frontFile) { $("status").textContent = "Pick a front photo first."; $("status").className = "status err"; return; }
   $("go").disabled = true;
   $("status").className = "status";
-  $("status").textContent = "Identifying…";
+  $("status").textContent = backFile ? "Identifying from front + back…" : "Identifying from front only…";
   $("result").classList.add("hidden");
   const fd = new FormData();
-  fd.append("file", f);
-  if (backFile) fd.append("back", backFile);
+  fd.append("file", frontFile, frontFile.name || "front.jpg");
+  if (backFile) fd.append("back", backFile, backFile.name || "back.jpg");
   fd.append("secret", $("secret").value);
   try {
     const r = await fetch("/identify", { method:"POST", body: fd });
@@ -255,6 +270,7 @@ $("go").onclick = async () => {
     $("f_set").value = d.set || "";
     $("f_number").value = d.number || "";
     $("f_parallel").value = d.parallel || "";
+    $("f_insert").value = d.insert || "";
     $("f_team").value = d.team || "";
     $("f_grader").value = d.grader || "Raw";
     $("f_grade").value = d.grade || "";
@@ -263,34 +279,25 @@ $("go").onclick = async () => {
     $("badge").className = "badge" + (d.needs_review ? " review" : "");
     const qq = qstr({
       player:$("f_player").value, year:$("f_year").value, set:$("f_set").value,
-      number:$("f_number").value, parallel:$("f_parallel").value
+      number:$("f_number").value, parallel:$("f_parallel").value, insert:$("f_insert").value
     });
     $("gImg").href = "https://www.google.com/search?tbm=isch&q="+qq;
     $("ebay").href = "https://www.ebay.ca/sch/i.html?_nkw="+qq+"&LH_Sold=1&LH_Complete=1";
+    $("pt130").href = "https://www.130point.com/sales/?search="+qq;
     if (d.cert) { $("psa").href = "https://www.psacard.com/cert/"+encodeURIComponent(d.cert); $("psa").classList.remove("hidden"); }
     else $("psa").classList.add("hidden");
     $("result").classList.remove("hidden");
-    $("status").textContent = "Card ID’d. Looking up sold comps…";
     $("compNote").textContent = "";
     $("comp").value = "";
     try {
-      const cr = await fetch("/comp", {
-        method:"POST",
-        headers:{ "Content-Type":"application/json", "x-app-secret": $("secret").value },
-        body: JSON.stringify(Object.assign({secret:$("secret").value}, d))
-      });
-      const ct = await cr.text();
-      if (!cr.ok) throw new Error(ct.slice(0,200));
-      const c = JSON.parse(ct);
-      const sug = c.suggested_cad != null ? c.suggested_cad : c.suggested_usd;
-      if (sug != null) $("comp").value = sug;
-      $("compNote").textContent = (c.summary || "") + (c.needs_review ? " — check this before you trust it." : "");
-      $("status").textContent = sug != null ? "Suggested comp filled. Change it if solds don’t match, then Save." : "No clean sold match. Use Sold and type a number.";
-      $("status").className = "status" + (c.needs_review || d.needs_review ? " warn" : "");
+      await lookupComp();
     } catch (ce) {
-      $("compNote").textContent = "Comp lookup failed. Use Sold and type a number.";
+      $("compNote").textContent = "Comp lookup failed. Use Sold / 130point and type a number.";
       $("status").textContent = "ID ok. Comp lookup failed: " + ce.message;
       $("status").className = "status warn";
+    }
+    try { await loadPhotos(); } catch(e) {
+      $("photoStrip").innerHTML = "<p class=\"muted\">No web photos yet. Tap Find more photos after you edit insert/parallel.</p>";
     }
   } catch(e) {
     $("status").textContent = "Failed: "+e.message;
@@ -311,12 +318,72 @@ function readCard(){
     set: $("f_set").value.trim(),
     number: $("f_number").value.trim(),
     parallel: $("f_parallel").value.trim(),
+    insert: $("f_insert").value.trim(),
     team: $("f_team").value.trim(),
     grader: $("f_grader").value || "Raw",
     grade: $("f_grade").value.trim(),
     cert: $("f_cert").value.trim()
   };
 }
+async function lookupComp(){
+  $("status").textContent = "Looking up sold comps…";
+  const cr = await fetch("/comp", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json", "x-app-secret": $("secret").value },
+    body: JSON.stringify(Object.assign({secret:$("secret").value}, readCard()))
+  });
+  const ct = await cr.text();
+  if (!cr.ok) throw new Error(ct.slice(0,200));
+  const c = JSON.parse(ct);
+  const sug = c.suggested_cad != null ? c.suggested_cad : c.suggested_usd;
+  if (sug != null) $("comp").value = sug;
+  $("compNote").textContent = (c.summary || "") + (c.needs_review ? " — check this before you trust it." : "");
+  $("status").textContent = sug != null ? "Comps updated from the fields above. Save if it looks right." : "No number returned. Open Sold / 130point and type it.";
+  $("status").className = "status" + (c.needs_review ? " warn" : "");
+}
+$("refreshComp").onclick = async ev => {
+  ev.preventDefault();
+  try { await lookupComp(); } catch(e) {
+    $("compNote").textContent = "Comp lookup failed. Use Sold and type a number.";
+    $("status").textContent = "Comp lookup failed: " + e.message;
+    $("status").className = "status warn";
+  }
+};
+async function loadPhotos(){
+  $("photoStrip").innerHTML = "<p class=\"muted\">Finding listing photos…</p>";
+  const r = await fetch("/photos", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json", "x-app-secret": $("secret").value },
+    body: JSON.stringify(Object.assign({secret:$("secret").value}, readCard()))
+  });
+  const t = await r.text();
+  if (!r.ok) throw new Error(t.slice(0,200));
+  const data = JSON.parse(t);
+  const imgs = data.images || [];
+  if (!imgs.length) {
+    $("photoStrip").innerHTML = "<p class=\"muted\">No web photos found. Use your scan or paste a URL.</p>";
+    return;
+  }
+  $("photoStrip").innerHTML = imgs.map((im,i) =>
+    "<img data-url=\""+im.url.replace(/\"/g,"")+"\" src=\""+im.url.replace(/\"/g,"")+"\" alt=\""+(im.label||"card")+"\" />"
+  ).join("");
+}
+$("photoStrip").onclick = e => {
+  const img = e.target.closest("img[data-url]");
+  if (!img) return;
+  [...$("photoStrip").querySelectorAll("img")].forEach(x => x.classList.remove("on"));
+  img.classList.add("on");
+  bindData = img.dataset.url;
+  $("bindImg").src = bindData;
+  $("bindBox").classList.remove("hidden");
+  $("bindUrl").value = bindData;
+};
+$("refreshPhotos").onclick = async ev => {
+  ev.preventDefault();
+  try { await loadPhotos(); } catch(e) {
+    $("photoStrip").innerHTML = "<p class=\"muted\">Photo search failed. Use Google Images or your scan.</p>";
+  }
+};
 $("saveBtn").onclick = () => {
   const rec = readCard();
   if (!rec.player) { $("status").textContent = "Player is required."; $("status").className = "status err"; return; }
@@ -334,15 +401,20 @@ $("saveBtn").onclick = () => {
   });
   saveAll(cards);
   $("status").textContent = "Saved. Ticker updated.";
-  resetIdForm();
-  $("file").value = "";
+  clearIdFields();
+  frontFile = null; backFile = null; scanData = null; bindData = null;
+  $("scanBox").classList.add("hidden");
+  $("backBox").classList.add("hidden");
+  $("bindBox").classList.add("hidden");
+  $("scanImg").removeAttribute("src");
+  $("backImg").removeAttribute("src");
   show("bind");
 };
 
 function renderBinder(){
   const cards = load();
   const q = ($("q").value||"").toLowerCase();
-  const rows = cards.filter(c => !q || [c.player,c.set,c.year,c.number,c.cert].join(" ").toLowerCase().includes(q));
+  const rows = cards.filter(c => !q || [c.player,c.set,c.year,c.number,c.insert,c.parallel,c.cert].join(" ").toLowerCase().includes(q));
   const t = totals();
   $("valueNote").textContent = t.mktN < t.cards
     ? "Book value only counts cards with a sold comp. Open eBay sold, then type the number. Stale comps (7+ days) get a mark."
