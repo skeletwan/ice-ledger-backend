@@ -91,7 +91,7 @@
         <label>Email</label>
         <input id="email" type="email" autocomplete="username" />
         <label>Password</label>
-        <input id="password" type="password" autocomplete="current-password" placeholder="6+ characters" />
+        <input id="password" type="password" autocomplete="off" placeholder="6+ characters" />
         <button id="loginBtn">Sign in</button>
         <button class="ghost" id="signupBtn">Create account</button>
         <button class="ghost" id="showReset">Forgot password</button>
@@ -287,7 +287,9 @@ function niceErr(raw){
   let msg = raw;
   try { const j = JSON.parse(raw); if (j.detail) msg = j.detail; } catch(e){}
   const map = {
-    "bad email or password": "That email and password don’t match. Try Sign in again, or Reset password.",
+    "bad email or password": "That email and password don’t match. Use Forgot password.",
+    "wrong password": "Password doesn’t match this email. Use Forgot password and the app secret.",
+    "no account with that email": "No account with that email. Create account, or check for a typo.",
     "email already used": "That email already has an account. Sign in, or use Forgot password.",
     "email and password (6+ chars)": "Use a real email and a password with at least 6 characters.",
     "email and a new password (6+ characters)": "Need the email and a new password of 6+ characters.",

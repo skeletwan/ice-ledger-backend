@@ -499,7 +499,7 @@ def require_scan(request: Request, x_token: str | None = None):
 @app.post("/signup")
 async def signup(payload: dict):
     email = (payload.get("email") or "").strip().lower()
-    pw = payload.get("password") or ""
+    pw = (payload.get("password") or "").strip()
     if "@" not in email or len(pw) < 6:
         raise HTTPException(400, "email and password (6+ chars)")
     con = db()
@@ -523,12 +523,15 @@ async def signup(payload: dict):
 @app.post("/login")
 async def login(payload: dict):
     email = (payload.get("email") or "").strip().lower()
-    pw = payload.get("password") or ""
+    pw = (payload.get("password") or "").strip()
     con = db()
     row = con.execute("SELECT id,pw FROM users WHERE email=?", (email,)).fetchone()
-    if not row or not check_pw(pw, row["pw"]):
+    if not row:
         con.close()
-        raise HTTPException(401, "bad email or password")
+        raise HTTPException(401, "no account with that email")
+    if not check_pw(pw, row["pw"]):
+        con.close()
+        raise HTTPException(401, "wrong password")
     token = secrets.token_urlsafe(24)
     con.execute("INSERT INTO sessions(token,user_id,created) VALUES(?,?,?)",
                 (token, row["id"], time.strftime("%Y-%m-%dT%H:%M:%SZ")))
