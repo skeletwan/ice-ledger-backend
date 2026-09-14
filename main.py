@@ -23,7 +23,8 @@ app.add_middleware(
 _hits = {}
 
 PROMPT = """Identify this hockey trading card. Return ONLY JSON, no markdown.
-If it is a graded slab, read the label. If raw, identify player, year, set, card number, parallel.
+You may get a FRONT image and sometimes a BACK image. Use the back for year, set, card number, copyright line.
+If it is a graded slab, read the label first. If raw, use front for player/parallel and back for set/year/number.
 If a field is not readable, use null. Do not invent a rare parallel.
 {
   "player": string|null,
@@ -83,9 +84,21 @@ def shrink(data: bytes) -> bytes:
 def health():
     return {"ok": True, "model": MODEL, "key_set": bool(XAI_API_KEY)}
 
+async def _jpeg_part(up: UploadFile, label: str):
+    raw = await up.read()
+    if len(raw) > 12_000_000:
+        raise HTTPException(400, f"{label} image too large")
+    try:
+        jpeg = shrink(raw)
+    except Exception:
+        raise HTTPException(400, f"{label} is not a readable image")
+    b64 = base64.b64encode(jpeg).decode("ascii")
+    return {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}", "detail": "high"}}
+
 @app.post("/identify")
 async def identify(
     file: UploadFile = File(...),
+    back: UploadFile | None = File(default=None),
     x_app_secret: str | None = Header(default=None),
     secret: str | None = Form(default=None),
 ):
@@ -93,26 +106,20 @@ async def identify(
     if not XAI_API_KEY:
         raise HTTPException(500, "XAI_API_KEY not set on server")
     check_cap()
-    raw = await file.read()
-    if len(raw) > 12_000_000:
-        raise HTTPException(400, "image too large")
-    try:
-        jpeg = shrink(raw)
-    except Exception:
-        raise HTTPException(400, "not a readable image")
-    b64 = base64.b64encode(jpeg).decode("ascii")
+    content = [
+        {"type": "text", "text": "FRONT of card:"},
+        await _jpeg_part(file, "front"),
+    ]
+    if back and back.filename:
+        content += [
+            {"type": "text", "text": "BACK of card:"},
+            await _jpeg_part(back, "back"),
+        ]
+    content.append({"type": "text", "text": PROMPT})
     payload = {
         "model": MODEL,
         "temperature": 0,
-        "messages": [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}", "detail": "high"}},
-                    {"type": "text", "text": PROMPT},
-                ],
-            }
-        ],
+        "messages": [{"role": "user", "content": content}],
     }
     async with httpx.AsyncClient(timeout=90) as client:
         r = await client.post(

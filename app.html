@@ -66,19 +66,33 @@
     <p class="muted">Identify, enter paid if you know it, optional listing photo, save.</p>
     <label>App secret</label>
     <input id="secret" type="text" value="UnderoathA1!" />
-    <label>Your photo</label>
+    <label>Front of card</label>
     <input id="file" type="file" accept="image/*" />
+    <label>Back of card (recommended on raws)</label>
+    <input id="fileBack" type="file" accept="image/*" />
     <button id="go">Identify</button>
     <div class="row2">
-      <div class="preview hidden" id="scanBox"><h3>Your scan</h3><img id="scanImg" alt="" /></div>
-      <div class="preview hidden" id="bindBox"><h3>Binder photo</h3><img id="bindImg" alt="" /></div>
+      <div class="preview hidden" id="scanBox"><h3>Front</h3><img id="scanImg" alt="" /></div>
+      <div class="preview hidden" id="backBox"><h3>Back</h3><img id="backImg" alt="" /></div>
     </div>
+    <div class="preview hidden" id="bindBox"><h3>Binder photo</h3><img id="bindImg" alt="" /></div>
     <p class="status" id="status"></p>
     <div class="card hidden" id="result">
       <div class="badge" id="badge"></div>
-      <h2 id="player"></h2>
-      <div class="line" id="headline"></div>
-      <div class="grid" id="fields"></div>
+      <p class="muted">Fix anything wrong, especially parallel, then save.</p>
+      <div class="grid">
+        <div class="field" style="grid-column:1/-1"><label>Player</label><input id="f_player" /></div>
+        <div class="field"><label>Year</label><input id="f_year" /></div>
+        <div class="field"><label>Set</label><input id="f_set" /></div>
+        <div class="field"><label>Number</label><input id="f_number" /></div>
+        <div class="field"><label>Parallel</label><input id="f_parallel" placeholder="Base, Young Guns, Gold /10…" /></div>
+        <div class="field"><label>Team</label><input id="f_team" /></div>
+        <div class="field"><label>Grader</label>
+          <select id="f_grader"><option>Raw</option><option>PSA</option><option>BGS</option><option>SGC</option><option>CGC</option></select>
+        </div>
+        <div class="field"><label>Grade</label><input id="f_grade" /></div>
+        <div class="field" style="grid-column:1/-1"><label>Cert</label><input id="f_cert" /></div>
+      </div>
       <div class="row2">
         <a class="ghost btn" id="gImg" target="_blank" rel="noopener">Google Images</a>
         <a class="ghost btn" id="ebay" target="_blank" rel="noopener">eBay sold</a>
@@ -112,7 +126,7 @@ const $ = id => document.getElementById(id);
 const KEY = "ice-binder-v1";
 const dash = v => (v==null || v==="") ? "—" : String(v);
 const money = n => n==null || n==="" || isNaN(+n) ? "—" : "$"+Number(n).toLocaleString("en-CA",{minimumFractionDigits:0,maximumFractionDigits:0});
-let last = null, scanData = null, bindData = null;
+let last = null, scanData = null, bindData = null, backFile = null;
 
 function load(){ try { return JSON.parse(localStorage.getItem(KEY)||"[]"); } catch(e){ return []; } }
 function saveAll(cards){ localStorage.setItem(KEY, JSON.stringify(cards)); paintTicker(); renderBinder(); }
@@ -170,14 +184,33 @@ function toJpeg(file, max){
   });
 }
 
+function resetIdForm(){
+  last = null;
+  ["f_player","f_year","f_set","f_number","f_parallel","f_team","f_grade","f_cert","comp","cost","notes"].forEach(id => { if($(id)) $(id).value = ""; });
+  if ($("f_grader")) $("f_grader").value = "Raw";
+  $("compNote").textContent = "";
+  $("result").classList.add("hidden");
+  backFile = null;
+  if ($("backBox")) $("backBox").classList.add("hidden");
+}
 $("file").onchange = async () => {
   const f = $("file").files[0];
   if (!f) return;
+  resetIdForm();
+  bindData = null;
+  $("bindBox").classList.add("hidden");
   scanData = await toJpeg(f, 900);
   $("scanImg").src = scanData;
   $("scanBox").classList.remove("hidden");
-  $("result").classList.add("hidden");
-  $("status").textContent = "";
+  $("status").textContent = "Front loaded. Add the back on raws, then Identify.";
+};
+$("fileBack").onchange = async () => {
+  const f = $("fileBack").files[0];
+  if (!f) return;
+  backFile = f;
+  const data = await toJpeg(f, 900);
+  $("backImg").src = data;
+  $("backBox").classList.remove("hidden");
 };
 $("bindFile").onchange = async () => {
   const f = $("bindFile").files[0];
@@ -209,6 +242,7 @@ $("go").onclick = async () => {
   $("result").classList.add("hidden");
   const fd = new FormData();
   fd.append("file", f);
+  if (backFile) fd.append("back", backFile);
   fd.append("secret", $("secret").value);
   try {
     const r = await fetch("/identify", { method:"POST", body: fd });
@@ -216,14 +250,21 @@ $("go").onclick = async () => {
     if (!r.ok) throw new Error(t.slice(0,200));
     const d = JSON.parse(t);
     last = d;
-    $("player").textContent = d.player || "Unknown player";
-    $("headline").textContent = [d.year,d.set,d.number?"#"+d.number:"",d.parallel].filter(Boolean).join(" · ") || "—";
-    const grade = (!d.grader || d.grader==="Raw") ? "Raw" : [d.grader,d.grade].filter(Boolean).join(" ");
-    $("badge").textContent = d.needs_review ? "Needs review" : "Looks good";
+    $("f_player").value = d.player || "";
+    $("f_year").value = d.year || "";
+    $("f_set").value = d.set || "";
+    $("f_number").value = d.number || "";
+    $("f_parallel").value = d.parallel || "";
+    $("f_team").value = d.team || "";
+    $("f_grader").value = d.grader || "Raw";
+    $("f_grade").value = d.grade || "";
+    $("f_cert").value = d.cert || "";
+    $("badge").textContent = d.needs_review ? "Needs review — edit fields below" : "Looks good — still edit if wrong";
     $("badge").className = "badge" + (d.needs_review ? " review" : "");
-    const rows = [["Team",d.team],["Grade",grade],["Cert",d.cert],["Year",d.year],["Set",d.set],["Number",d.number],["Parallel",d.parallel]];
-    $("fields").innerHTML = rows.map(([k,v]) => "<div class=\"field\"><span>"+k+"</span><b>"+dash(v)+"</b></div>").join("");
-    const qq = qstr(d);
+    const qq = qstr({
+      player:$("f_player").value, year:$("f_year").value, set:$("f_set").value,
+      number:$("f_number").value, parallel:$("f_parallel").value
+    });
     $("gImg").href = "https://www.google.com/search?tbm=isch&q="+qq;
     $("ebay").href = "https://www.ebay.ca/sch/i.html?_nkw="+qq+"&LH_Sold=1&LH_Complete=1";
     if (d.cert) { $("psa").href = "https://www.psacard.com/cert/"+encodeURIComponent(d.cert); $("psa").classList.remove("hidden"); }
@@ -263,15 +304,28 @@ function numOrNull(el){
   return v==="" ? null : +v;
 }
 
+function readCard(){
+  return {
+    player: $("f_player").value.trim(),
+    year: $("f_year").value.trim(),
+    set: $("f_set").value.trim(),
+    number: $("f_number").value.trim(),
+    parallel: $("f_parallel").value.trim(),
+    team: $("f_team").value.trim(),
+    grader: $("f_grader").value || "Raw",
+    grade: $("f_grade").value.trim(),
+    cert: $("f_cert").value.trim()
+  };
+}
 $("saveBtn").onclick = () => {
-  if (!last) return;
+  const rec = readCard();
+  if (!rec.player) { $("status").textContent = "Player is required."; $("status").className = "status err"; return; }
   const cards = load();
   const comp = numOrNull("comp");
   cards.unshift({
     id: "c"+Date.now(),
-    player: last.player, year: last.year, set: last.set, number: last.number,
-    parallel: last.parallel, team: last.team, grader: last.grader || "Raw",
-    grade: last.grade, cert: last.cert, notes: $("notes").value || last.notes || "",
+    ...rec,
+    notes: $("notes").value || "",
     cost: numOrNull("cost"),
     comp: comp,
     compAt: comp==null ? null : new Date().toISOString(),
@@ -280,7 +334,8 @@ $("saveBtn").onclick = () => {
   });
   saveAll(cards);
   $("status").textContent = "Saved. Ticker updated.";
-  $("notes").value = ""; $("cost").value = ""; $("comp").value = "";
+  resetIdForm();
+  $("file").value = "";
   show("bind");
 };
 
