@@ -159,16 +159,15 @@
     <label>Back of card (recommended on raws)</label>
     <input id="fileBack" type="file" accept="image/*" capture="environment" />
     <p class="muted">Camera: the phone will ask the first time you take a photo. That’s Safari’s permission sheet — it isn’t automatic forever.</p>
+    <div class="row2">
+      <div class="preview hidden" id="scanBox"><h3>Front</h3><img id="scanImg" alt="" /></div>
+      <div class="preview hidden" id="backBox"><h3>Back</h3><img id="backImg" alt="" /></div>
+    </div>
     <button id="go">Identify</button>
     <p class="status" id="status"></p>
   </section>
   <section class="page" id="resultPage">
     <button class="ghost" id="backScan">New scan</button>
-    <div class="row2">
-      <div class="preview hidden" id="scanBox"><h3>Front</h3><img id="scanImg" alt="" /></div>
-      <div class="preview hidden" id="backBox"><h3>Back</h3><img id="backImg" alt="" /></div>
-    </div>
-    <div class="preview hidden" id="bindBox"><h3>Binder photo</h3><img id="bindImg" alt="" /></div>
     <p class="status" id="resultStatus"></p>
     <div class="card" id="result">
       <div class="badge" id="badge"></div>
@@ -723,13 +722,14 @@ async function lookupComp(){
     $("comp").value = "";
     c.summary = (c.summary||"") + " Ignored value that matched card #.";
   }
+  function put(id, v){ if (v != null && $(id)) $(id).value = v; }
+  put("rawComp", c.raw_cad); put("e_raw", c.raw_cad);
+  put("psa8Comp", c.psa8_cad); put("e_psa8", c.psa8_cad);
+  put("psa9Comp", c.psa9_cad); put("e_psa9", c.psa9_cad);
+  put("psa10Comp", c.psa10_cad); put("e_psa10", c.psa10_cad);
+  put("bgs95Comp", c.bgs95_cad);
+  put("sgc10Comp", c.sgc10_cad);
   const setIf = (id, v) => { if (v != null && $(id) && $(id).value === "") $(id).value = v; };
-  if (c.raw_cad != null) $("rawComp").value = c.raw_cad;
-  if (c.psa8_cad != null) $("psa8Comp").value = c.psa8_cad;
-  if (c.psa9_cad != null) $("psa9Comp").value = c.psa9_cad;
-  if (c.psa10_cad != null) $("psa10Comp").value = c.psa10_cad;
-  if (c.bgs95_cad != null && $("bgs95Comp")) $("bgs95Comp").value = c.bgs95_cad;
-  if (c.sgc10_cad != null && $("sgc10Comp")) $("sgc10Comp").value = c.sgc10_cad;
   const g = ($("f_grader").value||"Raw");
   const gr = ($("f_grade").value||"").trim();
   if (sug != null) {
@@ -957,12 +957,16 @@ function renderBinder(){
     $("list").innerHTML = rows.map(cardRowHtml).join("");
   }
 }
-function pinSearch(){
+let searchPinned = false;
+function pinSearchOnce(){
+  if (searchPinned) return;
+  searchPinned = true;
   const el = $("searchStick") || $("q");
   setTimeout(() => el.scrollIntoView({ block:"start", behavior:"smooth" }), 250);
 }
-$("q").oninput = () => { renderBinder(); pinSearch(); };
-$("q").onfocus = pinSearch;
+$("q").oninput = () => { renderBinder(); pinSearchOnce(); };
+$("q").onfocus = pinSearchOnce;
+$("q").onblur = () => { searchPinned = false; };
 if ($("sortBy")) $("sortBy").onchange = renderBinder;
 if ($("teamFilter")) $("teamFilter").onchange = renderBinder;
 $("list").onclick = e => {
@@ -987,6 +991,12 @@ $("saveEdit").onclick = () => {
     cost:n($("e_cost").value), comp:n($("e_comp").value),
     rawComp:n($("e_raw").value), psa8Comp:n($("e_psa8").value),
     psa9Comp:n($("e_psa9").value), psa10Comp:n($("e_psa10").value),
+    book: {
+      Raw: n($("e_raw").value),
+      "PSA 8": n($("e_psa8").value),
+      "PSA 9": n($("e_psa9").value),
+      "PSA 10": n($("e_psa10").value)
+    },
     compAt: new Date().toISOString()
   });
   saveAll(cards);

@@ -166,6 +166,8 @@ Return ONLY JSON, no markdown:
   "psa8_cad": number|null,
   "psa9_cad": number|null,
   "psa10_cad": number|null,
+  "bgs95_cad": number|null,
+  "sgc10_cad": number|null,
   "low": number|null,
   "high": number|null,
   "currency": "CAD"|"USD"|null,
@@ -175,9 +177,11 @@ Return ONLY JSON, no markdown:
   "summary": string,
   "sources": [string]
 }}
-Always fill suggested_usd or suggested_cad if you see ANY sold prices.
-Use the median of matching solds. Convert USD to CAD at 1.35 for suggested_cad.
-If matches are messy, still fill the number and set needs_review true.
+Search separately for RAW solds, PSA 8, PSA 9, PSA 10, BGS 9.5, and SGC 10 of this same player/set/number/parallel.
+Fill each *_cad field you can. suggested_cad is the price for THIS copy's grader/grade.
+Only use sold sale prices (money). Never use the card number, year, print run, or cert as a price.
+If you cannot find a sold price for a grade, leave that field null. Do not copy one grade into another.
+Convert USD to CAD at 1.35.
 """
 
 def _extract_response_text(body: dict) -> str:
@@ -262,16 +266,65 @@ async def comp(
         data = {"summary": (text or "")[:280], "needs_review": True}
     if not isinstance(data, dict):
         data = {"summary": str(data)[:280], "needs_review": True}
-    nums = []
-    for key in ("suggested_cad", "suggested_usd", "low", "high"):
+    def _as_price(v):
         try:
-            if data.get(key) is not None:
-                nums.append(float(data[key]))
+            n = float(v)
         except (TypeError, ValueError):
-            pass
-    for m in re.findall(r"\$?\s*([0-9]{1,5}(?:\.[0-9]{1,2})?)", text or ""):
-        v = float(m)
-        if 2 <= v <= 20000:
+            return None
+        if n < 1 or n > 20000:
+            return None
+        return n
+
+    def _looks_like_card_no(n):
+        raw = str(card.get("number") or "").strip().lstrip("#")
+        if not raw:
+            return False
+        try:
+            return abs(float(n) - float(raw)) < 0.001
+        except ValueError:
+            return str(int(n)) == raw if float(n).is_integer() else False
+
+    grades = data.get("grades") or data.get("book") or {}
+    if isinstance(grades, dict):
+        alias = {
+            "raw": "raw_cad", "raw_cad": "raw_cad",
+            "psa8": "psa8_cad", "psa 8": "psa8_cad",
+            "psa9": "psa9_cad", "psa 9": "psa9_cad",
+            "psa10": "psa10_cad", "psa 10": "psa10_cad",
+            "bgs95": "bgs95_cad", "bgs 9.5": "bgs95_cad",
+            "sgc10": "sgc10_cad", "sgc 10": "sgc10_cad",
+        }
+        for k, v in grades.items():
+            dest = alias.get(str(k).lower().strip())
+            if dest and data.get(dest) is None:
+                data[dest] = v
+
+    text_l = text or ""
+    for rx, dest in (
+        (r"PSA\s*10[^0-9]{0,12}(?:CAD|USD|C\$|US\$|\$)\s*([0-9]{1,5}(?:\.[0-9]{1,2})?)", "psa10_cad"),
+        (r"PSA\s*9(?:\.0)?[^0-9.]{0,12}(?:CAD|USD|C\$|US\$|\$)\s*([0-9]{1,5}(?:\.[0-9]{1,2})?)", "psa9_cad"),
+        (r"PSA\s*8(?:\.0)?[^0-9.]{0,12}(?:CAD|USD|C\$|US\$|\$)\s*([0-9]{1,5}(?:\.[0-9]{1,2})?)", "psa8_cad"),
+        (r"BGS\s*9\.5[^0-9]{0,12}(?:CAD|USD|C\$|US\$|\$)\s*([0-9]{1,5}(?:\.[0-9]{1,2})?)", "bgs95_cad"),
+        (r"SGC\s*10[^0-9]{0,12}(?:CAD|USD|C\$|US\$|\$)\s*([0-9]{1,5}(?:\.[0-9]{1,2})?)", "sgc10_cad"),
+        (r"(?:raw|ungraded)[^0-9]{0,16}(?:CAD|USD|C\$|US\$|\$)\s*([0-9]{1,5}(?:\.[0-9]{1,2})?)", "raw_cad"),
+    ):
+        if data.get(dest) is None:
+            m = re.search(rx, text_l, flags=re.I)
+            if m:
+                data[dest] = m.group(1)
+
+    for key in ("suggested_cad", "suggested_usd", "raw_cad", "psa8_cad", "psa9_cad", "psa10_cad", "bgs95_cad", "sgc10_cad", "low", "high"):
+        n = _as_price(data.get(key))
+        if n is None:
+            data[key] = None
+        elif key in ("suggested_cad", "suggested_usd") and _looks_like_card_no(n):
+            data[key] = None
+        else:
+            data[key] = n
+    nums = []
+    for m in re.findall(r"(?:CAD|USD|C\$|US\$|\$)\s*([0-9]{1,5}(?:\.[0-9]{1,2})?)", text or "", flags=re.I):
+        v = _as_price(m)
+        if v is not None and not _looks_like_card_no(v):
             nums.append(v)
     if data.get("suggested_cad") is None and data.get("suggested_usd") is None and nums:
         mid = sorted(nums)[len(nums)//2]
