@@ -14,7 +14,9 @@
     .fxbar { display:flex; align-items:center; gap:8px; padding:8px 12px 0; background:#10161d; }
     .fxbar button { width:auto; margin:0; padding:6px 10px; font-size:12px; }
     .fxbar button.on { background:var(--btn); color:#fff; border-color:var(--btn); }
-    .spark { display:block; width:100%; height:36px; background:#10161d; border-bottom:1px solid var(--line); }
+    .spark { display:block; width:100%; height:88px; background:#10161d; }
+    .ranges { display:flex; gap:4px; padding:4px 10px 8px; background:#10161d; border-bottom:1px solid var(--line); }
+    .ranges button { width:auto; margin:0; padding:5px 8px; font-size:11px; letter-spacing:.04em; }
     .ticker { display:grid; grid-template-columns:repeat(3,1fr); gap:0; border-bottom:0; background:#10161d; }
     .tick { padding:10px 8px; text-align:center; border-right:1px solid var(--line); }
     .tick:last-child { border-right:0; }
@@ -111,15 +113,23 @@
   <div class="fxbar">
     <button class="ghost fx" id="fxCAD" data-fx="CAD">CAD</button>
     <button class="ghost fx" id="fxUSD" data-fx="USD">USD</button>
-    <span class="muted" id="fxNote"></span>
   </div>
   <div class="ticker" id="ticker"></div>
-  <svg id="spark" viewBox="0 0 300 36" class="spark" preserveAspectRatio="none"></svg>
+  <svg id="spark" viewBox="0 0 300 88" class="spark" preserveAspectRatio="none"></svg>
+  <div class="ranges" id="ranges">
+    <button class="ghost" data-r="1D">1D</button>
+    <button class="ghost" data-r="1W">1W</button>
+    <button class="ghost" data-r="1M">1M</button>
+    <button class="ghost" data-r="3M">3M</button>
+    <button class="ghost" data-r="1Y">1Y</button>
+    <button class="ghost" data-r="ALL">ALL</button>
+  </div>
   <header>
     <h1>Ice <span>Ledger</span></h1>
     <nav>
       <button class="ghost" id="tabScan">Scan</button>
       <button class="ghost" id="tabBind">Binder</button>
+      <button class="ghost" id="tabSet">Alerts</button>
       <button class="ghost" id="logoutBtn">Out</button>
     </nav>
     <span class="muted" id="scanLeft" style="font-size:11px"></span>
@@ -132,9 +142,10 @@
     <label>App secret</label>
     <input id="secret" type="text" value="UnderoathA1!" />
     <label>Front of card</label>
-    <input id="file" type="file" accept="image/*" />
+    <input id="file" type="file" accept="image/*" capture="environment" />
     <label>Back of card (recommended on raws)</label>
-    <input id="fileBack" type="file" accept="image/*" />
+    <input id="fileBack" type="file" accept="image/*" capture="environment" />
+    <p class="muted">Camera: the phone will ask the first time you take a photo. That’s Safari’s permission sheet — it isn’t automatic forever.</p>
     <button id="go">Identify</button>
     <div class="row2">
       <div class="preview hidden" id="scanBox"><h3>Front</h3><img id="scanImg" alt="" /></div>
@@ -199,6 +210,16 @@
     <input id="q" placeholder="Search binder…" />
     <div id="list"></div>
     <button class="ghost" id="exportBtn">Export JSON</button>
+  </section>
+  <section class="page" id="setPage">
+    <h2 style="font-size:18px;margin:0 0 8px">Alerts</h2>
+    <p class="muted">Daily binder ping at a time you pick. Also fires if book value jumps while the app is open. iPhone only does this reliably if Ice Ledger is on the Home Screen and you granted notifications.</p>
+    <label><input id="nOn" type="checkbox" style="width:auto;margin-right:8px" /> Notify me</label>
+    <label>Time of day</label>
+    <input id="nTime" type="time" value="18:00" />
+    <label><input id="nJump" type="checkbox" style="width:auto;margin-right:8px" checked /> Also tell me when book value goes up</label>
+    <button id="nSave">Save & allow notifications</button>
+    <p class="status" id="nStatus"></p>
   </section>
   <section class="page" id="detailPage">
     <div class="backrow">
@@ -281,7 +302,7 @@ function showApp(){
   $("authPage").classList.remove("on");
   $("authPage").classList.add("hidden");
   $("appShell").classList.remove("hidden");
-  paintTicker(); renderBinder(); refreshUsage();
+  paintTicker(); renderBinder(); refreshUsage(); loadNotePrefs(); scheduleDaily();
 }
 function niceErr(raw){
   let msg = raw;
@@ -351,6 +372,8 @@ function money(n){
   const cur = fx();
   return (cur==="USD"?"US$":"C$")+Number(v).toLocaleString(cur==="USD"?"en-US":"en-CA",{minimumFractionDigits:0,maximumFractionDigits:0});
 }
+const RNG = "ice-range";
+function rangeKey(){ return localStorage.getItem(RNG) || "1M"; }
 function loadHist(){ try { return JSON.parse(localStorage.getItem(HIST)||"[]"); } catch(e){ return []; } }
 function pushHist(bookCad){
   if (bookCad==null) return;
@@ -359,7 +382,17 @@ function pushHist(bookCad){
   const last = h[h.length-1];
   if (last && last.d === day) last.v = bookCad;
   else h.push({ d: day, v: bookCad });
-  localStorage.setItem(HIST, JSON.stringify(h.slice(-90)));
+  localStorage.setItem(HIST, JSON.stringify(h.slice(-400)));
+}
+function histForRange(){
+  const h = loadHist();
+  const r = rangeKey();
+  const days = { "1D":1, "1W":7, "1M":30, "3M":90, "1Y":365 }[r];
+  if (!days) return h;
+  const cut = new Date();
+  cut.setDate(cut.getDate() - (days-1));
+  const ds = cut.toISOString().slice(0,10);
+  return h.filter(x => x.d >= ds);
 }
 function spark(vals){
   const el = $("spark");
@@ -369,11 +402,13 @@ function spark(vals){
   const span = (max-min) || 1;
   const pts = vals.map((v,i) => {
     const x = vals.length===1 ? 150 : (i/(vals.length-1))*300;
-    const y = 32 - ((v-min)/span)*28;
+    const y = 80 - ((v-min)/span)*70;
     return x.toFixed(1)+","+y.toFixed(1);
   }).join(" ");
   const up = vals[vals.length-1] >= vals[0];
-  el.innerHTML = "<polyline fill=\"none\" stroke=\""+(up?"#6ee7a8":"#f07178")+"\" stroke-width=\"2\" points=\""+pts+"\" />";
+  const col = up ? "#6ee7a8" : "#f07178";
+  const fill = pts + " 300,88 0,88";
+  el.innerHTML = "<polygon fill=\""+col+"22\" points=\""+fill+"\" /><polyline fill=\"none\" stroke=\""+col+"\" stroke-width=\"2\" points=\""+pts+"\" />";
 }
 let last = null, scanData = null, bindData = null, frontFile = null, backFile = null;
 
@@ -385,12 +420,20 @@ function show(id){
   $("bindPage").classList.toggle("on", id==="bind");
   $("detailPage").classList.toggle("on", id==="detail");
   $("editPage").classList.toggle("on", id==="edit");
+  $("setPage").classList.toggle("on", id==="set");
   if (id==="bind") renderBinder();
 }
 $("tabScan").onclick = () => show("scan");
 $("tabBind").onclick = () => show("bind");
+$("tabSet").onclick = () => { loadNotePrefs(); show("set"); };
 $("fxCAD").onclick = () => setFx("CAD");
 $("fxUSD").onclick = () => setFx("USD");
+$("ranges").onclick = e => {
+  const b = e.target.closest("[data-r]");
+  if (!b) return;
+  localStorage.setItem(RNG, b.getAttribute("data-r"));
+  paintTicker();
+};
 
 function totals(){
   const cards = load();
@@ -419,9 +462,46 @@ function paintTicker(){
   if ($("fxCAD")) {
     $("fxCAD").classList.toggle("on", fx()==="CAD");
     $("fxUSD").classList.toggle("on", fx()==="USD");
-    $("fxNote").textContent = fx()==="USD" ? "US$ at 1.35 CAD" : "Stored in CAD";
   }
-  spark(hist.map(x => x.v));
+  spark(histForRange().map(x => x.v));
+  document.querySelectorAll("#ranges [data-r]").forEach(b => b.classList.toggle("on", b.getAttribute("data-r")===rangeKey()));
+  maybeJumpNote(t.mkt, ch);
+}
+const NOTE = "ice-note";
+let noteTimer = null;
+function notePrefs(){ try { return JSON.parse(localStorage.getItem(NOTE)||"{}"); } catch(e){ return {}; } }
+function loadNotePrefs(){
+  const p = notePrefs();
+  if ($("nOn")) $("nOn").checked = !!p.on;
+  if ($("nJump")) $("nJump").checked = p.jump !== false;
+  if ($("nTime") && p.time) $("nTime").value = p.time;
+}
+function ping(title, body){
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  try { new Notification(title, { body: body, tag: "ice-ledger" }); } catch(e) {}
+}
+function maybeJumpNote(book, ch){
+  const p = notePrefs();
+  if (!p.on || p.jump === false || ch==null || ch <= 0) return;
+  const key = "ice-jump-"+new Date().toISOString().slice(0,10);
+  if (sessionStorage.getItem(key)) return;
+  sessionStorage.setItem(key, "1");
+  ping("Binder up", "Book is "+money(book)+" today ("+(ch>=0?"+":"")+money(ch)+").");
+}
+function scheduleDaily(){
+  if (noteTimer) clearTimeout(noteTimer);
+  const p = notePrefs();
+  if (!p.on || !p.time) return;
+  const [hh, mm] = p.time.split(":").map(Number);
+  const now = new Date();
+  const next = new Date();
+  next.setHours(hh||18, mm||0, 0, 0);
+  if (next <= now) next.setDate(next.getDate()+1);
+  noteTimer = setTimeout(() => {
+    const t = totals();
+    ping("Ice Ledger daily", t.mktN ? ("Binder book "+money(t.mkt)+" · "+t.cards+" cards") : "Open Ice Ledger to refresh comps.");
+    scheduleDaily();
+  }, next - now);
 }
 function qstr(d){
   return encodeURIComponent([d.year,d.player,d.sport,d.set,d.number,d.insert,d.parallel].filter(Boolean).join(" "));
@@ -881,6 +961,22 @@ $("resetBtn").onclick = async () => {
     flash("authStatus", "ok", "Password updated. Signing you in…");
     setToken(d.token); showApp(); await pullCloud(); paintTicker(); renderBinder();
   } catch(e) { flash("authStatus", "err", e.message); }
+};
+$("nSave").onclick = async () => {
+  localStorage.setItem(NOTE, JSON.stringify({
+    on: $("nOn").checked,
+    jump: $("nJump").checked,
+    time: $("nTime").value || "18:00"
+  }));
+  if ($("nOn").checked && "Notification" in window) {
+    const perm = await Notification.requestPermission();
+    $("nStatus").textContent = perm === "granted" ? "Alerts on. Add this page to your Home Screen so iPhone keeps them." : "Permission denied. Enable Notifications for Safari in iOS Settings.";
+    $("nStatus").className = "status " + (perm==="granted" ? "ok" : "warn");
+  } else {
+    $("nStatus").textContent = "Alerts saved off.";
+    $("nStatus").className = "status ok";
+  }
+  scheduleDaily();
 };
 $("logoutBtn").onclick = () => { setToken(""); location.reload(); };
 if (token()) { $("authPage").classList.add("hidden"); $("authPage").classList.remove("on"); showApp(); pullCloud().then(() => { paintTicker(); renderBinder(); }); }
