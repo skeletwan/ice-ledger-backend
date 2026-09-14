@@ -122,10 +122,13 @@
       <button class="ghost" id="tabBind">Binder</button>
       <button class="ghost" id="logoutBtn">Out</button>
     </nav>
+    <span class="muted" id="scanLeft" style="font-size:11px"></span>
   </header>
 
   <section class="page on" id="scanPage">
     <p class="muted">Identify, enter paid if you know it, optional listing photo, save.</p>
+    <div class="status" id="quotaBox">Free plan: 10 IDs / month. Ice+ is 200.</div>
+    <button class="ghost" id="payBtn">Upgrade Ice+</button>
     <label>App secret</label>
     <input id="secret" type="text" value="UnderoathA1!" />
     <label>Front of card</label>
@@ -209,11 +212,22 @@
     <div class="vals">
       <div class="val"><b id="vHold">—</b><span>Your copy</span></div>
       <div class="val"><b id="vPaid">—</b><span>Paid</span></div>
-      <div class="val"><b id="vRaw">—</b><span>Raw sold</span></div>
-      <div class="val"><b id="vPsa9">—</b><span>PSA 9 sold</span></div>
-      <div class="val"><b id="vPsa8">—</b><span>PSA 8 sold</span></div>
-      <div class="val"><b id="vPsa10">—</b><span>PSA 10 sold</span></div>
+      <div class="val"><b id="vRaw">—</b><span>Raw</span></div>
+      <div class="val"><b id="vPsa9">—</b><span>PSA 9</span></div>
+      <div class="val"><b id="vPsa10">—</b><span>PSA 10</span></div>
+      <div class="val"><b id="vBgs">—</b><span>BGS 9.5</span></div>
     </div>
+    <label>Other grader / grade sold</label>
+    <div class="row2">
+      <select id="gSvc">
+        <option>Raw</option><option>PSA</option><option>BGS</option><option>SGC</option>
+        <option>CGC</option><option>TAG</option><option>HGA</option><option>ISA</option><option>ACE</option>
+      </select>
+      <select id="gNum">
+        <option>10</option><option>9.5</option><option>9</option><option>8.5</option><option>8</option><option>7</option>
+      </select>
+    </div>
+    <div class="val" style="margin-top:8px"><b id="vPick">—</b><span id="vPickLbl">Pick grader + grade</span></div>
     <p class="muted" id="dNotes"></p>
     <div class="row2">
       <a class="ghost btn" id="dEbay" target="_blank" rel="noopener">eBay sold</a>
@@ -267,7 +281,7 @@ function showApp(){
   $("authPage").classList.remove("on");
   $("authPage").classList.add("hidden");
   $("appShell").classList.remove("hidden");
-  paintTicker(); renderBinder();
+  paintTicker(); renderBinder(); refreshUsage();
 }
 function niceErr(raw){
   let msg = raw;
@@ -319,7 +333,12 @@ const FXK = "ice-fx";
 const HIST = "ice-book-hist";
 const USD_CAD = 1.35;
 function fx(){ return localStorage.getItem(FXK) || "CAD"; }
-function setFx(v){ localStorage.setItem(FXK, v); paintTicker(); renderBinder(); if (openId) { try { openDetail(openId); } catch(e){} } }
+function setFx(v){
+  localStorage.setItem(FXK, v);
+  paintTicker();
+  renderBinder();
+  if (openId && $("detailPage").classList.contains("on")) openDetail(openId);
+}
 function toFx(cad){
   if (cad==null || cad==="" || isNaN(+cad)) return null;
   return fx()==="USD" ? (+cad / USD_CAD) : +cad;
@@ -403,7 +422,7 @@ function paintTicker(){
   spark(hist.map(x => x.v));
 }
 function qstr(d){
-  return encodeURIComponent([d.year,d.player,d.set,d.number,d.insert,d.parallel].filter(Boolean).join(" "));
+  return encodeURIComponent([d.year,d.player,d.sport,d.set,d.number,d.insert,d.parallel].filter(Boolean).join(" "));
 }
 function daysAgo(iso){
   if (!iso) return null;
@@ -493,12 +512,15 @@ $("go").onclick = async () => {
   if (backFile) fd.append("back", backFile, backFile.name || "back.jpg");
   fd.append("secret", $("secret").value);
   try {
-    const r = await fetch("/identify", { method:"POST", body: fd });
+    const r = await fetch("/identify", { method:"POST", headers:{ "x-token": token() }, body: fd });
     const t = await r.text();
+    if (r.status === 402) { showPaywall("No IDs left this month. Upgrade Ice+."); refreshUsage(); return; }
     if (!r.ok) throw new Error(t.slice(0,200));
+    refreshUsage();
     const d = JSON.parse(t);
     last = d;
     $("f_player").value = d.player || "";
+    if ($("f_sport")) $("f_sport").value = d.sport || "";
     $("f_year").value = d.year || "";
     $("f_set").value = d.set || "";
     $("f_number").value = d.number || "";
@@ -547,6 +569,7 @@ function numOrNull(el){
 function readCard(){
   return {
     player: $("f_player").value.trim(),
+    sport: $("f_sport") ? $("f_sport").value.trim() : "",
     year: $("f_year").value.trim(),
     set: $("f_set").value.trim(),
     number: $("f_number").value.trim(),
@@ -661,6 +684,28 @@ $("saveBtn").onclick = () => {
 function versionLine(c){
   return [c.insert, c.parallel].filter(Boolean).join(" · ") || "Base";
 }
+function bookOf(c){
+  const b = Object.assign({}, c.book || {});
+  if (c.rawComp!=null && b.Raw==null) b.Raw = c.rawComp;
+  if (c.psa8Comp!=null) b["PSA 8"] = c.psa8Comp;
+  if (c.psa9Comp!=null) b["PSA 9"] = c.psa9Comp;
+  if (c.psa10Comp!=null) b["PSA 10"] = c.psa10Comp;
+  if (c.bgs95Comp!=null) b["BGS 9.5"] = c.bgs95Comp;
+  return b;
+}
+function bookGet(c, svc, num){
+  const b = bookOf(c);
+  if (svc==="Raw") return b.Raw;
+  return b[svc+" "+num];
+}
+function paintGradePick(){
+  const c = load().find(x => x.id===openId);
+  if (!c) return;
+  const svc = $("gSvc").value, num = $("gNum").value;
+  const v = bookGet(c, svc, num);
+  $("vPick").textContent = money(v);
+  $("vPickLbl").textContent = svc==="Raw" ? "Raw sold" : (svc+" "+num+" sold");
+}
 function openDetail(id){
   const c = load().find(x => x.id===id);
   if (!c) return;
@@ -677,10 +722,11 @@ function openDetail(id){
   $("dLine").textContent = [c.year,c.set,c.number?"#"+c.number:"",c.team].filter(Boolean).join(" · ");
   $("vHold").textContent = money(c.comp);
   $("vPaid").textContent = money(c.cost);
-  $("vRaw").textContent = money(c.rawComp);
-  $("vPsa9").textContent = money(c.psa9Comp);
-  $("vPsa8").textContent = money(c.psa8Comp);
-  $("vPsa10").textContent = money(c.psa10Comp);
+  $("vRaw").textContent = money(bookGet(c,"Raw",""));
+  $("vPsa9").textContent = money(bookGet(c,"PSA","9"));
+  $("vPsa10").textContent = money(bookGet(c,"PSA","10"));
+  $("vBgs").textContent = money(bookGet(c,"BGS","9.5"));
+  paintGradePick();
   $("dNotes").textContent = c.notes || "";
   const qq = qstr(c);
   $("dEbay").href = "https://www.ebay.ca/sch/i.html?_nkw="+qq+"&LH_Sold=1&LH_Complete=1";
@@ -733,6 +779,8 @@ $("list").onclick = e => {
   const art = e.target.closest("[data-open]");
   if (art) openDetail(art.getAttribute("data-open"));
 };
+$("gSvc").onchange = paintGradePick;
+$("gNum").onchange = paintGradePick;
 $("backBind").onclick = () => show("bind");
 $("editCardBtn").onclick = () => { fillEdit(); show("edit"); };
 $("backDetail").onclick = () => openDetail(openId);
@@ -771,6 +819,39 @@ $("exportBtn").onclick = () => {
   a.href = URL.createObjectURL(new Blob([JSON.stringify(slim,null,2)],{type:"application/json"}));
   a.download = "ice-ledger-binder.json";
   a.click();
+};
+async function refreshUsage(){
+  if (!token()) return;
+  const r = await fetch("/usage", { headers:{ "x-token": token() } });
+  if (!r.ok) return;
+  const u = await r.json();
+  const line = (u.plan==="plus"?"Ice+":"Free")+" · "+u.left+" of "+u.cap+" IDs left this month";
+  if ($("scanLeft")) $("scanLeft").textContent = u.left+" left";
+  if ($("quotaBox")) {
+    $("quotaBox").textContent = line;
+    $("quotaBox").className = "status " + (u.left<=0 ? "err" : (u.left<=3 ? "warn" : "ok"));
+  }
+}
+function showPaywall(msg){
+  if ($("quotaBox")) {
+    $("quotaBox").textContent = msg || "Scan cap reached. Upgrade Ice+ ($8/mo) for 200 IDs.";
+    $("quotaBox").className = "status err";
+  }
+  show("scan");
+}
+$("payBtn").onclick = async () => {
+  try {
+    const r = await fetch("/checkout", { headers:{ "x-token": token() } });
+    const d = await r.json();
+    if (d.url) { location.href = d.url; return; }
+    const secret = $("secret").value;
+    if (confirm("Stripe link not set yet. Unlock Ice+ on this account with the app secret?")) {
+      const p = await authPost("/plus", { secret });
+      await refreshUsage();
+      $("quotaBox").textContent = "Ice+ on. "+p.left+" IDs left this month.";
+      $("quotaBox").className = "status ok";
+    }
+  } catch(e) { $("quotaBox").textContent = e.message; $("quotaBox").className = "status err"; }
 };
 $("signupBtn").onclick = async () => {
   try {

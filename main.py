@@ -12,6 +12,9 @@ XAI_API_KEY = os.environ.get("XAI_API_KEY", "")
 APP_SECRET = os.environ.get("APP_SECRET", "")
 MODEL = os.environ.get("XAI_MODEL", "grok-4-1-fast-non-reasoning")
 DAILY_CAP = int(os.environ.get("DAILY_CAP", "80"))
+FREE_SCANS = int(os.environ.get("FREE_SCANS", "10"))
+PLUS_SCANS = int(os.environ.get("PLUS_SCANS", "200"))
+STRIPE_PAY_LINK = os.environ.get("STRIPE_PAY_LINK", "")
 
 app = FastAPI(title="Ice Ledger Identify")
 app.add_middleware(
@@ -30,6 +33,7 @@ If a field is not readable, use null. Do not invent a rare parallel.
 insert examples: Young Guns, SP Authentic, Exclusives, Canvas, Clear Cut, base, insert.
 {
   "player": string|null,
+  "sport": string|null,
   "year": string|null,
   "set": string|null,
   "number": string|null,
@@ -105,12 +109,14 @@ async def identify(
     file: UploadFile = File(...),
     back: UploadFile | None = File(default=None),
     x_app_secret: str | None = Header(default=None),
+    x_token: str | None = Header(default=None),
     secret: str | None = Form(default=None),
 ):
     check_secret(x_app_secret or secret)
     if not XAI_API_KEY:
         raise HTTPException(500, "XAI_API_KEY not set on server")
     check_cap()
+    require_scan(None, x_token)
     content = [
         {"type": "text", "text": "FRONT of card:"},
         await _jpeg_part(file, "front"),
@@ -212,6 +218,7 @@ def _parse_json_blob(text: str) -> dict:
 async def comp(
     payload: dict,
     x_app_secret: str | None = Header(default=None),
+    x_token: str | None = Header(default=None),
 ):
     check_secret(x_app_secret or payload.get("secret"))
     if not XAI_API_KEY:
@@ -307,6 +314,7 @@ def _urls_from_obj(obj, found):
 async def photos(
     payload: dict,
     x_app_secret: str | None = Header(default=None),
+    x_token: str | None = Header(default=None),
 ):
     check_secret(x_app_secret or payload.get("secret"))
     if not XAI_API_KEY:
@@ -405,7 +413,17 @@ def init_db():
       user_id INTEGER NOT NULL,
       data TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS usage (
+      user_id INTEGER NOT NULL,
+      month TEXT NOT NULL,
+      n INTEGER NOT NULL,
+      PRIMARY KEY (user_id, month)
+    );
     """)
+    try:
+        con.execute("ALTER TABLE users ADD COLUMN plan TEXT DEFAULT 'free'")
+    except sqlite3.OperationalError:
+        pass
     con.commit()
     con.close()
 
@@ -438,6 +456,45 @@ def require_user(request: Request = None, x_token: str | None = None):
     if not uid:
         raise HTTPException(401, "sign in")
     return uid
+
+def month_key():
+    return time.strftime("%Y-%m")
+
+def plan_of(uid: int) -> str:
+    con = db()
+    row = con.execute("SELECT plan FROM users WHERE id=?", (uid,)).fetchone()
+    con.close()
+    p = (row["plan"] if row else "free") or "free"
+    return p
+
+def usage_of(uid: int):
+    m = month_key()
+    con = db()
+    row = con.execute("SELECT n FROM usage WHERE user_id=? AND month=?", (uid, m)).fetchone()
+    con.close()
+    used = row["n"] if row else 0
+    plan = plan_of(uid)
+    cap = PLUS_SCANS if plan == "plus" else FREE_SCANS
+    return {"used": used, "cap": cap, "left": max(0, cap - used), "plan": plan, "month": m}
+
+def bump_usage(uid: int):
+    m = month_key()
+    con = db()
+    row = con.execute("SELECT n FROM usage WHERE user_id=? AND month=?", (uid, m)).fetchone()
+    if row:
+        con.execute("UPDATE usage SET n=n+1 WHERE user_id=? AND month=?", (uid, m))
+    else:
+        con.execute("INSERT INTO usage(user_id,month,n) VALUES(?,?,1)", (uid, m))
+    con.commit()
+    con.close()
+
+def require_scan(request: Request, x_token: str | None = None):
+    uid = require_user(request, x_token)
+    u = usage_of(uid)
+    if u["left"] <= 0:
+        raise HTTPException(402, "scan cap reached — upgrade")
+    bump_usage(uid)
+    return uid, usage_of(uid)
 
 @app.post("/signup")
 async def signup(payload: dict):
@@ -478,6 +535,30 @@ async def login(payload: dict):
     con.commit()
     con.close()
     return {"token": token, "email": email}
+
+@app.get("/usage")
+async def usage(request: Request, x_token: str | None = Header(default=None)):
+    uid = require_user(request, x_token)
+    return usage_of(uid)
+
+@app.get("/checkout")
+async def checkout(request: Request, x_token: str | None = Header(default=None)):
+    require_user(request, x_token)
+    if STRIPE_PAY_LINK:
+        return {"url": STRIPE_PAY_LINK, "price": "8 CAD / month"}
+    return {"url": None, "price": "8 CAD / month", "note": "Set STRIPE_PAY_LINK on Railway when the Stripe Payment Link is live."}
+
+@app.post("/plus")
+async def plus(payload: dict, request: Request, x_token: str | None = Header(default=None)):
+    """Flip plan to plus using APP_SECRET until Stripe webhook exists."""
+    if APP_SECRET and payload.get("secret") != APP_SECRET:
+        raise HTTPException(401, "app secret does not match")
+    uid = require_user(request, x_token)
+    con = db()
+    con.execute("UPDATE users SET plan='plus' WHERE id=?", (uid,))
+    con.commit()
+    con.close()
+    return usage_of(uid)
 
 @app.post("/reset")
 async def reset(payload: dict):
