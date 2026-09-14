@@ -89,7 +89,7 @@
     .val b { display:block; font-size:18px; }
     .val span { font-size:11px; color:var(--muted); text-transform:uppercase; }
     .item { cursor:pointer; }
-    .stick { position:sticky; top:0; z-index:6; background:var(--bg); padding:8px 0 10px; }
+    .stick { background:var(--bg); padding:0 0 10px; }
     .backrow { display:flex; gap:8px; }
     .backrow button { width:auto; flex:1; }
   </style>
@@ -957,16 +957,7 @@ function renderBinder(){
     $("list").innerHTML = rows.map(cardRowHtml).join("");
   }
 }
-let searchPinned = false;
-function pinSearchOnce(){
-  if (searchPinned) return;
-  searchPinned = true;
-  const el = $("searchStick") || $("q");
-  setTimeout(() => el.scrollIntoView({ block:"start", behavior:"smooth" }), 250);
-}
-$("q").oninput = () => { renderBinder(); pinSearchOnce(); };
-$("q").onfocus = pinSearchOnce;
-$("q").onblur = () => { searchPinned = false; };
+$("q").oninput = renderBinder;
 if ($("sortBy")) $("sortBy").onchange = renderBinder;
 if ($("teamFilter")) $("teamFilter").onchange = renderBinder;
 $("list").onclick = e => {
