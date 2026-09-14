@@ -3,44 +3,349 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Ice Ledger Scan</title>
+  <title>Ice Ledger</title>
   <style>
-    body { font-family:-apple-system,sans-serif; background:#0b0f14; color:#e8eef6; margin:0; padding:16px; }
-    input, button, pre { font:inherit; }
-    input { width:100%; padding:10px; margin:6px 0 12px; background:#121820; color:#fff; border:1px solid #2a3544; border-radius:8px; }
-    button { background:#3d8fb0; color:#fff; border:0; padding:12px; border-radius:8px; font-weight:700; width:100%; }
-    pre { white-space:pre-wrap; background:#171e28; padding:12px; border-radius:8px; }
-    .muted { color:#8b9bb0; font-size:13px; }
+    :root { --bg:#0b0f14; --card:#171e28; --line:#2a3544; --text:#e8eef6; --muted:#8b9bb0; --ice:#7ec8e3; --btn:#3d8fb0; --warn:#e6c07b; --bad:#f07178; --good:#6ee7a8; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,sans-serif; background:var(--bg); color:var(--text); }
+    .ticker { display:grid; grid-template-columns:repeat(3,1fr); gap:0; border-bottom:1px solid var(--line); background:#10161d; }
+    .tick { padding:10px 8px; text-align:center; border-right:1px solid var(--line); }
+    .tick:last-child { border-right:0; }
+    .tick b { display:block; font-size:16px; }
+    .tick span { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+    .pos { color:var(--good); } .neg { color:var(--bad); }
+    header { padding:12px 16px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; }
+    h1 { font-size:18px; margin:0; } h1 span { color:var(--ice); }
+    nav { display:flex; gap:8px; }
+    nav button { width:auto; margin:0; padding:8px 12px; }
+    .page { display:none; padding:16px 16px 40px; }
+    .page.on { display:block; }
+    .muted { color:var(--muted); font-size:13px; }
+    label { display:block; font-size:12px; color:var(--muted); margin-top:10px; }
+    input, select, textarea { width:100%; padding:10px 12px; margin-top:4px; background:#121820; color:var(--text); border:1px solid var(--line); border-radius:8px; font:inherit; }
+    button, a.btn { width:100%; margin-top:10px; background:var(--btn); color:#fff; border:0; padding:12px; border-radius:8px; font-weight:700; text-decoration:none; display:block; text-align:center; }
+    button.ghost, a.ghost { background:transparent; border:1px solid var(--line); color:var(--ice); }
+    button.danger { background:#6b2a30; }
+    button:disabled { opacity:.5; }
+    .row2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .preview { margin-top:12px; background:var(--card); border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+    .preview h3 { margin:0; padding:8px 10px; font-size:11px; color:var(--muted); text-transform:uppercase; border-bottom:1px solid var(--line); }
+    .preview img { display:block; width:100%; height:160px; object-fit:contain; background:#000; }
+    .status { margin-top:10px; font-size:14px; }
+    .status.err { color:var(--bad); } .status.warn { color:var(--warn); }
+    .card { margin-top:14px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; }
+    .card h2 { margin:0 0 4px; font-size:20px; }
+    .line { color:var(--muted); font-size:14px; margin-bottom:10px; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:8px 12px; }
+    .field { border-top:1px solid var(--line); padding-top:8px; }
+    .field span { display:block; font-size:11px; color:var(--muted); text-transform:uppercase; }
+    .field b { font-size:15px; }
+    .badge { display:inline-block; font-size:12px; padding:3px 8px; border-radius:999px; background:#2a3544; margin-bottom:8px; }
+    .badge.review { background:#4a3b16; color:var(--warn); }
+    .item { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px; margin-bottom:10px; }
+    .item-top { display:grid; grid-template-columns:72px 1fr; gap:10px; }
+    .item img { width:72px; height:72px; object-fit:contain; background:#000; border-radius:8px; }
+    .item h3 { margin:0 0 2px; font-size:15px; }
+    .px { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin-top:8px; }
+    .px label { margin-top:0; }
+    .hidden { display:none; }
+    .stale { font-size:11px; color:var(--warn); margin-top:6px; }
   </style>
 </head>
 <body>
-  <h1>Ice Ledger Scan</h1>
-  <p class="muted">Open this page in Safari. Take the photo in Camera first, then choose it here.</p>
-  <label>App secret</label>
-  <input id="secret" value="UnderoathA1!" />
-  <input id="file" type="file" accept="image/*" />
-  <button id="go">Identify</button>
-  <p class="muted" id="status"></p>
-  <pre id="out"></pre>
+  <div class="ticker" id="ticker"></div>
+  <header>
+    <h1>Ice <span>Ledger</span></h1>
+    <nav>
+      <button class="ghost" id="tabScan">Scan</button>
+      <button class="ghost" id="tabBind">Binder</button>
+    </nav>
+  </header>
+
+  <section class="page on" id="scanPage">
+    <p class="muted">Identify, enter paid if you know it, optional listing photo, save.</p>
+    <label>App secret</label>
+    <input id="secret" type="text" value="UnderoathA1!" />
+    <label>Your photo</label>
+    <input id="file" type="file" accept="image/*" />
+    <button id="go">Identify</button>
+    <div class="row2">
+      <div class="preview hidden" id="scanBox"><h3>Your scan</h3><img id="scanImg" alt="" /></div>
+      <div class="preview hidden" id="bindBox"><h3>Binder photo</h3><img id="bindImg" alt="" /></div>
+    </div>
+    <p class="status" id="status"></p>
+    <div class="card hidden" id="result">
+      <div class="badge" id="badge"></div>
+      <h2 id="player"></h2>
+      <div class="line" id="headline"></div>
+      <div class="grid" id="fields"></div>
+      <div class="row2">
+        <a class="ghost btn" id="gImg" target="_blank" rel="noopener">Google Images</a>
+        <a class="ghost btn" id="ebay" target="_blank" rel="noopener">eBay sold</a>
+      </div>
+      <a class="ghost btn hidden" id="psa" target="_blank" rel="noopener">PSA cert</a>
+      <label>Optional cleaner binder photo</label>
+      <input id="bindFile" type="file" accept="image/*" />
+      <label>Or image URL</label>
+      <input id="bindUrl" type="url" placeholder="https://…" />
+      <button class="ghost" id="useScan">Use my scan as binder photo</button>
+      <div class="row2">
+        <div><label>Paid CAD (optional)</label><input id="cost" type="number" step="0.01" placeholder="Leave blank if unknown" /></div>
+        <div><label>Comp CAD (sold)</label><input id="comp" type="number" step="0.01" placeholder="Suggested after ID" /></div>
+      </div>
+      <p class="muted" id="compNote"></p>
+      <label>Notes</label>
+      <textarea id="notes" rows="2"></textarea>
+      <button id="saveBtn">Save to binder</button>
+    </div>
+  </section>
+
+  <section class="page" id="bindPage">
+    <p class="muted" id="valueNote"></p>
+    <input id="q" placeholder="Search binder…" />
+    <div id="list"></div>
+    <button class="ghost" id="exportBtn">Export JSON</button>
+  </section>
+
 <script>
 const $ = id => document.getElementById(id);
+const KEY = "ice-binder-v1";
+const dash = v => (v==null || v==="") ? "—" : String(v);
+const money = n => n==null || n==="" || isNaN(+n) ? "—" : "$"+Number(n).toLocaleString("en-CA",{minimumFractionDigits:0,maximumFractionDigits:0});
+let last = null, scanData = null, bindData = null;
+
+function load(){ try { return JSON.parse(localStorage.getItem(KEY)||"[]"); } catch(e){ return []; } }
+function saveAll(cards){ localStorage.setItem(KEY, JSON.stringify(cards)); paintTicker(); renderBinder(); }
+function show(id){
+  $("scanPage").classList.toggle("on", id==="scan");
+  $("bindPage").classList.toggle("on", id==="bind");
+  if (id==="bind") renderBinder();
+}
+$("tabScan").onclick = () => show("scan");
+$("tabBind").onclick = () => show("bind");
+
+function totals(){
+  const cards = load();
+  let paid = 0, paidN = 0, mkt = 0, mktN = 0;
+  cards.forEach(c => {
+    if (c.cost!=null && c.cost!=="" && !isNaN(+c.cost)) { paid += +c.cost; paidN++; }
+    if (c.comp!=null && c.comp!=="" && !isNaN(+c.comp)) { mkt += +c.comp; mktN++; }
+  });
+  const pl = (paidN && mktN) ? mkt - paid : null;
+  return { cards: cards.length, paid, paidN, mkt, mktN, pl };
+}
+function paintTicker(){
+  const t = totals();
+  const plCls = t.pl==null ? "" : (t.pl>=0 ? "pos" : "neg");
+  const book = t.mktN ? money(t.mkt) : "—";
+  const cost = t.paidN ? money(t.paid) : "—";
+  const pl = t.pl==null ? "—" : money(t.pl);
+  $("ticker").innerHTML =
+    "<div class=\"tick\"><b>"+book+"</b><span>Book · "+t.mktN+"/"+t.cards+" comps</span></div>"+
+    "<div class=\"tick\"><b>"+cost+"</b><span>Paid · "+t.paidN+"/"+t.cards+"</span></div>"+
+    "<div class=\"tick\"><b class=\""+plCls+"\">"+pl+"</b><span>P/L on known costs</span></div>";
+}
+function qstr(d){
+  return encodeURIComponent([d.year,d.player,d.set,d.number,d.parallel].filter(Boolean).join(" "));
+}
+function daysAgo(iso){
+  if (!iso) return null;
+  return Math.floor((Date.now()-new Date(iso).getTime())/86400000);
+}
+function toJpeg(file, max){
+  return new Promise(resolve => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const s = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement("canvas");
+      c.width = Math.max(1, Math.round(img.width*s));
+      c.height = Math.max(1, Math.round(img.height*s));
+      c.getContext("2d").drawImage(img,0,0,c.width,c.height);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL("image/jpeg", 0.7));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+    img.src = url;
+  });
+}
+
+$("file").onchange = async () => {
+  const f = $("file").files[0];
+  if (!f) return;
+  scanData = await toJpeg(f, 900);
+  $("scanImg").src = scanData;
+  $("scanBox").classList.remove("hidden");
+  $("result").classList.add("hidden");
+  $("status").textContent = "";
+};
+$("bindFile").onchange = async () => {
+  const f = $("bindFile").files[0];
+  if (!f) return;
+  bindData = await toJpeg(f, 900);
+  $("bindUrl").value = "";
+  $("bindImg").src = bindData;
+  $("bindBox").classList.remove("hidden");
+};
+$("bindUrl").onchange = () => {
+  if (!$("bindUrl").value) return;
+  bindData = $("bindUrl").value;
+  $("bindImg").src = bindData;
+  $("bindBox").classList.remove("hidden");
+};
+$("useScan").onclick = ev => {
+  ev.preventDefault();
+  bindData = scanData;
+  $("bindImg").src = scanData;
+  $("bindBox").classList.remove("hidden");
+};
+
 $("go").onclick = async () => {
   const f = $("file").files[0];
-  if (!f) { $("status").textContent = "Pick a photo first."; return; }
-  $("status").textContent = "Working…";
-  $("out").textContent = "";
+  if (!f) { $("status").textContent = "Pick a photo first."; $("status").className = "status err"; return; }
+  $("go").disabled = true;
+  $("status").className = "status";
+  $("status").textContent = "Identifying…";
+  $("result").classList.add("hidden");
   const fd = new FormData();
   fd.append("file", f);
   fd.append("secret", $("secret").value);
   try {
     const r = await fetch("/identify", { method:"POST", body: fd });
     const t = await r.text();
-    $("status").textContent = r.ok ? "Done. Check the fields." : "Error " + r.status;
-    $("out").textContent = t;
-  } catch (e) {
-    $("status").textContent = "Failed: " + e.message;
+    if (!r.ok) throw new Error(t.slice(0,200));
+    const d = JSON.parse(t);
+    last = d;
+    $("player").textContent = d.player || "Unknown player";
+    $("headline").textContent = [d.year,d.set,d.number?"#"+d.number:"",d.parallel].filter(Boolean).join(" · ") || "—";
+    const grade = (!d.grader || d.grader==="Raw") ? "Raw" : [d.grader,d.grade].filter(Boolean).join(" ");
+    $("badge").textContent = d.needs_review ? "Needs review" : "Looks good";
+    $("badge").className = "badge" + (d.needs_review ? " review" : "");
+    const rows = [["Team",d.team],["Grade",grade],["Cert",d.cert],["Year",d.year],["Set",d.set],["Number",d.number],["Parallel",d.parallel]];
+    $("fields").innerHTML = rows.map(([k,v]) => "<div class=\"field\"><span>"+k+"</span><b>"+dash(v)+"</b></div>").join("");
+    const qq = qstr(d);
+    $("gImg").href = "https://www.google.com/search?tbm=isch&q="+qq;
+    $("ebay").href = "https://www.ebay.ca/sch/i.html?_nkw="+qq+"&LH_Sold=1&LH_Complete=1";
+    if (d.cert) { $("psa").href = "https://www.psacard.com/cert/"+encodeURIComponent(d.cert); $("psa").classList.remove("hidden"); }
+    else $("psa").classList.add("hidden");
+    $("result").classList.remove("hidden");
+    $("status").textContent = "Card ID’d. Looking up sold comps…";
+    $("compNote").textContent = "";
+    $("comp").value = "";
+    try {
+      const cr = await fetch("/comp", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json", "x-app-secret": $("secret").value },
+        body: JSON.stringify(Object.assign({secret:$("secret").value}, d))
+      });
+      const ct = await cr.text();
+      if (!cr.ok) throw new Error(ct.slice(0,200));
+      const c = JSON.parse(ct);
+      const sug = c.suggested_cad != null ? c.suggested_cad : c.suggested_usd;
+      if (sug != null) $("comp").value = sug;
+      $("compNote").textContent = (c.summary || "") + (c.needs_review ? " — check this before you trust it." : "");
+      $("status").textContent = sug != null ? "Suggested comp filled. Change it if solds don’t match, then Save." : "No clean sold match. Use Sold and type a number.";
+      $("status").className = "status" + (c.needs_review || d.needs_review ? " warn" : "");
+    } catch (ce) {
+      $("compNote").textContent = "Comp lookup failed. Use Sold and type a number.";
+      $("status").textContent = "ID ok. Comp lookup failed: " + ce.message;
+      $("status").className = "status warn";
+    }
+  } catch(e) {
+    $("status").textContent = "Failed: "+e.message;
+    $("status").className = "status err";
   }
+  $("go").disabled = false;
 };
+
+function numOrNull(el){
+  const v = $(el).value;
+  return v==="" ? null : +v;
+}
+
+$("saveBtn").onclick = () => {
+  if (!last) return;
+  const cards = load();
+  const comp = numOrNull("comp");
+  cards.unshift({
+    id: "c"+Date.now(),
+    player: last.player, year: last.year, set: last.set, number: last.number,
+    parallel: last.parallel, team: last.team, grader: last.grader || "Raw",
+    grade: last.grade, cert: last.cert, notes: $("notes").value || last.notes || "",
+    cost: numOrNull("cost"),
+    comp: comp,
+    compAt: comp==null ? null : new Date().toISOString(),
+    scan: scanData, photo: bindData || scanData,
+    added: new Date().toISOString()
+  });
+  saveAll(cards);
+  $("status").textContent = "Saved. Ticker updated.";
+  $("notes").value = ""; $("cost").value = ""; $("comp").value = "";
+  show("bind");
+};
+
+function renderBinder(){
+  const cards = load();
+  const q = ($("q").value||"").toLowerCase();
+  const rows = cards.filter(c => !q || [c.player,c.set,c.year,c.number,c.cert].join(" ").toLowerCase().includes(q));
+  const t = totals();
+  $("valueNote").textContent = t.mktN < t.cards
+    ? "Book value only counts cards with a sold comp. Open eBay sold, then type the number. Stale comps (7+ days) get a mark."
+    : "Comps are what you last typed from sold listings — not a live feed.";
+  if (!rows.length) { $("list").innerHTML = "<p class=\"muted\">Binder empty. Scan and save a card.</p>"; return; }
+  $("list").innerHTML = rows.map(c => {
+    const img = c.photo || c.scan || "";
+    const line = [c.year,c.set,c.number?"#"+c.number:"",c.parallel].filter(Boolean).join(" · ");
+    const grade = (!c.grader||c.grader==="Raw")?"Raw":[c.grader,c.grade].filter(Boolean).join(" ");
+    const age = daysAgo(c.compAt);
+    const stale = (c.comp!=null && age!=null && age>=7) ? "<div class=\"stale\">Comp is "+age+" days old — tap eBay sold and update</div>" : "";
+    const qq = qstr(c);
+    const pl = (c.cost!=null && c.comp!=null) ? (+c.comp)-(+c.cost) : null;
+    const plCls = pl==null?"":(pl>=0?"pos":"neg");
+    return "<article class=\"item\" data-id=\""+c.id+"\">"+
+      "<div class=\"item-top\"><img src=\""+img+"\" alt=\"\" /><div><h3>"+dash(c.player)+"</h3>"+
+      "<div class=\"muted\">"+dash(line)+"<br>"+grade+(c.cert?" · "+c.cert:"")+(pl!=null?" · <span class=\""+plCls+"\">"+money(pl)+"</span>":"")+"</div></div></div>"+
+      "<div class=\"px\">"+
+      "<div><label>Paid</label><input data-cost=\""+c.id+"\" type=\"number\" step=\"0.01\" value=\""+(c.cost??"")+"\" /></div>"+
+      "<div><label>Comp</label><input data-comp=\""+c.id+"\" type=\"number\" step=\"0.01\" value=\""+(c.comp??"")+"\" /></div>"+
+      "<div><label>&nbsp;</label><a class=\"ghost btn\" style=\"margin-top:4px;padding:10px\" href=\"https://www.ebay.ca/sch/i.html?_nkw="+qq+"&LH_Sold=1&LH_Complete=1\" target=\"_blank\">Sold</a></div>"+
+      "</div>"+stale+
+      "<button class=\"ghost\" data-del=\""+c.id+"\">Remove</button></article>";
+  }).join("");
+}
+$("q").oninput = renderBinder;
+$("list").onclick = e => {
+  const id = e.target.getAttribute("data-del");
+  if (!id) return;
+  if (!confirm("Remove this card?")) return;
+  saveAll(load().filter(c => c.id !== id));
+};
+$("list").onchange = e => {
+  const costId = e.target.getAttribute("data-cost");
+  const compId = e.target.getAttribute("data-comp");
+  const id = costId || compId;
+  if (!id) return;
+  const cards = load();
+  const i = cards.findIndex(c => c.id===id);
+  if (i<0) return;
+  const v = e.target.value==="" ? null : +e.target.value;
+  if (costId) cards[i].cost = v;
+  if (compId) { cards[i].comp = v; cards[i].compAt = v==null ? null : new Date().toISOString(); }
+  saveAll(cards);
+};
+$("exportBtn").onclick = () => {
+  const slim = load().map(c => {
+    const o = Object.assign({}, c);
+    delete o.scan; delete o.photo;
+    return o;
+  });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(slim,null,2)],{type:"application/json"}));
+  a.download = "ice-ledger-binder.json";
+  a.click();
+};
+paintTicker();
+renderBinder();
 </script>
 </body>
 </html>

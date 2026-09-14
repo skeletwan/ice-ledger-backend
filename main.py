@@ -134,3 +134,79 @@ async def identify(
         raise HTTPException(502, "model did not return JSON")
     data["model"] = MODEL
     return data
+
+
+COMP_MODEL = os.environ.get("COMP_MODEL", "grok-4-1-fast-reasoning")
+COMP_PROMPT = """Find recent SOLD prices (not asking prices) for this exact hockey card.
+Use eBay sold/completed and 130point if possible.
+Card: {card}
+Return ONLY JSON:
+{{
+  "suggested_cad": number|null,
+  "suggested_usd": number|null,
+  "low": number|null,
+  "high": number|null,
+  "currency": "CAD"|"USD"|null,
+  "sample_count": number,
+  "confidence": number,
+  "needs_review": boolean,
+  "summary": string,
+  "sources": [string]
+}}
+suggested_cad is your best single number in Canadian dollars if you can convert; otherwise null.
+Do not use listing ask prices. If solds don't match the parallel or grade, needs_review true and suggested_cad null.
+"""
+
+def _extract_response_text(body: dict) -> str:
+    if "output_text" in body and body["output_text"]:
+        return body["output_text"]
+    chunks = []
+    for item in body.get("output") or []:
+        if item.get("type") == "message":
+            for c in item.get("content") or []:
+                if c.get("type") in ("output_text", "text") and c.get("text"):
+                    chunks.append(c["text"])
+    if chunks:
+        return "\n".join(chunks)
+    try:
+        return body["choices"][0]["message"]["content"]
+    except Exception:
+        return ""
+
+@app.post("/comp")
+async def comp(
+    payload: dict,
+    x_app_secret: str | None = Header(default=None),
+):
+    check_secret(x_app_secret or payload.get("secret"))
+    if not XAI_API_KEY:
+        raise HTTPException(500, "XAI_API_KEY not set on server")
+    check_cap()
+    card = {k: payload.get(k) for k in ("player","year","set","number","parallel","team","grader","grade","cert")}
+    label = ", ".join(f"{k}={v}" for k,v in card.items() if v)
+    req = {
+        "model": COMP_MODEL,
+        "tools": [{"type": "web_search", "allowed_domains": ["ebay.ca","ebay.com","130point.com","psacard.com"]}],
+        "input": COMP_PROMPT.format(card=label),
+    }
+    async with httpx.AsyncClient(timeout=120) as client:
+        r = await client.post(
+            "https://api.x.ai/v1/responses",
+            headers={"Authorization": f"Bearer {XAI_API_KEY}", "Content-Type": "application/json"},
+            json=req,
+        )
+    if r.status_code >= 400:
+        raise HTTPException(502, f"xAI comp error {r.status_code}: {r.text[:400]}")
+    text = _extract_response_text(r.json()).strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[-1]
+        if text.endswith("```"):
+            text = text[: text.rfind("```")]
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        raise HTTPException(502, "comp did not return JSON")
+    data["model"] = COMP_MODEL
+    data["card"] = card
+    return data
+
