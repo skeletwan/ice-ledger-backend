@@ -475,6 +475,31 @@ async def login(payload: dict):
     con.close()
     return {"token": token, "email": email}
 
+@app.post("/reset")
+async def reset(payload: dict):
+    email = (payload.get("email") or "").strip().lower()
+    pw = payload.get("password") or ""
+    secret = payload.get("secret") or ""
+    if APP_SECRET and secret != APP_SECRET:
+        raise HTTPException(401, "app secret does not match")
+    if "@" not in email or len(pw) < 6:
+        raise HTTPException(400, "email and a new password (6+ characters)")
+    con = db()
+    row = con.execute("SELECT id FROM users WHERE email=?", (email,)).fetchone()
+    if not row:
+        con.close()
+        raise HTTPException(404, "no account with that email")
+    con.execute("UPDATE users SET pw=? WHERE id=?", (hash_pw(pw), row["id"]))
+    con.execute("DELETE FROM sessions WHERE user_id=?", (row["id"],))
+    token = secrets.token_urlsafe(24)
+    con.execute(
+        "INSERT INTO sessions(token,user_id,created) VALUES(?,?,?)",
+        (token, row["id"], time.strftime("%Y-%m-%dT%H:%M:%SZ")),
+    )
+    con.commit()
+    con.close()
+    return {"token": token, "email": email}
+
 @app.get("/cards")
 async def list_cards(request: Request, x_token: str | None = Header(default=None)):
     uid = require_user(request, x_token)

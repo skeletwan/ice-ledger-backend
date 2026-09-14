@@ -5,9 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Ice Ledger</title>
   <style>
-    :root { --bg:#0b0f14; --card:#171e28; --line:#2a3544; --text:#e8eef6; --muted:#8b9bb0; --ice:#7ec8e3; --btn:#3d8fb0; --warn:#e6c07b; --bad:#f07178; --good:#6ee7a8; }
+    :root { --bg:#071016; --card:#121c26; --line:#2a3d4d; --text:#eef6fb; --muted:#8aa3b5; --ice:#8fd4ee; --btn:#2f9ec4; --warn:#e6c07b; --bad:#f07178; --good:#6ee7a8; }
     * { box-sizing: border-box; }
-    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,sans-serif; background:var(--bg); color:var(--text); }
+    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:
+      radial-gradient(1200px 500px at 10% -10%, #163445 0%, transparent 50%),
+      radial-gradient(900px 400px at 110% 0%, #1a2a22 0%, transparent 45%),
+      var(--bg); color:var(--text); min-height:100vh; }
     .ticker { display:grid; grid-template-columns:repeat(3,1fr); gap:0; border-bottom:1px solid var(--line); background:#10161d; }
     .tick { padding:10px 8px; text-align:center; border-right:1px solid var(--line); }
     .tick:last-child { border-right:0; }
@@ -31,8 +34,16 @@
     .preview { margin-top:12px; background:var(--card); border:1px solid var(--line); border-radius:12px; overflow:hidden; }
     .preview h3 { margin:0; padding:8px 10px; font-size:11px; color:var(--muted); text-transform:uppercase; border-bottom:1px solid var(--line); }
     .preview img { display:block; width:100%; height:160px; object-fit:contain; background:#000; }
-    .status { margin-top:10px; font-size:14px; }
-    .status.err { color:var(--bad); } .status.warn { color:var(--warn); }
+    .status { margin-top:12px; font-size:14px; padding:10px 12px; border-radius:10px; line-height:1.35; }
+    #authStatus { display:none; }
+    #authStatus.on { display:block; }
+    .status.err { color:#ffd6d8; background:#3a1b20; border:1px solid #6b2a30; }
+    .status.warn { color:#ffe7b3; background:#3a3018; border:1px solid #6b5420; }
+    .status.ok { color:#d4ffe8; background:#163226; border:1px solid #2a6b4a; }
+    .auth-wrap { max-width:420px; margin:48px auto; padding:0 16px 40px; }
+    .auth-card { background:linear-gradient(180deg,#18232d,#121b22); border:1px solid var(--line); border-radius:18px; padding:22px 20px 24px; box-shadow:0 18px 50px rgba(0,0,0,.35); }
+    .mark { width:42px; height:42px; border-radius:12px; background:linear-gradient(135deg,#8fd4ee,#3d8fb0); margin-bottom:12px; }
+    #resetBox { margin-top:8px; padding-top:8px; border-top:1px solid var(--line); }
     .card { margin-top:14px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; }
     .card h2 { margin:0 0 4px; font-size:20px; }
     .line { color:var(--muted); font-size:14px; margin-bottom:10px; }
@@ -56,16 +67,30 @@
   </style>
 </head>
 <body>
-  <section class="page on" id="authPage" style="padding:16px">
-    <h1>Ice <span style="color:var(--ice)">Ledger</span></h1>
-    <p class="muted">Create an account so the binder lives on the server, not only this phone.</p>
-    <label>Email</label>
-    <input id="email" type="email" autocomplete="email" />
-    <label>Password (6+ characters)</label>
-    <input id="password" type="password" autocomplete="new-password" />
-    <button id="signupBtn">Create account</button>
-    <button class="ghost" id="loginBtn">Sign in</button>
-    <p class="status" id="authStatus"></p>
+  <section class="page on" id="authPage">
+    <div class="auth-wrap">
+      <div class="auth-card">
+        <div class="mark"></div>
+        <h1>Ice <span>Ledger</span></h1>
+        <p class="muted">Your binder, scans, and comps — signed in so it isn’t stuck on one phone.</p>
+        <label>Email</label>
+        <input id="email" type="email" autocomplete="username" />
+        <label>Password</label>
+        <input id="password" type="password" autocomplete="current-password" placeholder="6+ characters" />
+        <button id="loginBtn">Sign in</button>
+        <button class="ghost" id="signupBtn">Create account</button>
+        <button class="ghost" id="showReset">Forgot password</button>
+        <div id="resetBox" class="hidden">
+          <p class="muted">Set a new password with the app secret from Railway / the scan page.</p>
+          <label>App secret</label>
+          <input id="resetSecret" type="password" autocomplete="off" />
+          <label>New password</label>
+          <input id="resetPw" type="password" autocomplete="new-password" />
+          <button id="resetBtn">Reset password & sign in</button>
+        </div>
+        <p class="status" id="authStatus"></p>
+      </div>
+    </div>
   </section>
   <div id="appShell" class="hidden">
   <div class="ticker" id="ticker"></div>
@@ -157,10 +182,29 @@ function showApp(){
   $("appShell").classList.remove("hidden");
   paintTicker(); renderBinder();
 }
+function niceErr(raw){
+  let msg = raw;
+  try { const j = JSON.parse(raw); if (j.detail) msg = j.detail; } catch(e){}
+  const map = {
+    "bad email or password": "That email and password don’t match. Try Sign in again, or Reset password.",
+    "email already used": "That email already has an account. Sign in, or use Forgot password.",
+    "email and password (6+ chars)": "Use a real email and a password with at least 6 characters.",
+    "email and a new password (6+ characters)": "Need the email and a new password of 6+ characters.",
+    "app secret does not match": "App secret is wrong. Use the same one as on the scan page / Railway.",
+    "no account with that email": "No account with that email yet. Create account first.",
+    "sign in": "Session expired. Sign in again."
+  };
+  return map[msg] || msg;
+}
+function flash(el, kind, text){
+  const n = $(el);
+  n.textContent = text;
+  n.className = "status on " + kind;
+}
 async function authPost(path, body){
   const r = await fetch(path, { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(body) });
   const t = await r.text();
-  if (!r.ok) throw new Error(t.slice(0,180));
+  if (!r.ok) throw new Error(niceErr(t));
   return JSON.parse(t);
 }
 async function pullCloud(){
@@ -531,13 +575,28 @@ $("signupBtn").onclick = async () => {
   try {
     const d = await authPost("/signup", { email:$("email").value, password:$("password").value });
     setToken(d.token); showApp(); await pullCloud(); paintTicker(); renderBinder();
-  } catch(e) { $("authStatus").textContent = e.message; $("authStatus").className = "status err"; }
+  } catch(e) { flash("authStatus", "err", e.message); }
 };
 $("loginBtn").onclick = async () => {
   try {
     const d = await authPost("/login", { email:$("email").value, password:$("password").value });
     setToken(d.token); showApp(); await pullCloud(); paintTicker(); renderBinder();
-  } catch(e) { $("authStatus").textContent = e.message; $("authStatus").className = "status err"; }
+  } catch(e) { flash("authStatus", "err", e.message); }
+};
+$("showReset").onclick = ev => {
+  ev.preventDefault();
+  $("resetBox").classList.toggle("hidden");
+};
+$("resetBtn").onclick = async () => {
+  try {
+    const d = await authPost("/reset", {
+      email: $("email").value,
+      password: $("resetPw").value,
+      secret: $("resetSecret").value
+    });
+    flash("authStatus", "ok", "Password updated. Signing you in…");
+    setToken(d.token); showApp(); await pullCloud(); paintTicker(); renderBinder();
+  } catch(e) { flash("authStatus", "err", e.message); }
 };
 $("logoutBtn").onclick = () => { setToken(""); location.reload(); };
 if (token()) { $("authPage").classList.add("hidden"); $("authPage").classList.remove("on"); showApp(); pullCloud().then(() => { paintTicker(); renderBinder(); }); }
