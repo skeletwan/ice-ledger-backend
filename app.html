@@ -59,7 +59,16 @@
     .auth-wrap { max-width:420px; margin:48px auto; padding:0 16px 40px; }
     .auth-card { background:linear-gradient(180deg,#18232d,#121b22); border:1px solid var(--line); border-radius:18px; padding:22px 20px 24px; box-shadow:0 18px 50px rgba(0,0,0,.35); }
     .mark { width:42px; height:42px; border-radius:12px; background:linear-gradient(135deg,#8fd4ee,#3d8fb0); margin-bottom:12px; }
-    #resetBox { margin-top:8px; padding-top:8px; border-top:1px solid var(--line); }
+    .auth-card[data-mode="signin"] .signup-only,
+    .auth-card[data-mode="signin"] .reset-only,
+    .auth-card[data-mode="signin"] .signup-actions { display:none; }
+    .auth-card[data-mode="signup"] .signin-actions,
+    .auth-card[data-mode="signup"] .reset-only { display:none; }
+    .auth-card[data-mode="reset"] .signup-only,
+    .auth-card[data-mode="reset"] .signin-actions,
+    .auth-card[data-mode="reset"] .signup-actions { display:none; }
+    .auth-links { display:flex; justify-content:space-between; gap:12px; margin-top:12px; }
+    .auth-links button { width:auto; margin:0; padding:0; background:none; border:0; color:var(--ice); font-size:13px; font-weight:600; }
     .pw-wrap { position:relative; }
     .pw-wrap input { padding-right:72px; }
     .pw-wrap .eye { position:absolute; right:6px; top:4px; width:auto; margin:0; padding:8px 10px; font-size:12px; background:transparent; border:0; color:var(--ice); }
@@ -142,25 +151,39 @@
 <body>
   <section class="page on" id="authPage">
     <div class="auth-wrap">
-      <div class="auth-card">
+      <div class="auth-card" data-mode="signin">
         <div class="mark"></div>
         <h1>Ice <span>Ledger</span></h1>
-        <p class="muted">Your binder, scans, and comps — signed in so it isn’t stuck on one phone.</p>
+        <p class="muted" id="authLead">Sign in to your binder.</p>
         <label>Email</label>
         <input id="email" type="email" autocomplete="username" />
-        <label>Confirm email <span style="font-weight:400">(new accounts)</span></label>
-        <input id="email2" type="email" autocomplete="off" placeholder="Type it again" />
         <label>Password</label>
         <div class="pw-wrap">
-          <input id="password" type="password" autocomplete="off" placeholder="6+ characters" />
+          <input id="password" type="password" autocomplete="current-password" placeholder="6+ characters" />
           <button type="button" class="eye" data-eye="password">Show</button>
         </div>
-        <label style="margin-top:14px"><input id="agreeLegal" type="checkbox" style="width:auto;margin-right:8px" /> I agree to the <a href="/terms#terms-of-service" target="_blank" rel="noopener">Terms</a>, <a href="/aup#acceptable-use-policy" target="_blank" rel="noopener">Acceptable Use</a>, and <a href="/privacy#privacy-policy" target="_blank" rel="noopener">Privacy Policy</a></label>
-        <button id="loginBtn">Sign in</button>
-        <button class="ghost" id="signupBtn">Create account</button>
-        <button class="ghost" id="showReset">Forgot password</button>
-        <div id="resetBox" class="hidden">
-          <p class="muted">We’ll email a code to the address above.</p>
+        <div class="signup-only">
+          <label>Confirm password</label>
+          <div class="pw-wrap">
+            <input id="password2" type="password" autocomplete="new-password" placeholder="Type it again" />
+            <button type="button" class="eye" data-eye="password2">Show</button>
+          </div>
+          <label style="margin-top:14px"><input id="agreeLegal" type="checkbox" style="width:auto;margin-right:8px" /> I agree to the <a href="/terms#terms-of-service" target="_blank" rel="noopener">Terms</a>, <a href="/aup#acceptable-use-policy" target="_blank" rel="noopener">Acceptable Use</a>, and <a href="/privacy#privacy-policy" target="_blank" rel="noopener">Privacy Policy</a></label>
+        </div>
+        <div class="signin-actions">
+          <button id="loginBtn">Sign in</button>
+          <div class="auth-links">
+            <button type="button" id="toSignup">Create account</button>
+            <button type="button" id="showReset">Forgot password</button>
+          </div>
+        </div>
+        <div class="signup-actions">
+          <button id="signupBtn">Create account</button>
+          <div class="auth-links">
+            <button type="button" id="toSignin">Already have an account</button>
+          </div>
+        </div>
+        <div class="reset-only" id="resetBox">
           <button class="ghost" id="resetSend">Email me a code</button>
           <label>Code from email</label>
           <input id="resetCode" autocomplete="one-time-code" />
@@ -170,9 +193,9 @@
             <button type="button" class="eye" data-eye="resetPw">Show</button>
           </div>
           <button id="resetBtn">Set new password</button>
-          <label>Ice+ secret (mail test only)</label>
-          <input id="mailTestSecret" type="password" autocomplete="off" />
-          <button class="ghost" id="mailTestBtn">Send test email now</button>
+          <div class="auth-links">
+            <button type="button" id="resetBack">Back to sign in</button>
+          </div>
         </div>
         <p class="status" id="authStatus"></p>
       </div>
@@ -1459,19 +1482,36 @@ document.querySelectorAll(".eye").forEach(btn => {
     btn.textContent = on ? "Hide" : "Show";
   };
 });
+function setAuthMode(mode){
+  const card = document.querySelector(".auth-card");
+  if (card) card.setAttribute("data-mode", mode);
+  if ($("authLead")) {
+    $("authLead").textContent = mode === "signup" ? "Create an account." : mode === "reset" ? "We’ll email a code to reset your password." : "Sign in to your binder.";
+  }
+  if ($("authStatus")) { $("authStatus").className = "status"; $("authStatus").textContent = ""; }
+}
+setAuthMode("signin");
+$("toSignup") && ($("toSignup").onclick = ev => { ev.preventDefault(); setAuthMode("signup"); });
+$("toSignin") && ($("toSignin").onclick = ev => { ev.preventDefault(); setAuthMode("signin"); });
+$("showReset") && ($("showReset").onclick = ev => { ev.preventDefault(); setAuthMode("reset"); });
+$("resetBack") && ($("resetBack").onclick = ev => { ev.preventDefault(); setAuthMode("signin"); });
 $("signupBtn").onclick = async () => {
   try {
     if (!$("agreeLegal") || !$("agreeLegal").checked) {
       flash("authStatus", "err", "Agree to the Terms and Privacy Policy first.");
       return;
     }
-    const a = ($("email").value || "").trim().toLowerCase();
-    const b = ($("email2").value || "").trim().toLowerCase();
-    if (!a || a !== b) {
-      flash("authStatus", "err", "Email and confirm email have to match.");
+    const pw = $("password").value || "";
+    const pw2 = ($("password2") && $("password2").value) || "";
+    if (pw.length < 6) {
+      flash("authStatus", "err", "Password needs at least 6 characters.");
       return;
     }
-    const d = await authPost("/signup", { email:a, password:$("password").value });
+    if (pw !== pw2) {
+      flash("authStatus", "err", "Password and confirm password have to match.");
+      return;
+    }
+    const d = await authPost("/signup", { email:$("email").value, password:pw });
     setToken(d.token); showApp(); await pullCloud(); paintTicker(); renderBinder();
   } catch(e) { flash("authStatus", "err", e.message); }
 };
@@ -1481,28 +1521,10 @@ $("loginBtn").onclick = async () => {
     setToken(d.token); showApp(); await pullCloud(); paintTicker(); renderBinder();
   } catch(e) { flash("authStatus", "err", e.message); }
 };
-$("showReset").onclick = ev => {
-  ev.preventDefault();
-  $("resetBox").classList.toggle("hidden");
-};
 $("resetSend") && ($("resetSend").onclick = async () => {
   try {
-    const body = { email: $("email").value };
-    if ($("mailTestSecret") && $("mailTestSecret").value) body.secret = $("mailTestSecret").value;
-    const d = await authPost("/reset", body);
-    if (d && d.found === false) flash("authStatus", "err", "No account uses that email. Use the address that said already in use.");
-    else if (d && d.mailed === false) flash("authStatus", "err", d.error || "Mail did not send. Check MAIL_FROM / Resend.");
-    else flash("authStatus", "ok", "If that email has an account, a code is on the way.");
-  } catch(e) { flash("authStatus", "err", e.message); }
-});
-$("mailTestBtn") && ($("mailTestBtn").onclick = async () => {
-  try {
-    const d = await authPost("/mail-test", {
-      secret: ($("mailTestSecret") && $("mailTestSecret").value) || "",
-      email: $("email").value || "iceledger@outlook.com"
-    });
-    if (d && d.ok) flash("authStatus", "ok", "Test sent to " + d.to + ". Check that inbox and Resend → Emails.");
-    else flash("authStatus", "err", (d && d.error) || "Test did not send.");
+    await authPost("/reset", { email: $("email").value });
+    flash("authStatus", "ok", "If that email has an account, a code is on the way.");
   } catch(e) { flash("authStatus", "err", e.message); }
 });
 $("resetBtn").onclick = async () => {
