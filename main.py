@@ -172,7 +172,7 @@ async def identify(
 
 COMP_MODEL = os.environ.get("COMP_MODEL", "grok-4-1-fast-reasoning")
 COMP_PROMPT = """Search recent SOLD / completed hockey card sales for this exact card (not asking prices).
-Prefer eBay sold and 130point.com.
+Prefer eBay completed/sold listings and Fanatics Collect auction sales history. Do not use 130point.
 Card: {card}
 Return ONLY JSON, no markdown:
 {{
@@ -194,7 +194,7 @@ Return ONLY JSON, no markdown:
   "sources": [string]
 }}
 Search separately for RAW solds, PSA 8, PSA 9, PSA 10, BGS 9.5, and SGC 10 of this same player/set/number/parallel.
-Fill each *_cad field you can. suggested_cad is the price for THIS copy's grader/grade.
+Fill each *_cad field you can. suggested_cad is the price for THIS copy's grader/grade. If this copy is Raw, suggested_cad MUST equal raw_cad.
 Only use sold sale prices (money). Never use the card number, year, print run, or cert as a price.
 If you cannot find a sold price for a grade, leave that field null. Do not copy one grade into another.
 Convert USD to CAD at 1.35.
@@ -519,6 +519,10 @@ def init_db():
       created TEXT NOT NULL
     )
     """)
+    try:
+        con.execute("ALTER TABLE comments ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
     con.execute("""
     CREATE TABLE IF NOT EXISTS likes (
       slug TEXT NOT NULL,
@@ -563,6 +567,10 @@ def init_db():
       read INTEGER NOT NULL DEFAULT 0
     )
     """)
+    try:
+        con.execute("ALTER TABLE notes ADD COLUMN card_id TEXT")
+    except sqlite3.OperationalError:
+        pass
     con.commit()
     con.close()
 
@@ -825,8 +833,8 @@ async def upsert_card(payload: dict, request: Request, x_token: str | None = Hea
         fans = con.execute("SELECT follower FROM follows WHERE slug=?", (slug,)).fetchall() if slug else []
         for f in fans:
             con.execute(
-                "INSERT INTO notes(user_id,slug,body,created,read) VALUES(?,?,?,?,0)",
-                (f["follower"], slug, f"{who} added {player}", created),
+                "INSERT INTO notes(user_id,slug,body,created,read,card_id) VALUES(?,?,?,?,0,?)",
+                (f["follower"], slug, f"{who} added {player}", created, cid),
             )
     con.commit()
     con.close()
@@ -974,7 +982,7 @@ async def list_notes(request: Request, x_token: str | None = Header(default=None
     uid = require_user(request, x_token)
     con = db()
     rows = con.execute(
-        "SELECT id,slug,body,created,read FROM notes WHERE user_id=? ORDER BY id DESC LIMIT 60",
+        "SELECT id,slug,body,created,read,card_id FROM notes WHERE user_id=? ORDER BY id DESC LIMIT 60",
         (uid,),
     ).fetchall()
     unread = con.execute("SELECT COUNT(*) AS n FROM notes WHERE user_id=? AND read=0", (uid,)).fetchone()["n"]
@@ -1111,7 +1119,7 @@ async def public_binder(slug: str):
 async def list_comments(slug: str, cid: str):
     con = db()
     rows = con.execute(
-        "SELECT id,name,body,created FROM comments WHERE slug=? AND card_id=? ORDER BY id DESC LIMIT 80",
+        "SELECT id,name,body,created FROM comments WHERE slug=? AND card_id=? AND IFNULL(hidden,0)=0 ORDER BY id DESC LIMIT 80",
         (slug, cid),
     ).fetchall()
     con.close()
@@ -1151,6 +1159,48 @@ async def add_comment(slug: str, cid: str, payload: dict, request: Request, x_to
     rid = con.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
     con.close()
     return {"ok": True, "id": rid, "name": name, "body": body, "created": created}
+
+@app.post("/comments/{cid}/report")
+async def report_comment(cid: int, request: Request, x_token: str | None = Header(default=None)):
+    uid = require_user(request, x_token)
+    con = db()
+    row = con.execute("SELECT id,slug,body FROM comments WHERE id=?", (cid,)).fetchone()
+    if not row:
+        con.close()
+        raise HTTPException(404, "gone")
+    con.execute(
+        "INSERT INTO reports(slug,reporter,reason,created) VALUES(?,?,?,?)",
+        (row["slug"], uid, f"comment:{cid}:{(row['body'] or '')[:60]}", time.strftime("%Y-%m-%dT%H:%M:%SZ")),
+    )
+    n = con.execute(
+        "SELECT COUNT(*) AS n FROM reports WHERE reason LIKE ?",
+        (f"comment:{cid}:%",),
+    ).fetchone()["n"]
+    if n >= 3:
+        con.execute("UPDATE comments SET hidden=1 WHERE id=?", (cid,))
+    con.commit()
+    con.close()
+    return {"ok": True, "reports": n}
+
+@app.get("/admin/inbox")
+async def admin_inbox(secret: str = ""):
+    if APP_SECRET and secret != APP_SECRET:
+        raise HTTPException(401, "app secret does not match")
+    con = db()
+    rows = con.execute("SELECT id,slug,reason,created FROM reports ORDER BY id DESC LIMIT 80").fetchall()
+    con.close()
+    return {"reports": [dict(r) for r in rows]}
+
+@app.post("/admin/hide-comment")
+async def admin_hide(payload: dict):
+    if APP_SECRET and payload.get("secret") != APP_SECRET:
+        raise HTTPException(401, "app secret does not match")
+    cid = int(payload.get("id") or 0)
+    con = db()
+    con.execute("UPDATE comments SET hidden=1 WHERE id=?", (cid,))
+    con.commit()
+    con.close()
+    return {"ok": True}
 
 @app.delete("/comments/{cid}")
 async def del_comment(cid: int, request: Request, x_token: str | None = Header(default=None)):

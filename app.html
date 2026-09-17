@@ -102,6 +102,7 @@
     body.dock-on .dock { display:grid; }
     .dock button { width:auto; margin:0; padding:10px 4px; font-size:12px; background:transparent; color:var(--muted); border:0; border-radius:0; }
     .dock button.on { color:var(--ice); }
+    .dock button.ping { color:#7ef0d2; font-weight:800; }
     .page { padding-bottom:88px; }
     .pwid { display:flex; align-items:center; gap:12px; margin-bottom:10px; }
     .pava { width:52px; height:52px; border-radius:16px; background:var(--ice); color:#071016; font-weight:800; display:flex; align-items:center; justify-content:center; font-size:16px; overflow:hidden; border:3px solid var(--ice); flex:0 0 auto; }
@@ -111,7 +112,7 @@
     .ava-full { display:none; position:fixed; inset:0; z-index:40; background:rgba(0,0,0,.88); align-items:center; justify-content:center; padding:24px; }
     .ava-full.on { display:flex; }
     .ava-full img { max-width:92vw; max-height:80vh; border-radius:16px; border:4px solid var(--ice); }
-    .heart { display:inline-block; margin-left:6px; background:#2a1a28; color:#ff8fb3; border:1px solid #6a3a52; border-radius:999px; padding:2px 8px; font-size:12px; font-weight:800; letter-spacing:.02em; }
+    .heart { display:inline-block; margin-left:6px; background:#102830; color:#7ef0d2; border:1px solid #2a6a62; border-radius:999px; padding:2px 8px; font-size:12px; font-weight:800; letter-spacing:.02em; }
     .heart.big { font-size:16px; padding:6px 12px; margin:8px 0 0; }
     .hue-swatch { width:48px; height:48px; padding:0; border:0; border-radius:12px; background:transparent; overflow:hidden; }
     .hue-swatch::-webkit-color-swatch-wrapper { padding:0; }
@@ -229,7 +230,7 @@
         <a class="ghost btn" id="gImg" target="_blank" rel="noopener">Google Images</a>
         <a class="ghost btn" id="ebay" target="_blank" rel="noopener">eBay sold</a>
       </div>
-      <a class="ghost btn" id="pt130" target="_blank" rel="noopener">130point sold</a>
+      <a class="ghost btn" id="pt130" target="_blank" rel="noopener">Fanatics sold</a>
       <a class="ghost btn hidden" id="psa" target="_blank" rel="noopener">PSA cert</a>
       <button id="refreshComp">Update comps</button>
       <div class="row2">
@@ -366,6 +367,10 @@
     <p class="muted" id="plusNote"></p>
     <h3 style="font-size:15px;margin:16px 0 8px">Alerts</h3>
     <p class="muted">Pushes stay off until book can update itself.</p>
+    <h3 style="font-size:15px;margin:16px 0 8px">Moderation</h3>
+    <p class="muted">Reports land here. Three photo or comment reports auto-hide that item.</p>
+    <button class="ghost" id="modLoad">Load reports</button>
+    <div id="modList"></div>
     <button class="ghost" id="logoutBtn">Get out</button>
   </section>
   <section class="page" id="helpPage">
@@ -409,7 +414,7 @@
     <p class="muted" id="dNotes"></p>
     <div class="row2">
       <a class="ghost btn" id="dEbay" target="_blank" rel="noopener">eBay sold</a>
-      <a class="ghost btn" id="d130" target="_blank" rel="noopener">130point</a>
+      <a class="ghost btn" id="d130" target="_blank" rel="noopener">Fanatics</a>
     </div>
     <button class="ghost" id="shareCard">Copy public link to this card</button>
     <p class="muted" id="shareCardNote"></p>
@@ -474,6 +479,7 @@ function showApp(){
   $("appShell").classList.remove("hidden");
   document.body.classList.add("dock-on");
   paintTicker(); renderBinder(); refreshUsage(); loadNotePrefs(); scheduleDaily(); loadMe(); refreshNotesBadge();
+  if (!window._noteTick) window._noteTick = setInterval(refreshNotesBadge, 25000);
 }
 function niceErr(raw){
   let msg = raw;
@@ -887,7 +893,7 @@ $("go").onclick = async () => {
     });
     $("gImg").href = "https://www.google.com/search?tbm=isch&q="+qq;
     $("ebay").href = "https://www.ebay.ca/sch/i.html?_nkw="+qq+"&LH_Sold=1&LH_Complete=1";
-    $("pt130").href = "https://www.130point.com/sales/?search="+qq;
+    $("pt130").href = "https://sales-history.fanaticscollect.com/?q="+qq;
     if (d.cert) { $("psa").href = "https://www.psacard.com/cert/"+encodeURIComponent(d.cert); $("psa").classList.remove("hidden"); }
     else $("psa").classList.add("hidden");
     $("result").classList.remove("hidden");
@@ -898,7 +904,7 @@ $("go").onclick = async () => {
     try {
       await lookupComp();
     } catch (ce) {
-      $("compNote").textContent = "Comp lookup failed. Use Sold / 130point and type a number.";
+      $("compNote").textContent = "Comp lookup failed. Use eBay sold or Fanatics and type a number.";
       $("status").textContent = "ID ok. Comp lookup failed: " + ce.message;
       $("status").className = "status warn";
       setCompBanner("bad", "Comp search failed. You can still save and type a number.");
@@ -954,7 +960,9 @@ async function lookupComp(){
   const ct = await cr.text();
   if (!cr.ok) throw new Error(ct.slice(0,200));
   const c = JSON.parse(ct);
+  const g0 = ($("f_grader").value||"Raw");
   let sug = c.suggested_cad != null ? c.suggested_cad : c.suggested_usd;
+  if (g0==="Raw" && c.raw_cad != null) sug = c.raw_cad;
   if (sug == null && c.low != null && c.high != null) sug = Math.round((+c.low + +c.high) / 2);
   if (sug == null && c.low != null) sug = c.low;
   const cardNo = parseFloat(String($("f_number").value||"").replace("#",""));
@@ -974,7 +982,10 @@ async function lookupComp(){
   const g = ($("f_grader").value||"Raw");
   const gr = ($("f_grade").value||"").trim();
   if (sug != null) {
-    if (g==="Raw") setIf("rawComp", sug);
+    if (g==="Raw") {
+      if ($("rawComp")) $("rawComp").value = sug;
+      if ($("comp")) $("comp").value = sug;
+    }
     if (g==="PSA" && gr==="8") setIf("psa8Comp", sug);
     if (g==="PSA" && (gr==="9"||gr==="9.0")) setIf("psa9Comp", sug);
     if (g==="PSA" && (gr==="10"||gr==="10.0")) setIf("psa10Comp", sug);
@@ -983,10 +994,10 @@ async function lookupComp(){
   }
   const range = (c.low != null || c.high != null) ? (" Range " + (c.low ?? "?") + "–" + (c.high ?? "?") + ".") : "";
   $("compNote").textContent = (c.summary || c.error || "") + range + (c.needs_review ? " Check before you trust it." : "");
-  $("status").textContent = sug != null ? "Sold comp filled. Edit if wrong, then Save." : "Still no auto price. Open Sold / 130point and type it.";
+  $("status").textContent = sug != null ? "Sold comp filled. Edit if wrong, then Save." : "Still no auto price. Open eBay sold or Fanatics and type it.";
   $("status").className = "status" + ((c.needs_review || !sug) ? " warn" : "");
   if ($("resultStatus")) $("resultStatus").textContent = $("status").textContent;
-  setCompBanner(sug != null ? "ok" : "bad", sug != null ? "Comps loaded. Check the numbers, then save." : "No sold found automatically. Use eBay / 130point.");
+  setCompBanner(sug != null ? "ok" : "bad", sug != null ? "Comps loaded. Check the numbers, then save." : "No sold found automatically. Use eBay or Fanatics.");
 }
 $("refreshComp").onclick = async ev => {
   ev.preventDefault();
@@ -1126,7 +1137,7 @@ function openDetail(id){
   $("dNotes").textContent = c.notes || "";
   const qq = qstr(c);
   $("dEbay").href = "https://www.ebay.ca/sch/i.html?_nkw="+qq+"&LH_Sold=1&LH_Complete=1";
-  $("d130").href = "https://www.130point.com/sales/?search="+qq;
+  $("d130").href = "https://sales-history.fanaticscollect.com/?q="+qq;
   show("detail");
   if (mySlug && $("ownComments")) loadComments(mySlug, id, $("ownComments"));
 }
@@ -1263,10 +1274,13 @@ $("dDel").onclick = () => {
   show("bind");
 };
 function applyCompObj(card, c){
+  const rawCard = !card.grader || card.grader === "Raw";
   let sug = c.suggested_cad != null ? c.suggested_cad : c.suggested_usd;
+  if (rawCard && c.raw_cad != null) sug = c.raw_cad;
   if (sug == null && c.low != null && c.high != null) sug = Math.round((+c.low + +c.high)/2);
   if (sug != null) card.comp = sug;
-  if (c.raw_cad != null) card.rawComp = c.raw_cad;
+  if (rawCard && sug != null) card.rawComp = sug;
+  else if (c.raw_cad != null) card.rawComp = c.raw_cad;
   if (c.psa8_cad != null) card.psa8Comp = c.psa8_cad;
   if (c.psa9_cad != null) card.psa9Comp = c.psa9_cad;
   if (c.psa10_cad != null) card.psa10Comp = c.psa10_cad;
@@ -1365,6 +1379,18 @@ async function unlockPlus(){
   if ($("plusNote")) $("plusNote").textContent = "Ice+ on. "+p.left+" IDs this month.";
   if ($("quotaBox")) { $("quotaBox").textContent = "Ice+ on. "+p.left+" IDs left this month."; $("quotaBox").className = "status ok"; }
 }
+$("modLoad") && ($("modLoad").onclick = async () => {
+  const secret = ($("plusSecret") && $("plusSecret").value) || "";
+  const box = $("modList");
+  if (!secret) { box.textContent = "Paste app secret first."; return; }
+  const r = await fetch("/admin/inbox?secret="+encodeURIComponent(secret));
+  const t = await r.text();
+  if (!r.ok) { box.textContent = t.slice(0,160); return; }
+  const d = JSON.parse(t);
+  box.innerHTML = (d.reports||[]).length ? d.reports.map(x =>
+    "<div class=\"item\" style=\"cursor:default\"><b>"+x.slug+"</b> <span class=\"muted\">"+(x.created||"").slice(0,16)+"</span><p style=\"margin:6px 0 0\">"+String(x.reason||"").replace(/[<>]/g,"")+"</p></div>"
+  ).join("") : "<p class=\"muted\">No reports.</p>";
+});
 $("plusBtn") && ($("plusBtn").onclick = async () => {
   try { await unlockPlus(); } catch(e) { if ($("plusNote")) $("plusNote").textContent = e.message; }
 });
@@ -1506,8 +1532,14 @@ async function loadComments(slug, cid, box){
   const d = await r.json();
   const list = d.comments || [];
   box.innerHTML = list.length ? list.map(c =>
-    "<div class=\"item\" style=\"cursor:default\"><b>"+c.name+"</b> <span class=\"muted\">"+(c.created||"").slice(0,16)+"</span><p style=\"margin:6px 0 0\">"+String(c.body||"").replace(/[<>]/g,"")+"</p></div>"
+    "<div class=\"item\" style=\"cursor:default\" data-cid=\""+c.id+"\"><b>"+c.name+"</b> <span class=\"muted\">"+(c.created||"").slice(0,16)+"</span><p style=\"margin:6px 0 0\">"+String(c.body||"").replace(/[<>]/g,"")+"</p><button class=\"ghost\" data-rep=\""+c.id+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Report</button></div>"
   ).join("") : "<p class=\"muted\">No comments yet.</p>";
+  box.onclick = async ev => {
+    const b = ev.target.closest("[data-rep]");
+    if (!b || !token()) return;
+    const r = await fetch("/comments/"+b.getAttribute("data-rep")+"/report", { method:"POST", headers:{ "x-token": token() } });
+    if (r.ok) loadComments(slug, cid, box);
+  };
 }
 async function postComment(slug, cid, ta, box, note){
   if (!token()) { if (note) note.textContent = "Sign in to comment."; return; }
@@ -1648,8 +1680,11 @@ async function refreshNotesBadge(){
     const n = d.unread || 0;
     const b = $("noteBadge");
     if (b) b.textContent = n ? ("("+n+")") : "";
-    if ($("tabFind") && n) $("tabFind").textContent = "Community · "+n;
-    else if ($("tabFind")) $("tabFind").textContent = "Community";
+    if ($("tabFind")) {
+      $("tabFind").textContent = n ? ("Community · "+n) : "Community";
+      $("tabFind").classList.toggle("ping", n > 0);
+    }
+    if ($("openNotes")) $("openNotes").textContent = n ? ("Alerts ("+n+")") : "Alerts";
   } catch(e){}
 }
 async function loadNotes(){
@@ -1659,14 +1694,14 @@ async function loadNotes(){
   const r = await fetch("/notes", { headers:{ "x-token": token() } });
   const d = await r.json();
   box.innerHTML = (d.notes||[]).length ? d.notes.map(n =>
-    "<article class=\"item\" data-slug=\""+(n.slug||"")+"\"><b>"+(n.body||"")+"</b><div class=\"muted\">"+(n.created||"").slice(0,16)+(n.read?"":" · new")+"</div></article>"
+    "<article class=\"item\" data-slug=\""+(n.slug||"")+"\" data-card=\""+(n.card_id||"")+"\"><b>"+(n.body||"")+"</b><div class=\"muted\">"+(n.created||"").slice(0,16)+(n.read?"":" · new")+"</div></article>"
   ).join("") : "<p class=\"muted\">Nothing yet. Follow a binder first.</p>";
   await fetch("/notes/read", { method:"POST", headers:{ "x-token": token() } });
   refreshNotesBadge();
 }
 $("notesList") && ($("notesList").onclick = e => {
   const art = e.target.closest("[data-slug]");
-  if (art && art.getAttribute("data-slug")) openPublic(art.getAttribute("data-slug"));
+  if (art && art.getAttribute("data-slug")) openPublic(art.getAttribute("data-slug"), art.getAttribute("data-card"));
 });
 async function paintLike(){
   if (!viewSlug || !viewCard || !$("likeBtn")) return;
@@ -1685,7 +1720,7 @@ $("likeBtn") && ($("likeBtn").onclick = async () => {
   const d = await r.json().catch(()=>({}));
   if (r.ok) $("likeBtn").innerHTML = "<span class=\"heart big\">♥ "+(d.likes||0)+"</span> " + (d.liked ? "Liked" : "Like");
 });
-async function openPublic(slug){
+async function openPublic(slug, cardId){
   viewSlug = slug;
   $("authPage").classList.add("hidden");
   $("authPage").classList.remove("on");
@@ -1707,6 +1742,10 @@ async function openPublic(slug){
     "<article class=\"item\" data-pub=\""+c.id+"\"><div class=\"item-top\"><img src=\""+(c.photo||"")+"\" alt=\"\" /><div><h3>"+(c.player||"—")+" <span class=\"heart\">♥ "+(c.likes||0)+"</span></h3><div class=\"muted\">"+[c.team,c.year,c.set,c.number?"#"+c.number:""].filter(Boolean).join(" · ")+"</div></div></div></article>"
   ).join("") || "<p class=\"muted\">Empty binder.</p>";
   show("pub");
+  if (cardId) {
+    const c = pubCards.find(x => x.id === cardId);
+    if (c) openPubCard(c);
+  }
 }
 $("pubList") && ($("pubList").onclick = e => {
   const art = e.target.closest("[data-pub]");
