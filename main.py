@@ -46,28 +46,20 @@ def send_mail(subject: str, body: str, to: str | None = None) -> bool:
     sender = MAIL_FROM or f"Ice Ledger <{MAIL_TO}>"
     addr = _from_address(sender)
     if RESEND_API_KEY:
-        host = addr.split("@")[-1].lower() if "@" in addr else ""
-        if host in {"outlook.com", "hotmail.com", "gmail.com", "yahoo.com", "live.com"}:
-            MAIL_LAST_ERROR = (
-                f"MAIL_FROM is {addr}. Resend cannot send from that inbox. "
-                "Use Ice Ledger <noreply@contact.iceledgerz.com>"
+        try:
+            r = httpx.post(
+                "https://api.resend.com/emails",
+                headers={"Authorization": f"Bearer {RESEND_API_KEY}", "Content-Type": "application/json"},
+                json={"from": sender, "to": [to], "subject": subject, "text": body},
+                timeout=20,
             )
+            if r.status_code < 300:
+                return True
+            MAIL_LAST_ERROR = f"Resend {r.status_code}: {(r.text or '')[:400]}"
             print("MAIL_FAIL", MAIL_LAST_ERROR)
-        else:
-            try:
-                r = httpx.post(
-                    "https://api.resend.com/emails",
-                    headers={"Authorization": f"Bearer {RESEND_API_KEY}", "Content-Type": "application/json"},
-                    json={"from": sender, "to": [to], "subject": subject, "text": body},
-                    timeout=20,
-                )
-                if r.status_code < 300:
-                    return True
-                MAIL_LAST_ERROR = f"Resend {r.status_code}: {(r.text or '')[:400]}"
-                print("MAIL_FAIL", MAIL_LAST_ERROR)
-            except Exception as e:
-                MAIL_LAST_ERROR = f"Resend error: {e}"
-                print("MAIL_FAIL", MAIL_LAST_ERROR)
+        except Exception as e:
+            MAIL_LAST_ERROR = f"Resend error: {e}"
+            print("MAIL_FAIL", MAIL_LAST_ERROR)
     if SMTP_HOST and SMTP_USER and SMTP_PASS:
         try:
             import smtplib
@@ -901,8 +893,27 @@ async def reset_request(payload: dict):
         )
         if not sent:
             print("RESET_MAIL_FAIL", email, MAIL_LAST_ERROR)
+        found, mailed = True, sent
+    else:
+        found, mailed = False, False
+        print("RESET_NO_USER", email)
     con.close()
-    return {"ok": True}
+    out = {"ok": True}
+    if APP_SECRET and payload.get("secret") == APP_SECRET:
+        out.update({"found": found, "mailed": mailed, "error": MAIL_LAST_ERROR, "from": MAIL_FROM})
+    return out
+
+
+def _mail_test_body(to: str):
+    ok = send_mail("Ice Ledger mail test", "If you got this, mail is working on Ice Ledger.", to=to)
+    return {"ok": ok, "to": to, "from": MAIL_FROM, "resend_key": bool(RESEND_API_KEY), "error": MAIL_LAST_ERROR}
+
+
+@app.get("/mail-test")
+async def mail_test_get(secret: str = "", email: str = ""):
+    if not APP_SECRET or secret != APP_SECRET:
+        raise HTTPException(401, "app secret does not match")
+    return _mail_test_body((email or MAIL_TO).strip().lower())
 
 
 @app.post("/mail-test")
@@ -910,8 +921,7 @@ async def mail_test(payload: dict):
     if not APP_SECRET or payload.get("secret") != APP_SECRET:
         raise HTTPException(401, "app secret does not match")
     to = (payload.get("email") or MAIL_TO or "").strip().lower()
-    ok = send_mail("Ice Ledger mail test", "If you got this, mail is working on Ice Ledger.", to=to)
-    return {"ok": ok, "to": to, "from": MAIL_FROM, "error": MAIL_LAST_ERROR}
+    return _mail_test_body(to)
 
 @app.post("/reset-confirm")
 async def reset_confirm(payload: dict):
