@@ -90,8 +90,22 @@
     .val span { font-size:11px; color:var(--muted); text-transform:uppercase; }
     .item { cursor:pointer; }
     .stick { background:var(--bg); padding:0 0 10px; }
+    body.bind-on .yf, body.bind-on .ticker, body.bind-on .fxbar { display:none; }
+    body.bind-on header { position:sticky; top:0; z-index:8; background:#071016; }
+    body.bind-on .stick { position:sticky; top:52px; z-index:7; padding:8px 16px 10px; margin:0 -16px; background:#071016; border-bottom:1px solid var(--line); }
     .backrow { display:flex; gap:8px; }
     .backrow button { width:auto; flex:1; }
+    .shot { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; min-height:108px; margin-top:0; padding:16px 10px; background:linear-gradient(180deg,#182833,#101820); border:1px dashed #3d5a6a; border-radius:14px; color:var(--text); font-weight:700; font-size:14px; text-align:center; cursor:pointer; }
+    .shot span { display:block; font-size:11px; font-weight:600; color:var(--muted); text-transform:none; }
+    .shot.on { border-style:solid; border-color:var(--ice); background:#14303a; }
+    .shot input { display:none; }
+    #go { margin-top:16px; padding:16px; font-size:17px; letter-spacing:.02em; border-radius:14px; background:linear-gradient(180deg,#3db4d8,#2a86a8); box-shadow:0 8px 24px rgba(47,158,196,.28); }
+    .banner { display:none; margin:0 0 12px; padding:12px 14px; border-radius:12px; background:#173445; border:1px solid #2f6f86; color:var(--ice); font-weight:700; font-size:14px; }
+    .banner.on { display:block; }
+    .banner.wait { animation: pulse 1.2s ease-in-out infinite; }
+    .banner.ok { background:#163226; border-color:#2a6b4a; color:#d4ffe8; animation:none; }
+    .banner.bad { background:#3a3018; border-color:#6b5420; color:#ffe7b3; animation:none; }
+    @keyframes pulse { 50% { opacity:.55; } }
   </style>
 </head>
 <body>
@@ -149,25 +163,28 @@
   </header>
 
   <section class="page on" id="scanPage">
-    <p class="muted">Identify, enter paid if you know it, optional listing photo, save.</p>
+    <p class="muted">Front and back photos. Identify files the card.</p>
     <div class="status" id="quotaBox">Free plan: 10 IDs / month. Ice+ is 200.</div>
     <button class="ghost" id="payBtn">Upgrade Ice+</button>
-    <label>App secret</label>
-    <input id="secret" type="text" value="UnderoathA1!" />
-    <label>Front of card</label>
-    <input id="file" type="file" accept="image/*" capture="environment" />
-    <label>Back of card (recommended on raws)</label>
-    <input id="fileBack" type="file" accept="image/*" capture="environment" />
-    <p class="muted">Camera: the phone will ask the first time you take a photo. That’s Safari’s permission sheet — it isn’t automatic forever.</p>
+    <input id="secret" type="hidden" value="" />
+    <div class="row2" style="margin-top:14px">
+      <label class="shot" id="shotFront">Front photo<span>Camera or library</span>
+        <input id="file" type="file" accept="image/*" capture="environment" />
+      </label>
+      <label class="shot" id="shotBack">Back photo<span>Helps on raws</span>
+        <input id="fileBack" type="file" accept="image/*" capture="environment" />
+      </label>
+    </div>
     <div class="row2">
       <div class="preview hidden" id="scanBox"><h3>Front</h3><img id="scanImg" alt="" /></div>
       <div class="preview hidden" id="backBox"><h3>Back</h3><img id="backImg" alt="" /></div>
     </div>
-    <button id="go">Identify</button>
+    <button id="go">Identify card</button>
     <p class="status" id="status"></p>
   </section>
   <section class="page" id="resultPage">
     <button class="ghost" id="backScan">New scan</button>
+    <div class="banner" id="compBanner">Searching sold comps… this can take 15–40 seconds.</div>
     <p class="status" id="resultStatus"></p>
     <div class="card" id="result">
       <div class="badge" id="badge"></div>
@@ -233,7 +250,27 @@
     </div>
     </div>
     <div id="list"></div>
+    <button id="refreshBook">Refresh book</button>
+    <p class="muted" id="bookNote"></p>
+    <button class="ghost" id="shareBtn">Copy public binder link</button>
+    <p class="muted" id="shareNote"></p>
     <button class="ghost" id="exportBtn">Export JSON</button>
+  </section>
+  <section class="page" id="pubPage">
+    <p class="muted" id="pubHead"></p>
+    <div id="pubList"></div>
+  </section>
+  <section class="page" id="pubDetail">
+    <button class="ghost" id="backPub">Back to binder</button>
+    <div class="hero"><img id="pubHero" alt="" /></div>
+    <h2 id="pubTitle"></h2>
+    <p class="muted" id="pubLine"></p>
+    <div class="vals" id="pubVals"></div>
+    <h3 style="font-size:14px">Comments</h3>
+    <div id="pubComments"></div>
+    <textarea id="pubBody" rows="2" placeholder="Say something about this card (signed in)"></textarea>
+    <button id="pubPost">Post comment</button>
+    <p class="status" id="pubCStatus"></p>
   </section>
   <section class="page" id="setPage">
     <h2 style="font-size:18px;margin:0 0 8px">Alerts</h2>
@@ -278,7 +315,14 @@
       <a class="ghost btn" id="dEbay" target="_blank" rel="noopener">eBay sold</a>
       <a class="ghost btn" id="d130" target="_blank" rel="noopener">130point</a>
     </div>
+    <button class="ghost" id="shareCard">Copy public link to this card</button>
+    <p class="muted" id="shareCardNote"></p>
     <button class="danger" id="dDel">Remove from binder</button>
+    <h3 style="font-size:14px;margin-top:16px">Comments</h3>
+    <div id="ownComments"></div>
+    <textarea id="ownBody" rows="2" placeholder="Comment"></textarea>
+    <button id="ownPost">Post</button>
+    <p class="muted" id="ownCNote"></p>
   </section>
   <section class="page" id="editPage">
     <button class="ghost" id="backDetail">Back to card</button>
@@ -326,7 +370,7 @@ function showApp(){
   $("authPage").classList.remove("on");
   $("authPage").classList.add("hidden");
   $("appShell").classList.remove("hidden");
-  paintTicker(); renderBinder(); refreshUsage(); loadNotePrefs(); scheduleDaily();
+  paintTicker(); renderBinder(); refreshUsage(); loadNotePrefs(); scheduleDaily(); loadMe();
 }
 function niceErr(raw){
   let msg = raw;
@@ -470,7 +514,10 @@ function show(id){
   $("detailPage").classList.toggle("on", id==="detail");
   $("editPage").classList.toggle("on", id==="edit");
   $("setPage").classList.toggle("on", id==="set");
+  if ($("pubPage")) $("pubPage").classList.toggle("on", id==="pub");
+  if ($("pubDetail")) $("pubDetail").classList.toggle("on", id==="pubDetail");
   if (id==="bind") renderBinder();
+  document.body.classList.toggle("bind-on", id==="bind" || id==="pub");
   window.scrollTo(0,0);
 }
 $("tabScan").onclick = () => show("scan");
@@ -607,6 +654,7 @@ $("file").onchange = async () => {
   scanData = await toJpeg(f, 900);
   $("scanImg").src = scanData || URL.createObjectURL(f);
   $("scanBox").classList.remove("hidden");
+  if ($("shotFront")) $("shotFront").classList.add("on");
   $("status").textContent = backFile
     ? "New front loaded. Back is still attached. Identify when ready."
     : "Front loaded. Add the back on raws, then Identify.";
@@ -619,6 +667,7 @@ $("fileBack").onchange = async () => {
   const data = await toJpeg(f, 900);
   $("backImg").src = data || URL.createObjectURL(f);
   $("backBox").classList.remove("hidden");
+  if ($("shotBack")) $("shotBack").classList.add("on");
   $("status").textContent = frontFile
     ? "Back loaded. Front is still attached. Identify when ready."
     : "Back loaded. Add the front, then Identify.";
@@ -665,6 +714,7 @@ $("go").onclick = async () => {
     if (d.cert) { $("psa").href = "https://www.psacard.com/cert/"+encodeURIComponent(d.cert); $("psa").classList.remove("hidden"); }
     else $("psa").classList.add("hidden");
     $("result").classList.remove("hidden");
+    setCompBanner("wait", "Card IDed. Searching sold comps… 15–40 seconds.");
     show("result");
     $("compNote").textContent = "";
     $("comp").value = "";
@@ -674,6 +724,7 @@ $("go").onclick = async () => {
       $("compNote").textContent = "Comp lookup failed. Use Sold / 130point and type a number.";
       $("status").textContent = "ID ok. Comp lookup failed: " + ce.message;
       $("status").className = "status warn";
+      setCompBanner("bad", "Comp search failed. You can still save and type a number.");
     }
     bindData = scanData;
   } catch(e) {
@@ -703,11 +754,20 @@ function readCard(){
     cert: $("f_cert").value.trim()
   };
 }
+function setCompBanner(mode, text){
+  const b = $("compBanner");
+  if (!b) return;
+  b.className = "banner on " + (mode || "wait");
+  if (text) b.textContent = text;
+}
+function hideCompBanner(){ const b=$("compBanner"); if (b) b.className = "banner"; }
 async function lookupComp(){
+  setCompBanner("wait", "Searching sold comps… this can take 15–40 seconds.");
   $("status").textContent = "Looking up sold comps…";
+  if ($("resultStatus")) $("resultStatus").textContent = "ID done. Pulling solds next.";
   const cr = await fetch("/comp", {
     method:"POST",
-    headers:{ "Content-Type":"application/json", "x-app-secret": $("secret").value },
+    headers:{ "Content-Type":"application/json", "x-app-secret": ($("secret")&&$("secret").value)||"", "x-token": token() },
     body: JSON.stringify(Object.assign({secret:$("secret").value}, readCard()))
   });
   const ct = await cr.text();
@@ -744,6 +804,8 @@ async function lookupComp(){
   $("compNote").textContent = (c.summary || c.error || "") + range + (c.needs_review ? " Check before you trust it." : "");
   $("status").textContent = sug != null ? "Sold comp filled. Edit if wrong, then Save." : "Still no auto price. Open Sold / 130point and type it.";
   $("status").className = "status" + ((c.needs_review || !sug) ? " warn" : "");
+  if ($("resultStatus")) $("resultStatus").textContent = $("status").textContent;
+  setCompBanner(sug != null ? "ok" : "bad", sug != null ? "Comps loaded. Check the numbers, then save." : "No sold found automatically. Use eBay / 130point.");
 }
 $("refreshComp").onclick = async ev => {
   ev.preventDefault();
@@ -751,13 +813,14 @@ $("refreshComp").onclick = async ev => {
     $("compNote").textContent = "Comp lookup failed. Use Sold and type a number.";
     $("status").textContent = "Comp lookup failed: " + e.message;
     $("status").className = "status warn";
+    setCompBanner("bad", "Comp search failed. You can still type a number.");
   }
 };
 async function loadPhotos(){
   $("photoStrip").innerHTML = "<p class=\"muted\">Finding listing photos…</p>";
   const r = await fetch("/photos", {
     method:"POST",
-    headers:{ "Content-Type":"application/json", "x-app-secret": $("secret").value },
+    headers:{ "Content-Type":"application/json", "x-app-secret": ($("secret")&&$("secret").value)||"", "x-token": token() },
     body: JSON.stringify(Object.assign({secret:$("secret").value}, readCard()))
   });
   const t = await r.text();
@@ -884,6 +947,7 @@ function openDetail(id){
   $("dEbay").href = "https://www.ebay.ca/sch/i.html?_nkw="+qq+"&LH_Sold=1&LH_Complete=1";
   $("d130").href = "https://www.130point.com/sales/?search="+qq;
   show("detail");
+  if (mySlug && $("ownComments")) loadComments(mySlug, id, $("ownComments"));
 }
 function fillEdit(){
   const c = load().find(x => x.id===openId);
@@ -1000,6 +1064,58 @@ $("dDel").onclick = () => {
   if (token()) fetch("/cards/"+openId, { method:"DELETE", headers:{ "x-token": token() } });
   show("bind");
 };
+function applyCompObj(card, c){
+  let sug = c.suggested_cad != null ? c.suggested_cad : c.suggested_usd;
+  if (sug == null && c.low != null && c.high != null) sug = Math.round((+c.low + +c.high)/2);
+  if (sug != null) card.comp = sug;
+  if (c.raw_cad != null) card.rawComp = c.raw_cad;
+  if (c.psa8_cad != null) card.psa8Comp = c.psa8_cad;
+  if (c.psa9_cad != null) card.psa9Comp = c.psa9_cad;
+  if (c.psa10_cad != null) card.psa10Comp = c.psa10_cad;
+  card.book = Object.assign({}, card.book||{}, {
+    Raw: c.raw_cad ?? card.rawComp,
+    "PSA 8": c.psa8_cad ?? card.psa8Comp,
+    "PSA 9": c.psa9_cad ?? card.psa9Comp,
+    "PSA 10": c.psa10_cad ?? card.psa10Comp
+  });
+  card.compAt = new Date().toISOString();
+}
+$("refreshBook") && ($("refreshBook").onclick = async () => {
+  const note = $("bookNote");
+  const cards = load();
+  const now = Date.now();
+  const scored = cards.map(c => {
+    const age = c.compAt ? (now - new Date(c.compAt).getTime())/86400000 : 99;
+    const val = +c.comp || +c.cost || 25;
+    return { c, score: age * Math.log(val+10), age };
+  }).filter(x => x.age >= 1).sort((a,b) => b.score - a.score);
+  const batch = scored.slice(0, 8);
+  if (!batch.length) { note.textContent = "Nothing stale enough (needs ~1 day since last comp)."; return; }
+  note.textContent = "Refreshing "+batch.length+" cards…";
+  let ok = 0;
+  for (const row of batch) {
+    const card = row.c;
+    try {
+      const r = await fetch("/book-refresh", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json", "x-token": token(), "x-app-secret": $("secret").value },
+        body: JSON.stringify(Object.assign({ secret:$("secret").value }, {
+          player:card.player, year:card.year, set:card.set, number:card.number,
+          parallel:card.parallel, insert:card.insert, team:card.team,
+          grader:card.grader, grade:card.grade, cert:card.cert
+        }))
+      });
+      if (r.status === 402) { note.textContent = "Book refresh cap hit. Ice+ is 30/mo."; break; }
+      if (!r.ok) continue;
+      applyCompObj(card, await r.json());
+      ok++;
+      await pushCard(card).catch(()=>{});
+    } catch(e) {}
+  }
+  saveAll(cards);
+  refreshUsage();
+  note.textContent = "Updated "+ok+" card"+(ok===1?"":"s")+". Chart uses the new book.";
+});
 $("exportBtn").onclick = () => {
   const slim = load().map(c => {
     const o = Object.assign({}, c);
@@ -1016,7 +1132,7 @@ async function refreshUsage(){
   const r = await fetch("/usage", { headers:{ "x-token": token() } });
   if (!r.ok) return;
   const u = await r.json();
-  const line = (u.plan==="plus"?"Ice+":"Free")+" · "+u.left+" of "+u.cap+" IDs left this month";
+  const line = (u.plan==="plus"?"Ice+":"Free")+" · "+u.left+"/"+u.cap+" IDs · "+(u.book_left??"?")+"/"+(u.book_cap??"?")+" book refreshes";
   if ($("quotaBox")) {
     $("quotaBox").textContent = line;
     $("quotaBox").className = "status " + (u.left<=0 ? "err" : (u.left<=3 ? "warn" : "ok"));
@@ -1086,8 +1202,110 @@ $("nSave").onclick = async () => {
   }
   scheduleDaily();
 };
+let mySlug = "";
+let viewSlug = "";
+let viewCard = null;
+let pubCards = [];
+async function loadMe(){
+  if (!token()) return;
+  try {
+    const r = await fetch("/me", { headers:{ "x-token": token() } });
+    const d = await r.json();
+    mySlug = d.slug || "";
+    if ($("shareNote")) $("shareNote").textContent = mySlug ? ("Public link: "+location.origin+"/?b="+mySlug) : "";
+  } catch(e){}
+}
+$("shareCard") && ($("shareCard").onclick = async () => {
+  await loadMe();
+  if (!mySlug || !openId) { $("shareCardNote").textContent = "Need a synced account."; return; }
+  const url = location.origin+"/?b="+mySlug+"&c="+encodeURIComponent(openId);
+  try { await navigator.clipboard.writeText(url); $("shareCardNote").textContent = "Copied "+url; }
+  catch(e){ $("shareCardNote").textContent = url; }
+});
+$("shareBtn") && ($("shareBtn").onclick = async () => {
+  await loadMe();
+  const url = location.origin+"/?b="+mySlug;
+  try { await navigator.clipboard.writeText(url); $("shareNote").textContent = "Copied "+url; }
+  catch(e){ $("shareNote").textContent = url; }
+});
+async function loadComments(slug, cid, box){
+  if (!box) return;
+  const r = await fetch("/u/"+encodeURIComponent(slug)+"/cards/"+encodeURIComponent(cid)+"/comments");
+  const d = await r.json();
+  const list = d.comments || [];
+  box.innerHTML = list.length ? list.map(c =>
+    "<div class=\"item\" style=\"cursor:default\"><b>"+c.name+"</b> <span class=\"muted\">"+(c.created||"").slice(0,16)+"</span><p style=\"margin:6px 0 0\">"+String(c.body||"").replace(/[<>]/g,"")+"</p></div>"
+  ).join("") : "<p class=\"muted\">No comments yet.</p>";
+}
+async function postComment(slug, cid, ta, box, note){
+  if (!token()) { if (note) note.textContent = "Sign in to comment."; return; }
+  const body = (ta.value||"").trim();
+  if (body.length < 2) return;
+  const r = await fetch("/u/"+encodeURIComponent(slug)+"/cards/"+encodeURIComponent(cid)+"/comments", {
+    method:"POST", headers:{ "Content-Type":"application/json", "x-token": token() },
+    body: JSON.stringify({ body })
+  });
+  const t = await r.text();
+  if (!r.ok) { if (note) note.textContent = t.slice(0,160); return; }
+  ta.value = "";
+  loadComments(slug, cid, box);
+}
+$("ownPost") && ($("ownPost").onclick = () => {
+  if (mySlug && openId) postComment(mySlug, openId, $("ownBody"), $("ownComments"), $("ownCNote"));
+});
+$("pubPost") && ($("pubPost").onclick = () => {
+  if (viewSlug && viewCard) postComment(viewSlug, viewCard.id, $("pubBody"), $("pubComments"), $("pubCStatus"));
+});
+function openPubCard(c){
+  viewCard = c;
+  $("pubHero").src = c.photo || "";
+  $("pubTitle").textContent = c.player || "Card";
+  $("pubLine").textContent = [c.team,c.year,c.set,c.number?"#"+c.number:"",c.insert,c.parallel].filter(Boolean).join(" · ");
+  const b = c.book || {};
+  $("pubVals").innerHTML = ["Raw","PSA 8","PSA 9","PSA 10"].map(k =>
+    "<div class=\"val\"><b>"+(b[k]!=null?money(b[k]):(k==="Raw"&&c.comp!=null?money(c.comp):"—"))+"</b><span>"+k+"</span></div>"
+  ).join("");
+  show("pubDetail");
+  loadComments(viewSlug, c.id, $("pubComments"));
+}
+async function openPublic(slug){
+  viewSlug = slug;
+  $("authPage").classList.add("hidden");
+  $("authPage").classList.remove("on");
+  $("appShell").classList.remove("hidden");
+  const r = await fetch("/u/"+encodeURIComponent(slug));
+  if (!r.ok) { $("pubHead").textContent = "Binder not found."; show("pub"); return; }
+  const d = await r.json();
+  $("pubHead").textContent = slug+" · "+d.count+" cards · book "+(d.book?money(d.book):"—");
+  pubCards = d.cards || [];
+  $("pubList").innerHTML = pubCards.map(c =>
+    "<article class=\"item\" data-pub=\""+c.id+"\"><div class=\"item-top\"><img src=\""+(c.photo||"")+"\" alt=\"\" /><div><h3>"+(c.player||"—")+"</h3><div class=\"muted\">"+[c.team,c.year,c.set,c.number?"#"+c.number:""].filter(Boolean).join(" · ")+"</div></div></div></article>"
+  ).join("") || "<p class=\"muted\">Empty binder.</p>";
+  show("pub");
+}
+$("pubList") && ($("pubList").onclick = e => {
+  const art = e.target.closest("[data-pub]");
+  if (!art) return;
+  const c = pubCards.find(x => x.id === art.getAttribute("data-pub"));
+  if (c) openPubCard(c);
+});
+$("backPub") && ($("backPub").onclick = () => show("pub"));
+
 $("logoutBtn").onclick = () => { setToken(""); location.reload(); };
-if (token()) { $("authPage").classList.add("hidden"); $("authPage").classList.remove("on"); showApp(); pullCloud().then(() => { paintTicker(); renderBinder(); }); }
+const guestB = new URLSearchParams(location.search).get("b");
+const guestC = new URLSearchParams(location.search).get("c");
+if (guestB) {
+  openPublic(guestB).then(() => {
+    if (guestC) {
+      const c = pubCards.find(x => x.id === guestC);
+      if (c) openPubCard(c);
+    }
+  }).catch(()=>{});
+  if (token()) { loadMe(); }
+} else if (token()) {
+  $("authPage").classList.add("hidden"); $("authPage").classList.remove("on"); showApp();
+  pullCloud().then(() => { paintTicker(); renderBinder(); loadMe(); });
+}
 paintTicker();
 renderBinder();
 </script>

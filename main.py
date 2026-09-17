@@ -14,6 +14,8 @@ MODEL = os.environ.get("XAI_MODEL", "grok-4-1-fast-non-reasoning")
 DAILY_CAP = int(os.environ.get("DAILY_CAP", "80"))
 FREE_SCANS = int(os.environ.get("FREE_SCANS", "10"))
 PLUS_SCANS = int(os.environ.get("PLUS_SCANS", "200"))
+FREE_BOOK = int(os.environ.get("FREE_BOOK", "8"))
+PLUS_BOOK = int(os.environ.get("PLUS_BOOK", "30"))
 STRIPE_PAY_LINK = os.environ.get("STRIPE_PAY_LINK", "")
 
 app = FastAPI(title="Ice Ledger Identify")
@@ -26,11 +28,20 @@ app.add_middleware(
 
 _hits = {}
 
-PROMPT = """Identify this hockey trading card. Return ONLY JSON, no markdown.
-You may get a FRONT image and sometimes a BACK image. Use the back for year, set, card number, copyright line.
-If it is a graded slab, read the label first. If raw, use front for player/parallel and back for set/year/number.
-If a field is not readable, use null. Do not invent a rare parallel.
-insert examples: Young Guns, SP Authentic, Exclusives, Canvas, Clear Cut, base, insert.
+PROMPT = """Identify this HOCKEY trading card. Return ONLY JSON, no markdown.
+Hockey only (NHL / CHL / IIHF / Team Canada). If it is not hockey, still fill what you see and set notes.
+You may get FRONT and sometimes BACK. Back is source of truth for year, set name, card number, copyright line.
+Slab: read the grading label first (grader, grade, cert), then the card through the case.
+
+Upper Deck hockey rules (2015–2026 especially):
+- Young Guns = insert "Young Guns" (not a parallel). Canvas Young Guns = insert "Young Guns Canvas".
+- Exclusives, High Gloss, Clear Cut, Outburst, Traxx are parallels or separate inserts — never label a plain YG as those.
+- "C" or Young Guns badge on silver UD Series 1/2 rookies is usually Young Guns, not SP Authentic.
+- Copy set name from the back: Series 1, Series 2, Extended, SP Authentic, SP Game Used, The Cup, Stature, Premier, Allure, Synergy, Metal Universe, Chronology, Trilogy, O-Pee-Chee, Parkhurst.
+- Parallel examples: Silver Foil, Gold /100, Exclusives /100, High Gloss /10, Clear Cut, Outburst Gold, Rainbow, Black /1. If no /n and no foil name, parallel is null or Base.
+- Do not invent a numbered parallel because the photo is shiny.
+
+If a field is not readable, use null. Never invent a rare parallel.
 {
   "player": string|null,
   "sport": string|null,
@@ -66,6 +77,11 @@ DB_PATH = Path(os.environ.get("DB_PATH", str(ROOT / "ice.db")))
 def check_secret(secret: str | None):
     if APP_SECRET and secret != APP_SECRET:
         raise HTTPException(401, "bad secret")
+
+def allow_user_or_secret(secret: str | None, x_token: str | None = None):
+    if user_from_token(x_token):
+        return
+    check_secret(secret)
 
 @app.get("/", response_class=HTMLResponse)
 def home():
@@ -112,7 +128,7 @@ async def identify(
     x_token: str | None = Header(default=None),
     secret: str | None = Form(default=None),
 ):
-    check_secret(x_app_secret or secret)
+    allow_user_or_secret(x_app_secret or secret, x_token)
     if not XAI_API_KEY:
         raise HTTPException(500, "XAI_API_KEY not set on server")
     check_cap()
@@ -224,7 +240,7 @@ async def comp(
     x_app_secret: str | None = Header(default=None),
     x_token: str | None = Header(default=None),
 ):
-    check_secret(x_app_secret or payload.get("secret"))
+    allow_user_or_secret(x_app_secret or payload.get("secret"), x_token)
     if not XAI_API_KEY:
         raise HTTPException(500, "XAI_API_KEY not set on server")
     check_cap()
@@ -369,7 +385,7 @@ async def photos(
     x_app_secret: str | None = Header(default=None),
     x_token: str | None = Header(default=None),
 ):
-    check_secret(x_app_secret or payload.get("secret"))
+    allow_user_or_secret(x_app_secret or payload.get("secret"), x_token)
     if not XAI_API_KEY:
         raise HTTPException(500, "XAI_API_KEY not set on server")
     check_cap()
@@ -472,13 +488,71 @@ def init_db():
       n INTEGER NOT NULL,
       PRIMARY KEY (user_id, month)
     );
+    CREATE TABLE IF NOT EXISTS book_usage (
+      user_id INTEGER NOT NULL,
+      month TEXT NOT NULL,
+      n INTEGER NOT NULL,
+      PRIMARY KEY (user_id, month)
+    );
     """)
     try:
         con.execute("ALTER TABLE users ADD COLUMN plan TEXT DEFAULT 'free'")
     except sqlite3.OperationalError:
         pass
+    try:
+        con.execute("ALTER TABLE users ADD COLUMN slug TEXT")
+    except sqlite3.OperationalError:
+        pass
+    con.execute("""
+    CREATE TABLE IF NOT EXISTS comments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      slug TEXT NOT NULL,
+      card_id TEXT NOT NULL,
+      user_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      body TEXT NOT NULL,
+      created TEXT NOT NULL
+    )
+    """)
     con.commit()
     con.close()
+
+def ensure_slug(uid: int) -> str:
+    con = db()
+    row = con.execute("SELECT email, slug FROM users WHERE id=?", (uid,)).fetchone()
+    if not row:
+        con.close()
+        raise HTTPException(404, "no user")
+    if row["slug"]:
+        s = row["slug"]
+        con.close()
+        return s
+    base = re.sub(r"[^a-z0-9]+", "", (row["email"] or "collector").split("@")[0].lower())[:12] or "ice"
+    s = f"{base}{uid}"
+    con.execute("UPDATE users SET slug=? WHERE id=?", (s, uid))
+    con.commit()
+    con.close()
+    return s
+
+def public_card(raw: dict) -> dict:
+    c = dict(raw or {})
+    for k in ("cost", "notes", "scan"):
+        c.pop(k, None)
+    return {
+        "id": c.get("id"),
+        "player": c.get("player"),
+        "year": c.get("year"),
+        "set": c.get("set"),
+        "number": c.get("number"),
+        "insert": c.get("insert"),
+        "parallel": c.get("parallel"),
+        "team": c.get("team"),
+        "grader": c.get("grader"),
+        "grade": c.get("grade"),
+        "photo": c.get("photo"),
+        "comp": c.get("comp"),
+        "book": c.get("book") or {},
+    }
 
 init_db()
 
@@ -522,13 +596,20 @@ def plan_of(uid: int) -> str:
 
 def usage_of(uid: int):
     m = month_key()
-    con = db()
-    row = con.execute("SELECT n FROM usage WHERE user_id=? AND month=?", (uid, m)).fetchone()
-    con.close()
-    used = row["n"] if row else 0
     plan = plan_of(uid)
     cap = PLUS_SCANS if plan == "plus" else FREE_SCANS
-    return {"used": used, "cap": cap, "left": max(0, cap - used), "plan": plan, "month": m}
+    bcap = PLUS_BOOK if plan == "plus" else FREE_BOOK
+    con = db()
+    row = con.execute("SELECT n FROM usage WHERE user_id=? AND month=?", (uid, m)).fetchone()
+    brow = con.execute("SELECT n FROM book_usage WHERE user_id=? AND month=?", (uid, m)).fetchone()
+    con.close()
+    used = row["n"] if row else 0
+    bused = brow["n"] if brow else 0
+    return {
+        "used": used, "cap": cap, "left": max(0, cap - used),
+        "book_used": bused, "book_cap": bcap, "book_left": max(0, bcap - bused),
+        "plan": plan, "month": m
+    }
 
 def bump_usage(uid: int):
     m = month_key()
@@ -538,6 +619,17 @@ def bump_usage(uid: int):
         con.execute("UPDATE usage SET n=n+1 WHERE user_id=? AND month=?", (uid, m))
     else:
         con.execute("INSERT INTO usage(user_id,month,n) VALUES(?,?,1)", (uid, m))
+    con.commit()
+    con.close()
+
+def bump_book(uid: int):
+    m = month_key()
+    con = db()
+    row = con.execute("SELECT n FROM book_usage WHERE user_id=? AND month=?", (uid, m)).fetchone()
+    if row:
+        con.execute("UPDATE book_usage SET n=n+1 WHERE user_id=? AND month=?", (uid, m))
+    else:
+        con.execute("INSERT INTO book_usage(user_id,month,n) VALUES(?,?,1)", (uid, m))
     con.commit()
     con.close()
 
@@ -596,6 +688,15 @@ async def login(payload: dict):
 async def usage(request: Request, x_token: str | None = Header(default=None)):
     uid = require_user(request, x_token)
     return usage_of(uid)
+
+@app.post("/book-refresh")
+async def book_refresh(payload: dict, request: Request, x_token: str | None = Header(default=None)):
+    uid = require_user(request, x_token)
+    u = usage_of(uid)
+    if u["book_left"] <= 0:
+        raise HTTPException(402, "book refresh cap reached — upgrade")
+    bump_book(uid)
+    return await comp(payload, payload.get("secret"), x_token)
 
 @app.get("/checkout")
 async def checkout(request: Request, x_token: str | None = Header(default=None)):
@@ -674,6 +775,168 @@ async def delete_card(cid: str, request: Request, x_token: str | None = Header(d
     uid = require_user(request, x_token)
     con = db()
     con.execute("DELETE FROM cards WHERE id=? AND user_id=?", (cid, uid))
+    con.commit()
+    con.close()
+    return {"ok": True}
+
+@app.get("/me")
+async def me(request: Request, x_token: str | None = Header(default=None)):
+    uid = require_user(request, x_token)
+    slug = ensure_slug(uid)
+    return {"slug": slug, "url": f"/?b={slug}"}
+
+@app.get("/u/{slug}")
+async def public_binder(slug: str):
+    slug = re.sub(r"[^a-z0-9]", "", (slug or "").lower())
+    con = db()
+    u = con.execute("SELECT id FROM users WHERE slug=?", (slug,)).fetchone()
+    if not u:
+        con.close()
+        raise HTTPException(404, "binder not found")
+    rows = con.execute("SELECT data FROM cards WHERE user_id=?", (u["id"],)).fetchall()
+    con.close()
+    cards = [public_card(json.loads(r["data"])) for r in rows]
+    book = sum((c.get("comp") or 0) for c in cards if isinstance(c.get("comp"), (int, float)))
+    return {"slug": slug, "count": len(cards), "book": book, "cards": cards}
+
+@app.get("/u/{slug}/cards/{cid}/comments")
+async def list_comments(slug: str, cid: str):
+    con = db()
+    rows = con.execute(
+        "SELECT id,name,body,created FROM comments WHERE slug=? AND card_id=? ORDER BY id DESC LIMIT 80",
+        (slug, cid),
+    ).fetchall()
+    con.close()
+    return {"comments": [dict(r) for r in rows]}
+
+@app.post("/u/{slug}/cards/{cid}/comments")
+async def add_comment(slug: str, cid: str, payload: dict, request: Request, x_token: str | None = Header(default=None)):
+    uid = require_user(request, x_token)
+    body = (payload.get("body") or "").strip()
+    if len(body) < 2 or len(body) > 280:
+        raise HTTPException(400, "comment 2–280 characters")
+    con = db()
+    owner = con.execute("SELECT id FROM users WHERE slug=?", (slug,)).fetchone()
+    if not owner:
+        con.close()
+        raise HTTPException(404, "binder not found")
+    card = con.execute("SELECT id FROM cards WHERE id=? AND user_id=?", (cid, owner["id"])).fetchone()
+    if not card:
+        con.close()
+        raise HTTPException(404, "card not found")
+    hour = time.strftime("%Y-%m-%dT%H")
+    n = con.execute(
+        "SELECT COUNT(*) AS n FROM comments WHERE user_id=? AND created LIKE ?",
+        (uid, hour + "%"),
+    ).fetchone()["n"]
+    if n >= 12:
+        con.close()
+        raise HTTPException(429, "slow down — 12 comments an hour")
+    name = ensure_slug(uid)
+    created = time.strftime("%Y-%m-%dT%H:%M:%SZ")
+    con.execute(
+        "INSERT INTO comments(slug,card_id,user_id,name,body,created) VALUES(?,?,?,?,?,?)",
+        (slug, cid, uid, name, body, created),
+    )
+    con.commit()
+    rid = con.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
+    con.close()
+    return {"ok": True, "id": rid, "name": name, "body": body, "created": created}
+
+@app.delete("/comments/{cid}")
+async def del_comment(cid: int, request: Request, x_token: str | None = Header(default=None)):
+    uid = require_user(request, x_token)
+    slug = ensure_slug(uid)
+    con = db()
+    row = con.execute("SELECT slug,user_id FROM comments WHERE id=?", (cid,)).fetchone()
+    if not row:
+        con.close()
+        raise HTTPException(404, "gone")
+    if row["user_id"] != uid and row["slug"] != slug:
+        con.close()
+        raise HTTPException(403, "not yours")
+    con.execute("DELETE FROM comments WHERE id=?", (cid,))
+    con.commit()
+    con.close()
+    return {"ok": True}
+
+@app.get("/me")
+async def me(request: Request, x_token: str | None = Header(default=None)):
+    uid = require_user(request, x_token)
+    slug = ensure_slug(uid)
+    return {"slug": slug, "url": f"/?b={slug}"}
+
+@app.get("/u/{slug}")
+async def public_binder(slug: str):
+    slug = re.sub(r"[^a-z0-9]", "", (slug or "").lower())
+    con = db()
+    u = con.execute("SELECT id FROM users WHERE slug=?", (slug,)).fetchone()
+    if not u:
+        con.close()
+        raise HTTPException(404, "binder not found")
+    rows = con.execute("SELECT data FROM cards WHERE user_id=?", (u["id"],)).fetchall()
+    con.close()
+    cards = [public_card(json.loads(r["data"])) for r in rows]
+    book = sum((c.get("comp") or 0) for c in cards if c.get("comp") is not None)
+    return {"slug": slug, "count": len(cards), "book": book, "cards": cards}
+
+@app.get("/u/{slug}/cards/{cid}/comments")
+async def list_comments(slug: str, cid: str):
+    con = db()
+    rows = con.execute(
+        "SELECT id,name,body,created FROM comments WHERE slug=? AND card_id=? ORDER BY id DESC LIMIT 80",
+        (slug, cid),
+    ).fetchall()
+    con.close()
+    return {"comments": [dict(r) for r in rows]}
+
+@app.post("/u/{slug}/cards/{cid}/comments")
+async def add_comment(slug: str, cid: str, payload: dict, request: Request, x_token: str | None = Header(default=None)):
+    uid = require_user(request, x_token)
+    body = (payload.get("body") or "").strip()
+    if len(body) < 2 or len(body) > 280:
+        raise HTTPException(400, "comment 2–280 characters")
+    con = db()
+    owner = con.execute("SELECT id FROM users WHERE slug=?", (slug,)).fetchone()
+    if not owner:
+        con.close()
+        raise HTTPException(404, "binder not found")
+    card = con.execute("SELECT id FROM cards WHERE id=? AND user_id=?", (cid, owner["id"])).fetchone()
+    if not card:
+        con.close()
+        raise HTTPException(404, "card not found")
+    hour = time.strftime("%Y-%m-%dT%H")
+    n = con.execute(
+        "SELECT COUNT(*) AS n FROM comments WHERE user_id=? AND created LIKE ?",
+        (uid, hour + "%"),
+    ).fetchone()["n"]
+    if n >= 12:
+        con.close()
+        raise HTTPException(429, "slow down — 12 comments an hour")
+    name = ensure_slug(uid)
+    created = time.strftime("%Y-%m-%dT%H:%M:%SZ")
+    con.execute(
+        "INSERT INTO comments(slug,card_id,user_id,name,body,created) VALUES(?,?,?,?,?,?)",
+        (slug, cid, uid, name, body, created),
+    )
+    con.commit()
+    cid_row = con.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
+    con.close()
+    return {"ok": True, "id": cid_row, "name": name, "body": body, "created": created}
+
+@app.delete("/comments/{cid}")
+async def del_comment(cid: int, request: Request, x_token: str | None = Header(default=None)):
+    uid = require_user(request, x_token)
+    slug = ensure_slug(uid)
+    con = db()
+    row = con.execute("SELECT slug,user_id FROM comments WHERE id=?", (cid,)).fetchone()
+    if not row:
+        con.close()
+        raise HTTPException(404, "gone")
+    if row["user_id"] != uid and row["slug"] != slug:
+        con.close()
+        raise HTTPException(403, "not yours")
+    con.execute("DELETE FROM comments WHERE id=?", (cid,))
     con.commit()
     con.close()
     return {"ok": True}
