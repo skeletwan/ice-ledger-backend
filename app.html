@@ -248,7 +248,7 @@
       <input id="ripCode" placeholder="RIP-XXXXXX" autocomplete="off" />
       <button class="ghost" id="ripRedeem" style="margin-top:4px">Redeem</button>
     </div>
-    <p class="muted" id="ripNote">Rip Night is 20 IDs — the hits and Young Guns from a hobby box, not every base card. Codes if a scan fails or you shout out the app.</p>
+    <p class="muted" id="ripNote"></p>
     <input id="secret" type="hidden" value="" />
     <div class="row2" style="margin-top:14px">
       <label class="shot-wrap" id="shotFront" for="file">
@@ -339,7 +339,6 @@
     <button class="ghost" id="shareBtn">Share binder</button>
     <button class="ghost" id="viewPublicBtn">Open my public binder</button>
     <p class="muted" id="shareNote"></p>
-    <button class="ghost" id="exportBtn">Export JSON</button>
   </section>
   <section class="page" id="searchPage">
     <button class="ghost" id="backBindFromSearch">Back to binder</button>
@@ -363,8 +362,15 @@
   </section>
   <section class="page" id="notesPage">
     <button class="ghost" id="backFindNotes">Community</button>
-    <h2 style="font-size:18px;margin:12px 0 8px">Notifications</h2>
-    <p class="muted">New cards from binders you follow.</p>
+    <h2 style="font-size:18px;margin:12px 0 8px">Alerts</h2>
+    <p class="muted">Pick a type.</p>
+    <button class="ghost" id="noteCatCard">New cards</button>
+    <button class="ghost" id="noteCatLike">Likes</button>
+    <button class="ghost" id="noteCatComment">Comments</button>
+  </section>
+  <section class="page" id="notesCatPage">
+    <button class="ghost" id="backNotesHub">All alerts</button>
+    <h2 id="notesCatTitle" style="font-size:18px;margin:12px 0 8px">Alerts</h2>
     <div id="notesList"></div>
   </section>
   <section class="page" id="pubPage">
@@ -381,6 +387,8 @@
     <div class="hero"><img id="pubHero" alt="" /></div>
     <h2 id="pubTitle"></h2>
     <p class="muted" id="pubLine"></p>
+    <svg class="spark" id="pubSpark" viewBox="0 0 360 120" preserveAspectRatio="none"></svg>
+    <p class="muted" id="pubTrendNote"></p>
     <div class="vals" id="pubVals"></div>
     <h3 style="font-size:14px">Comments</h3>
     <div id="pubComments"></div>
@@ -469,6 +477,15 @@
     <button class="ghost" id="ripMake">Make code</button>
     <p class="muted" id="ripMakeNoteOut"></p>
     <div id="ripCodeList"></div>
+    <h3 style="font-size:15px;margin:16px 0 8px">Accounts</h3>
+    <p class="muted">Email or binder slug of the user.</p>
+    <input id="modUser" placeholder="email or slug" />
+    <div class="row2">
+      <button class="ghost" id="modSuspend">Suspend</button>
+      <button class="ghost" id="modUnsuspend">Unsuspend</button>
+    </div>
+    <button class="danger" id="modDeleteUser">Delete account</button>
+    <p class="muted" id="modUserNote"></p>
   </section>
   <section class="page" id="helpPage">
     <button class="ghost" id="backYou">Back to You</button>
@@ -716,7 +733,8 @@ function spark(vals, elId){
   const W = 360, H = 200, L = 8, R = 52, T = 12, B = 18;
   const plotW = W - L - R, plotH = H - T - B;
   if (!vals.length) {
-    el.innerHTML = "<text x='180' y='100' fill='#8aa3b5' font-size='12' text-anchor='middle'>No book history yet</text>";
+    const msg = (elId==="cardSpark"||elId==="pubSpark") ? "Value after the next update" : "No book history yet";
+    el.innerHTML = "<text x='180' y='70' fill='#8aa3b5' font-size='12' text-anchor='middle'>"+msg+"</text>";
     return;
   }
   const min = Math.min.apply(null, vals), max = Math.max.apply(null, vals);
@@ -764,18 +782,19 @@ function show(id){
   if ($("helpPage")) $("helpPage").classList.toggle("on", id==="help");
   if ($("searchPage")) $("searchPage").classList.toggle("on", id==="search");
   if ($("notesPage")) $("notesPage").classList.toggle("on", id==="notes");
+  if ($("notesCatPage")) $("notesCatPage").classList.toggle("on", id==="notesCat");
   if (id==="scan" && $("status")) $("status").textContent = "";
   if (id!=="set" && $("pNote")) $("pNote").textContent = "";
   if ($("opsPage")) $("opsPage").classList.toggle("on", id==="ops");
   if (id==="bind") renderBinder();
   if (id==="search") renderSearch();
-  if (id==="find" || id==="pub" || id==="notes") refreshNotesBadge();
+  if (id==="find" || id==="pub" || id==="notes" || id==="notesCat") refreshNotesBadge();
   if (id==="find") loadFind();
   document.body.classList.toggle("bind-on", id==="bind");
   document.body.classList.toggle("dock-on", true);
   document.body.classList.toggle("chart-on", id==="bind" && document.body.classList.contains("chart-open"));
   ["tabScan","tabBind","tabFind","tabSet"].forEach(tid => {
-    if ($(tid)) $(tid).classList.toggle("on", (tid==="tabScan"&&id==="scan")||(tid==="tabBind"&&(id==="bind"||id==="detail"||id==="edit"||id==="search"))||(tid==="tabFind"&&(id==="find"||id==="pub"||id==="pubDetail"||id==="notes"))||(tid==="tabSet"&&(id==="set"||id==="ops"||id==="help")));
+    if ($(tid)) $(tid).classList.toggle("on", (tid==="tabScan"&&id==="scan")||(tid==="tabBind"&&(id==="bind"||id==="detail"||id==="edit"||id==="search"))||(tid==="tabFind"&&(id==="find"||id==="pub"||id==="pubDetail"||id==="notes"||id==="notesCat"))||(tid==="tabSet"&&(id==="set"||id==="ops"||id==="help")));
   });
   window.scrollTo(0,0);
 }
@@ -864,14 +883,17 @@ function pushCardHist(card){
   else h.push({ d: day, v: +card.comp, t: new Date().toISOString() });
   card.hist = h.slice(-400);
 }
-function paintCardSpark(card){
-  const vals = ((card && card.hist) || []).map(x => +x.v).filter(v => !isNaN(v));
-  spark(vals, "cardSpark");
-  if ($("cardTrendNote")) {
-    if (vals.length < 2) $("cardTrendNote").textContent = "Value over time. Needs at least two comp updates.";
+function paintCardSpark(card, elId, noteId){
+  let hist = (card && card.hist) || [];
+  let vals = hist.map(x => +x.v).filter(v => !isNaN(v));
+  if (!vals.length && card && card.comp != null && !isNaN(+card.comp)) vals = [+card.comp];
+  spark(vals, elId || "cardSpark");
+  const note = $(noteId || "cardTrendNote");
+  if (note) {
+    if (vals.length < 2) note.textContent = vals.length ? "Current book "+money(vals[0])+". Trend starts after the next refresh." : "No sold value yet.";
     else {
       const ch = vals[vals.length-1] - vals[0];
-      $("cardTrendNote").textContent = (ch>=0?"Up ":"Down ")+money(Math.abs(ch))+" across "+vals.length+" updates.";
+      note.textContent = (ch>=0?"Up ":"Down ")+money(Math.abs(ch))+" across "+vals.length+" updates.";
     }
   }
 }
@@ -1522,17 +1544,12 @@ $("refreshBook") && ($("refreshBook").onclick = async () => {
   note.textContent = "Updated "+ok+" card"+(ok===1?"":"s")+". Next refresh tomorrow.";
   btn.dataset.busy = "0";
 });
-$("exportBtn").onclick = () => {
-  const slim = load().map(c => {
-    const o = Object.assign({}, c);
-    delete o.scan; delete o.photo;
-    return o;
-  });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([JSON.stringify(slim,null,2)],{type:"application/json"}));
-  a.download = "ice-ledger-binder.json";
-  a.click();
-};
+function noteKind(n){
+  const b = (n.body||"").toLowerCase();
+  if (b.indexOf("liked")>=0) return "like";
+  if (b.indexOf("comment")>=0 || b.indexOf("replied")>=0) return "comment";
+  return "card";
+}
 async function refreshUsage(){
   if (!token()) return;
   const r = await fetch("/usage", { headers:{ "x-token": token() } });
@@ -1569,7 +1586,10 @@ $("modLoad") && ($("modLoad").onclick = async () => {
   const reports = (d.reports||[]).map(x => {
     const kind = x.kind || "photo";
     const label = kind==="comment" ? "Comment" : "Photo";
-    return "<div class=\"item\" data-review-kind=\""+kind+"\" data-review-slug=\""+(x.slug||"")+"\" data-review-card=\""+(x.card_id||"")+"\"><b>"+label+" · "+(x.slug||"")+"</b> <span class=\"muted\">"+(x.created||"").slice(0,16)+"</span><p style=\"margin:6px 0 0\">"+String(x.preview||x.reason||"").replace(/[<>]/g,"")+"</p><button class=\"ghost\" data-open-report=\"1\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Review</button></div>";
+    const hide = kind==="comment"
+      ? "<button class=\"ghost\" data-hide-comment=\""+(x.comment_id||"")+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Hide comment</button>"
+      : "<button class=\"ghost\" data-hide-photo=\""+(x.slug||"")+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Hide photo</button>";
+    return "<div class=\"item\" data-review-kind=\""+kind+"\" data-review-slug=\""+(x.slug||"")+"\" data-review-card=\""+(x.card_id||"")+"\"><b>"+label+" · "+(x.slug||"")+"</b> <span class=\"muted\">"+(x.created||"").slice(0,16)+"</span><p style=\"margin:6px 0 0\">"+String(x.preview||x.reason||"").replace(/[<>]/g,"")+"</p><button class=\"ghost\" data-open-report=\"1\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Review</button>"+hide+"</div>";
   }).join("") || "<p class=\"muted\">No reports yet.</p>";
   const photos = (d.hidden_photos||[]).map(x =>
     "<div class=\"item\" data-review-kind=\"photo\" data-review-slug=\""+x.slug+"\"><b>Photo · "+(x.display||x.slug)+"</b><button class=\"ghost\" data-open-report=\"1\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Review</button><button class=\"ghost\" data-restore-photo=\""+x.slug+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Restore photo</button></div>"
@@ -1589,6 +1609,18 @@ $("modList") && ($("modList").onclick = async ev => {
     const kind = row.getAttribute("data-review-kind");
     if (kind === "photo" && slug) { showFull("/u/"+slug+"/avatar", slug); return; }
     if (slug) { openPublic(slug, card || null); return; }
+    return;
+  }
+  const hp = ev.target.closest("[data-hide-photo]");
+  const hc = ev.target.closest("[data-hide-comment]");
+  if (hp) {
+    await fetch("/admin/hide-photo", { method:"POST", headers:{ "Content-Type":"application/json", "x-token": token() }, body: JSON.stringify({ slug: hp.getAttribute("data-hide-photo") }) });
+    if ($("modLoad")) $("modLoad").click();
+    return;
+  }
+  if (hc) {
+    await fetch("/admin/hide-comment", { method:"POST", headers:{ "Content-Type":"application/json", "x-token": token() }, body: JSON.stringify({ id: +hc.getAttribute("data-hide-comment") }) });
+    if ($("modLoad")) $("modLoad").click();
     return;
   }
   const p = ev.target.closest("[data-restore-photo]");
@@ -1666,6 +1698,29 @@ async function loadRipCodes(){
     "<div class=\"item\" style=\"cursor:default\"><b>"+c.code+"</b> · "+c.scans+" IDs · "+c.used+"/"+c.max_uses+" used"+(c.note?" · "+c.note:"")+"</div>"
   ).join("") || "<p class=\"muted\">No codes yet.</p>";
 }
+async function modAccount(path, extra){
+  const raw = (($("modUser")&&$("modUser").value)||"").trim();
+  const body = Object.assign({}, extra||{});
+  if (raw.indexOf("@")>=0) body.email = raw.toLowerCase();
+  else body.slug = raw.toLowerCase();
+  const r = await fetch(path, { method:"POST", headers:{ "Content-Type":"application/json", "x-token": token() }, body: JSON.stringify(body) });
+  const t = await r.text();
+  if (!r.ok) throw new Error(t.slice(0,160));
+  return JSON.parse(t||"{}");
+}
+$("modSuspend") && ($("modSuspend").onclick = async () => {
+  try { const d = await modAccount("/admin/suspend", { on:true }); $("modUserNote").textContent = "Suspended "+(d.email||d.slug); }
+  catch(e){ $("modUserNote").textContent = e.message; }
+});
+$("modUnsuspend") && ($("modUnsuspend").onclick = async () => {
+  try { const d = await modAccount("/admin/suspend", { on:false }); $("modUserNote").textContent = "Restored "+(d.email||d.slug); }
+  catch(e){ $("modUserNote").textContent = e.message; }
+});
+$("modDeleteUser") && ($("modDeleteUser").onclick = async () => {
+  if (!confirm("Permanently delete this account and their binder?")) return;
+  try { await modAccount("/admin/delete-user", {}); $("modUserNote").textContent = "Account deleted."; }
+  catch(e){ $("modUserNote").textContent = e.message; }
+});
 $("ripMake") && ($("ripMake").onclick = async () => {
   try {
     const d = await authPost("/admin/rip-code", {
@@ -1984,6 +2039,7 @@ function openPubCard(c){
     "<div class=\"val\"><b>"+(b[k]!=null?money(b[k]):(k==="Raw"&&c.comp!=null?money(c.comp):"—"))+"</b><span>"+k+"</span></div>"
   ).join("");
   show("pubDetail");
+  paintCardSpark(c, "pubSpark", "pubTrendNote");
   loadComments(viewSlug, c.id, $("pubComments"));
   paintLike();
 }
@@ -2149,7 +2205,11 @@ $("findList") && ($("findList").onclick = e => {
 });
 $("backFind") && ($("backFind").onclick = () => show("find"));
 $("backFindNotes") && ($("backFindNotes").onclick = () => show("find"));
-$("openNotes") && ($("openNotes").onclick = () => { show("notes"); loadNotes(); });
+$("openNotes") && ($("openNotes").onclick = () => { show("notes"); paintNotesHub(); });
+$("backNotesHub") && ($("backNotesHub").onclick = () => { show("notes"); paintNotesHub(); });
+["noteCatCard","noteCatLike","noteCatComment"].forEach(id => {
+  $(id) && ($(id).onclick = () => openNoteCat(id==="noteCatLike"?"like":id==="noteCatComment"?"comment":"card"));
+});
 function paintFollow(){
   if (!$("followBtn") || !viewSlug) return;
   $("followBtn").textContent = following[viewSlug] ? "Following" : "Follow";
@@ -2195,16 +2255,43 @@ async function refreshNotesBadge(){
   } catch(e){}
 }
 setInterval(() => { if (token()) refreshNotesBadge(); }, 15000);
-async function loadNotes(){
+let notesCache = [];
+async function fetchNotes(){
+  if (!token()) return [];
+  const r = await fetch("/notes", { headers:{ "x-token": token() } });
+  if (!r.ok) return [];
+  const d = await r.json();
+  notesCache = d.notes || [];
+  return notesCache;
+}
+async function paintNotesHub(){
+  const rows = await fetchNotes();
+  const count = k => rows.filter(n => noteKind(n)===k && !n.read).length;
+  const label = (id, name, k) => {
+    if (!$(id)) return;
+    const n = count(k);
+    $(id).textContent = n ? (name+" · "+n+" new") : name;
+    $(id).classList.toggle("ping", n>0);
+  };
+  label("noteCatCard", "New cards", "card");
+  label("noteCatLike", "Likes", "like");
+  label("noteCatComment", "Comments", "comment");
+}
+async function openNoteCat(kind){
+  const titles = { card:"New cards", like:"Likes", comment:"Comments" };
+  if ($("notesCatTitle")) $("notesCatTitle").textContent = titles[kind] || "Alerts";
+  show("notesCat");
   const box = $("notesList");
   if (!box) return;
   if (!token()) { box.innerHTML = "<p class=\"muted\">Sign in to see notifications.</p>"; return; }
-  const r = await fetch("/notes", { headers:{ "x-token": token() } });
-  const d = await r.json();
-  box.innerHTML = (d.notes||[]).length ? d.notes.map(n =>
+  const rows = (await fetchNotes()).filter(n => noteKind(n)===kind);
+  box.innerHTML = rows.length ? rows.map(n =>
     "<article class=\"item\" data-slug=\""+(n.slug||"")+"\" data-card=\""+(n.card_id||"")+"\"><b>"+(n.body||"")+"</b><div class=\"muted\">"+(n.created||"").slice(0,16)+(n.read?"":" · new")+"</div></article>"
-  ).join("") : "<p class=\"muted\">Nothing yet. Follow a binder first.</p>";
-  await fetch("/notes/read", { method:"POST", headers:{ "x-token": token() } });
+  ).join("") : "<p class=\"muted\">Nothing in here yet.</p>";
+  const ids = rows.filter(n => !n.read).map(n => n.id);
+  if (ids.length) {
+    await fetch("/notes/read", { method:"POST", headers:{ "Content-Type":"application/json", "x-token": token() }, body: JSON.stringify({ ids }) });
+  }
   refreshNotesBadge();
 }
 $("notesList") && ($("notesList").onclick = e => {
