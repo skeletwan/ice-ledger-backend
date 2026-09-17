@@ -292,6 +292,10 @@
   <section class="page" id="setPage">
     <h2 style="font-size:18px;margin:0 0 8px">You</h2>
     <p class="muted">Plan, alerts, sign out.</p>
+    <label>App secret (Railway APP_SECRET)</label>
+    <input id="plusSecret" type="password" autocomplete="off" />
+    <button id="plusBtn">Unlock Ice+ on this account</button>
+    <p class="muted" id="plusNote"></p>
     <h3 style="font-size:15px;margin:16px 0 8px">Alerts</h3>
     <p class="muted">Daily binder ping at a time you pick. Also fires if book value jumps while the app is open. iPhone only does this reliably if Ice Ledger is on the Home Screen and you granted notifications.</p>
     <label><input id="nOn" type="checkbox" style="width:auto;margin-right:8px" /> Notify me</label>
@@ -1166,6 +1170,15 @@ function applyCompObj(card, c){
 }
 $("refreshBook") && ($("refreshBook").onclick = async () => {
   const note = $("bookNote");
+  const btn = $("refreshBook");
+  const day = new Date().toISOString().slice(0,10);
+  if (localStorage.getItem("ice-book-day") === day) {
+    note.textContent = "Already ran Refresh book today. Come back tomorrow.";
+    return;
+  }
+  if (btn.dataset.busy === "1") return;
+  btn.dataset.busy = "1";
+  btn.disabled = true;
   const cards = load();
   const now = Date.now();
   const scored = cards.map(c => {
@@ -1174,8 +1187,12 @@ $("refreshBook") && ($("refreshBook").onclick = async () => {
     return { c, score: age * Math.log(val+10), age };
   }).filter(x => x.age >= 1).sort((a,b) => b.score - a.score);
   const batch = scored.slice(0, 8);
-  if (!batch.length) { note.textContent = "Nothing stale enough (needs ~1 day since last comp)."; return; }
-  note.textContent = "Refreshing "+batch.length+" cards…";
+  if (!batch.length) {
+    note.textContent = "Nothing stale enough (needs ~1 day since last comp).";
+    btn.dataset.busy = "0"; btn.disabled = false; return;
+  }
+  localStorage.setItem("ice-book-day", day);
+  note.textContent = "Refreshing "+batch.length+" cards — don’t tap again.";
   let ok = 0;
   for (const row of batch) {
     const card = row.c;
@@ -1198,7 +1215,8 @@ $("refreshBook") && ($("refreshBook").onclick = async () => {
   }
   saveAll(cards);
   refreshUsage();
-  note.textContent = "Updated "+ok+" card"+(ok===1?"":"s")+". Chart uses the new book.";
+  note.textContent = "Updated "+ok+" card"+(ok===1?"":"s")+". Next refresh tomorrow.";
+  btn.dataset.busy = "0";
 });
 $("exportBtn").onclick = () => {
   const slim = load().map(c => {
@@ -1229,18 +1247,24 @@ function showPaywall(msg){
   }
   show("scan");
 }
+async function unlockPlus(){
+  const secret = ($("plusSecret") && $("plusSecret").value) || "";
+  if (!secret) { if ($("plusNote")) $("plusNote").textContent = "Paste APP_SECRET from Railway first."; show("set"); return; }
+  const p = await authPost("/plus", { secret });
+  await refreshUsage();
+  if ($("plusNote")) $("plusNote").textContent = "Ice+ on. "+p.left+" IDs this month.";
+  if ($("quotaBox")) { $("quotaBox").textContent = "Ice+ on. "+p.left+" IDs left this month."; $("quotaBox").className = "status ok"; }
+}
+$("plusBtn") && ($("plusBtn").onclick = async () => {
+  try { await unlockPlus(); } catch(e) { if ($("plusNote")) $("plusNote").textContent = e.message; }
+});
 $("payBtn").onclick = async () => {
   try {
     const r = await fetch("/checkout", { headers:{ "x-token": token() } });
     const d = await r.json();
     if (d.url) { location.href = d.url; return; }
-    const secret = $("secret").value;
-    if (confirm("Stripe link not set yet. Unlock Ice+ on this account with the app secret?")) {
-      const p = await authPost("/plus", { secret });
-      await refreshUsage();
-      $("quotaBox").textContent = "Ice+ on. "+p.left+" IDs left this month.";
-      $("quotaBox").className = "status ok";
-    }
+    show("set");
+    if ($("plusNote")) $("plusNote").textContent = "Stripe isn’t live. Paste APP_SECRET below and tap Unlock Ice+.";
   } catch(e) { $("quotaBox").textContent = e.message; $("quotaBox").className = "status err"; }
 };
 $("signupBtn").onclick = async () => {
