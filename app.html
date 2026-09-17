@@ -93,7 +93,11 @@
     .quote-wrap { display:none; }
     body.chart-on .quote-wrap { display:block; }
     header { position:sticky; top:0; z-index:8; background:#071016; }
-    body.bind-on .stick { position:static; padding:8px 0 10px; background:transparent; border:0; margin:0; }
+    body.bind-on { overflow:hidden; }
+    body.bind-on #bindPage.on { display:flex; flex-direction:column; height:calc(100dvh - 118px); overflow:hidden; padding-bottom:8px; }
+    body.bind-on .bookbar, body.bind-on .stick { flex:0 0 auto; position:static; }
+    body.bind-on #list { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; min-height:0; }
+    #q { font-size:16px; }
     .bookbar { display:none; padding:10px 0 4px; }
     body.bind-on .bookbar { display:block; }
     .bookbar button { width:100%; text-align:left; background:#121c26; border:1px solid var(--line); border-radius:12px; padding:10px 12px; }
@@ -323,14 +327,10 @@
   <section class="page" id="helpPage">
     <button class="ghost" id="backYou">Back to You</button>
     <h2 style="font-size:18px;margin:12px 0 8px">Support / feedback</h2>
-    <p class="muted">Ice Ledger is one person, not a help desk. Replies can take a bit — especially evenings and shift work. Feedback on what to build next is welcome.</p>
-    <div class="card">
-      <h3 style="margin:0 0 8px;font-size:15px">Tips</h3>
-      <p class="muted">Scan front and back on raws. Young Guns is an insert, not a parallel. Check the name before you save. Refresh book once a day — extra taps won’t run again until tomorrow. Find is other people’s public binders; comment and like a card, not a chat room.</p>
-    </div>
+    <p class="muted">I’m just one dude running this app. If you need a hand with anything, I’ll do my best to get back to you as soon as I can. Any feedback on improvements is definitely welcome!</p>
     <div class="card">
       <h3 style="margin:0 0 8px;font-size:15px">Contact</h3>
-      <p class="muted">Email <a href="mailto:iceledger@outlook.com" style="color:var(--ice)">iceledger@outlook.com</a>. Say if it’s a bug, a card that IDed wrong, or an idea. No sales pitches.</p>
+      <p class="muted">Email <a href="mailto:iceledger@outlook.com" style="color:var(--ice)">iceledger@outlook.com</a>. Say if it’s a bug, a card that IDed wrong, or an idea.</p>
       <a class="btn" href="mailto:iceledger@outlook.com?subject=Ice%20Ledger%20feedback">Email support / feedback</a>
     </div>
   </section>
@@ -1142,7 +1142,13 @@ function renderBinder(){
     $("list").innerHTML = rows.map(cardRowHtml).join("");
   }
 }
-$("q").oninput = renderBinder;
+$("q").oninput = () => {
+  const el = $("q");
+  const start = el.selectionStart;
+  renderBinder();
+  if (document.activeElement !== el) el.focus();
+  try { el.setSelectionRange(start, start); } catch(e){}
+};
 if ($("sortBy")) $("sortBy").onchange = renderBinder;
 if ($("teamFilter")) $("teamFilter").onchange = renderBinder;
 $("list").onclick = e => {
