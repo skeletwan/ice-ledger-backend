@@ -102,7 +102,7 @@
     body.dock-on .dock { display:grid; }
     .dock button { width:auto; margin:0; padding:10px 4px; font-size:12px; background:transparent; color:var(--muted); border:0; border-radius:0; }
     .dock button.on { color:var(--ice); }
-    .dock button.ping { color:#7ef0d2; font-weight:800; box-shadow:inset 0 0 0 2px #7ef0d2; border-radius:10px; }
+    .dock button.ping, button.ghost.ping { color:#7ef0d2; font-weight:800; box-shadow:inset 0 0 0 2px #7ef0d2; border-radius:10px; }
     .page { padding-bottom:88px; }
     .pwid { display:flex; align-items:center; gap:12px; margin-bottom:10px; }
     .pava { width:52px; height:52px; border-radius:16px; background:var(--ice); color:#071016; font-weight:800; display:flex; align-items:center; justify-content:center; font-size:16px; overflow:hidden; border:3px solid var(--ice); flex:0 0 auto; }
@@ -113,6 +113,8 @@
     .ava-full.on { display:flex; }
     .ava-full img { max-width:80vw; max-height:70vh; border-radius:16px; border:4px solid var(--ice); pointer-events:none; }
     .ava-full .close { width:auto; margin:0; padding:10px 18px; }
+    .crop-frame { width:220px; height:220px; border-radius:16px; overflow:hidden; border:3px solid var(--ice); background:#000; touch-action:none; position:relative; }
+    .crop-frame img { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%) scale(1); max-width:none; height:220px; width:auto; pointer-events:none; border:0; }
     .heart { display:inline-block; margin-left:6px; background:#102830; color:#7ef0d2; border:1px solid #2a6a62; border-radius:999px; padding:2px 8px; font-size:12px; font-weight:800; letter-spacing:.02em; }
     .heart.big { font-size:16px; padding:6px 12px; margin:8px 0 0; }
     .hue-swatch { width:48px; height:48px; padding:0; border:0; border-radius:12px; background:transparent; overflow:hidden; }
@@ -288,7 +290,7 @@
   <section class="page" id="findPage">
     <div class="row2">
       <button class="ghost" id="openFollowing">Following</button>
-      <button class="ghost" id="openNotes">Alerts <span id="noteBadge"></span></button>
+      <button class="ghost" id="openNotes">Alerts</button>
     </div>
     <input id="findQ" placeholder="Screen name or player…" />
     <select id="findSort">
@@ -357,8 +359,11 @@
     <input id="plusSecret" type="password" autocomplete="off" />
     <button id="plusBtn">Unlock Ice+ on this account</button>
     <p class="muted" id="plusNote"></p>
-    <h3 style="font-size:15px;margin:16px 0 8px">Alerts</h3>
-    <p class="muted">Pushes stay off until book can update itself.</p>
+    <h3 style="font-size:15px;margin:16px 0 8px">Follow alerts</h3>
+    <p class="muted">Ping when a binder you follow adds a card. Works with the app open or on the Home Screen.</p>
+    <label><input id="followAlertOn" type="checkbox" style="width:auto;margin-right:8px" /> Notify me on followed binders</label>
+    <button class="ghost" id="followAlertSave">Save alerts</button>
+    <p class="muted" id="followAlertNote"></p>
     <h3 style="font-size:15px;margin:16px 0 8px">Moderation</h3>
     <p class="muted">Reports land here. Three photo or comment reports auto-hide that item.</p>
     <button class="ghost" id="modLoad">Load reports</button>
@@ -458,6 +463,13 @@
     <button id="tabSet">You</button>
   </nav>
   </div>
+<div class="ava-full" id="avaFull"><img id="avaFullImg" alt="" /><button type="button" class="close" id="avaFullX">Close</button></div>
+<div class="ava-full" id="cropFull">
+  <div class="crop-frame" id="cropFrame"><img id="cropImg" alt="" /></div>
+  <input id="cropZoom" type="range" min="100" max="220" value="100" style="width:220px" />
+  <button type="button" class="close" id="cropDone">Use photo</button>
+  <button type="button" class="close ghost" id="cropCancel">Cancel</button>
+</div>
 
 <script>
 const $ = id => document.getElementById(id);
@@ -1384,6 +1396,17 @@ $("modLoad") && ($("modLoad").onclick = async () => {
     "<div class=\"item\" style=\"cursor:default\"><b>"+x.slug+"</b> <span class=\"muted\">"+(x.created||"").slice(0,16)+"</span><p style=\"margin:6px 0 0\">"+String(x.reason||"").replace(/[<>]/g,"")+"</p></div>"
   ).join("") : "<p class=\"muted\">No reports.</p>";
 });
+if ($("followAlertOn")) $("followAlertOn").checked = localStorage.getItem("ice-follow-alerts") === "1";
+$("followAlertSave") && ($("followAlertSave").onclick = async () => {
+  const on = $("followAlertOn") && $("followAlertOn").checked;
+  localStorage.setItem("ice-follow-alerts", on ? "1" : "0");
+  if (on && "Notification" in window) {
+    const perm = await Notification.requestPermission();
+    $("followAlertNote").textContent = perm === "granted" ? "Alerts on for followed binders." : "Allow notifications for Safari / the Home Screen icon.";
+  } else {
+    $("followAlertNote").textContent = "Follow alerts off.";
+  }
+});
 $("plusBtn") && ($("plusBtn").onclick = async () => {
   try { await unlockPlus(); } catch(e) { if ($("plusNote")) $("plusNote").textContent = e.message; }
 });
@@ -1484,9 +1507,7 @@ $("pDisplay") && ($("pDisplay").oninput = () => paintProfile($("pDisplay").value
 $("pPhoto") && ($("pPhoto").onchange = async () => {
   const f = $("pPhoto").files[0];
   if (!f) return;
-  myAvatar = await blobJpegUrl(f, 160);
-  paintProfile($("pDisplay").value||"Collector", $("pHue").value, myAvatar);
-  if ($("shotProfile")) $("shotProfile").classList.add("on");
+  openCrop(URL.createObjectURL(f));
 });
 $("pSave") && ($("pSave").onclick = async () => {
   try {
@@ -1612,7 +1633,7 @@ function renderFind(){
     const hue = b.hue || "#8fd4ee";
     const st = "object-fit:cover;object-position:"+(b.cropx||50)+"% "+(b.cropy||50)+"%;transform:scale("+((b.cropz||100)/100)+");transform-origin:"+(b.cropx||50)+"% "+(b.cropy||50)+"%";
     const av = b.avatar ? "<img alt=\"\" src=\""+b.avatar+"\" style=\""+st+"\" />" : name.slice(0,2).toUpperCase();
-    const extra = [b.count+" cards", b.book?money(b.book):"", b.team||""].filter(Boolean).join(" · ");
+    const extra = [b.count+" cards", b.book?money(b.book):""].filter(Boolean).join(" · ");
     const heart = "<span class=\"heart\">♥ "+(b.likes||0)+"</span>";
     const fol = following[b.slug] ? " · Following" : "";
     return "<article class=\"item\" data-slug=\""+b.slug+"\"><div class=\"pwid\"><div class=\"pava\" data-full=\""+(b.avatar||"")+"\" style=\"border-color:"+hue+";background:"+hue+"\">"+av+"</div><div><h3>"+name+" "+heart+"</h3><div class=\"muted\">"+extra+fol+"</div></div></div></article>";
@@ -1633,6 +1654,49 @@ function showFull(src){
 function hideFull(){ if ($("avaFull")) $("avaFull").classList.remove("on"); }
 $("avaFull") && ($("avaFull").onclick = hideFull);
 $("avaFullX") && ($("avaFullX").onclick = ev => { ev.stopPropagation(); hideFull(); });
+let crop = { x:0, y:0, z:1, drag:false, sx:0, sy:0 };
+function applyCrop(){
+  const img = $("cropImg");
+  if (!img) return;
+  img.style.transform = "translate(calc(-50% + "+crop.x+"px), calc(-50% + "+crop.y+"px)) scale("+crop.z+")";
+}
+function openCrop(src){
+  crop = { x:0, y:0, z:1, drag:false, sx:0, sy:0 };
+  if ($("cropImg")) $("cropImg").src = src;
+  if ($("cropZoom")) $("cropZoom").value = 100;
+  applyCrop();
+  if ($("cropFull")) $("cropFull").classList.add("on");
+}
+$("cropZoom") && ($("cropZoom").oninput = () => { crop.z = (+$("cropZoom").value)/100; applyCrop(); });
+$("cropFrame") && ($("cropFrame").onpointerdown = e => {
+  crop.drag = true; crop.sx = e.clientX - crop.x; crop.sy = e.clientY - crop.y;
+  try { $("cropFrame").setPointerCapture(e.pointerId); } catch(err){}
+});
+$("cropFrame") && ($("cropFrame").onpointermove = e => {
+  if (!crop.drag) return;
+  crop.x = e.clientX - crop.sx; crop.y = e.clientY - crop.sy;
+  applyCrop();
+});
+$("cropFrame") && ($("cropFrame").onpointerup = () => { crop.drag = false; });
+$("cropCancel") && ($("cropCancel").onclick = ev => { ev.stopPropagation(); $("cropFull").classList.remove("on"); });
+$("cropDone") && ($("cropDone").onclick = ev => {
+  ev.stopPropagation();
+  const frame = $("cropFrame"), img = $("cropImg");
+  if (!frame || !img) return;
+  const c = document.createElement("canvas");
+  c.width = 160; c.height = 160;
+  const r = frame.getBoundingClientRect(), ir = img.getBoundingClientRect();
+  const nw = img.naturalWidth || 1, nh = img.naturalHeight || 1;
+  const sx = (r.left - ir.left) * (nw / ir.width);
+  const sy = (r.top - ir.top) * (nh / ir.height);
+  const sw = r.width * (nw / ir.width), sh = r.height * (nh / ir.height);
+  c.getContext("2d").drawImage(img, sx, sy, sw, sh, 0, 0, 160, 160);
+  myAvatar = c.toDataURL("image/jpeg", 0.85);
+  paintProfile($("pDisplay").value||"Collector", $("pHue").value, myAvatar);
+  if ($("shotProfile")) $("shotProfile").classList.add("on");
+  $("cropFull").classList.remove("on");
+});
+$("cropFull") && ($("cropFull").onclick = e => { if (e.target.id === "cropFull") $("cropFull").classList.remove("on"); });
 $("pAva") && ($("pAva").onclick = () => { if (myAvatar) showFull(myAvatar); });
 $("findList") && ($("findList").onclick = e => {
   const av = e.target.closest("[data-full]");
@@ -1676,10 +1740,19 @@ async function refreshNotesBadge(){
     const b = $("noteBadge");
     if (b) b.textContent = n ? ("("+n+")") : "";
     if ($("tabFind")) {
-      $("tabFind").textContent = n ? ("Community · "+n) : "Community";
+      $("tabFind").textContent = "Community";
       $("tabFind").classList.toggle("ping", n > 0);
     }
-    if ($("openNotes")) $("openNotes").textContent = n ? ("Alerts ("+n+")") : "Alerts";
+    if ($("openNotes")) {
+      $("openNotes").textContent = "Alerts";
+      $("openNotes").classList.toggle("ping", n > 0);
+    }
+    const want = localStorage.getItem("ice-follow-alerts") === "1";
+    const last = +(localStorage.getItem("ice-note-unread")||0);
+    if (want && n > last && "Notification" in window && Notification.permission === "granted") {
+      try { new Notification("Ice Ledger", { body: "A binder you follow added a card." }); } catch(e){}
+    }
+    localStorage.setItem("ice-note-unread", String(n));
   } catch(e){}
 }
 async function loadNotes(){
@@ -1768,6 +1841,5 @@ if (guestB) {
 paintTicker();
 renderBinder();
 </script>
-<div class="ava-full" id="avaFull"><img id="avaFullImg" alt="" /><button type="button" class="close" id="avaFullX">Close</button></div>
 </body>
 </html>
