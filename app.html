@@ -16,6 +16,18 @@
     .fxbar button.on { background:var(--btn); color:#fff; border-color:var(--btn); }
     .yf { background:#10161d; }
     .spark { display:block; width:100%; height:200px; background:#10161d; }
+    .mini-trend { background:#0e171e; border:1px solid var(--line); border-radius:14px; padding:10px 12px 8px; margin:10px 0 14px; }
+    .mini-trend-top { display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-bottom:4px; }
+    .mini-last { font-size:20px; font-weight:700; letter-spacing:-0.03em; }
+    .mini-chg { font-size:13px; font-weight:700; }
+    .mini-chg.up { color:#26a69a; }
+    .mini-chg.dn { color:#ef5350; }
+    .mini-chg.flat { color:var(--muted); }
+    .mini-spark { display:block; width:100%; height:52px; background:transparent; }
+    .tips { background:#0e171e; border:1px solid var(--line); border-radius:14px; padding:12px 14px; margin:10px 0 14px; }
+    .tips h3 { margin:0 0 6px; font-size:14px; }
+    .tips ul { margin:0; padding-left:18px; color:var(--muted); font-size:13px; line-height:1.45; }
+    .tips li { margin:0 0 4px; }
     .ranges { display:flex; gap:0; padding:0; background:#10161d; border-bottom:1px solid var(--line); }
     .ranges button { flex:1; width:auto; margin:0; padding:10px 0 8px; font-size:12px; font-weight:700; letter-spacing:.02em; border:0; border-bottom:2px solid transparent; border-radius:0; background:transparent; color:var(--muted); }
     .ranges button.on { color:var(--text); border-bottom-color:#26a69a; background:transparent; }
@@ -119,6 +131,10 @@
     .pwid { display:flex; align-items:center; gap:12px; margin-bottom:10px; }
     .pava { width:56px; height:56px; border-radius:16px; background:var(--ice); color:#071016; font-weight:800; display:flex; align-items:center; justify-content:center; font-size:16px; overflow:hidden; border:3px solid var(--ice); flex:0 0 auto; position:relative; }
     .pava img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; background:#0e171e; }
+    .binder-hero { display:flex; align-items:center; gap:14px; margin:12px 0 14px; }
+    .binder-hero .pava { width:88px; height:88px; border-radius:22px; font-size:22px; }
+    .binder-hero h2 { margin:0 0 4px; font-size:22px; line-height:1.15; }
+    .binder-hero .bio { margin:0 0 4px; color:var(--text); font-size:14px; }
     .item.reply { margin-left:18px; border-left:2px solid var(--line); }
     .board-post { display:block; border-radius:16px; padding:14px 16px; margin:10px 0 14px; background:#0e171e; border:2px solid var(--ice); }
     .board-post .k { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin:0 0 6px; }
@@ -252,6 +268,16 @@
     </div>
     <p class="muted" id="ripNote"></p>
     <input id="secret" type="hidden" value="" />
+    <div class="tips">
+      <h3>Photo tips</h3>
+      <ul>
+        <li>The front shot is the picture in your binder and on Community.</li>
+        <li>Fill the frame with the card. Square up so edges are straight.</li>
+        <li>Use even light. Avoid flash glare on slabs and shiny parallels.</li>
+        <li>Raws: front and back. Slabs: front only, label readable.</li>
+        <li>You can replace the photo later from Edit on that card.</li>
+      </ul>
+    </div>
     <div class="row2" style="margin-top:14px">
       <label class="shot-wrap" id="shotFront" for="file">
         <input class="shot-file" id="file" type="file" accept="image/*" />
@@ -379,7 +405,14 @@
     <button class="ghost" id="backFind">Community</button>
     <button class="ghost" id="followBtn">Follow</button>
     <button class="ghost" id="likeBinderBtn">Like binder · 0</button>
-    <p class="muted" id="pubHead"></p>
+    <div class="binder-hero" id="pubHeroHead">
+      <div class="pava" id="pubAva">IL</div>
+      <div>
+        <h2 id="pubName">Binder</h2>
+        <p class="bio" id="pubBio"></p>
+        <p class="muted" id="pubHead"></p>
+      </div>
+    </div>
     <div id="pubBanner"></div>
     <div class="row2">
       <select id="pubSort">
@@ -397,11 +430,14 @@
   <section class="page" id="pubDetail">
     <button class="ghost" id="backPub">Back to binder</button>
     <button class="ghost" id="likeBtn">Like · 0</button>
+    <button class="ghost hidden" id="pubEditBtn">Edit card</button>
     <div class="hero"><img id="pubHero" alt="" /></div>
     <h2 id="pubTitle"></h2>
     <p class="muted" id="pubLine"></p>
-    <svg class="spark" id="pubSpark" viewBox="0 0 360 120" preserveAspectRatio="none"></svg>
-    <p class="muted" id="pubTrendNote"></p>
+    <div class="mini-trend">
+      <div class="mini-trend-top"><span class="mini-last" id="pubTrendVal">—</span><span class="mini-chg flat" id="pubTrendNote"></span></div>
+      <svg class="mini-spark" id="pubSpark" viewBox="0 0 280 56" preserveAspectRatio="none"></svg>
+    </div>
     <div class="vals" id="pubVals"></div>
     <h3 style="font-size:14px">Comments</h3>
     <div id="pubComments"></div>
@@ -520,8 +556,10 @@
     <h2 id="dPlayer" style="margin:14px 0 4px"></h2>
     <div id="dChips"></div>
     <p class="muted" id="dLine"></p>
-    <svg class="spark" id="cardSpark" viewBox="0 0 360 120" preserveAspectRatio="none"></svg>
-    <p class="muted" id="cardTrendNote">Value over time for this card. Updates when comps refresh.</p>
+    <div class="mini-trend">
+      <div class="mini-trend-top"><span class="mini-last" id="cardTrendVal">—</span><span class="mini-chg flat" id="cardTrendNote"></span></div>
+      <svg class="mini-spark" id="cardSpark" viewBox="0 0 280 56" preserveAspectRatio="none"></svg>
+    </div>
     <div class="vals">
       <div class="val"><b id="vHold">—</b><span>Your copy</span></div>
       <div class="val"><b id="vPaid">—</b><span>Paid</span></div>
@@ -586,8 +624,15 @@
       <div><label>PSA 8 sold</label><input id="e_psa8" type="number" step="0.01" /></div>
       <div><label>PSA 10 sold</label><input id="e_psa10" type="number" step="0.01" /></div>
     </div>
+    <label>Photo</label>
+    <label class="shot-wrap" for="e_photo" style="min-height:88px;margin-bottom:10px">
+      <input class="shot-file" id="e_photo" type="file" accept="image/*" />
+      <div class="shot-ui">Replace photo</div>
+    </label>
+    <p class="muted">This photo is what shows in your binder. Same idea as scan: fill the frame, even light, no glare.</p>
     <label>Notes</label><textarea id="e_notes" rows="2"></textarea>
     <button id="saveEdit">Save changes</button>
+    <p class="muted" id="editNote"></p>
   </section>
   <nav class="dock" id="dock">
     <button id="tabScan">Scan</button>
@@ -776,6 +821,7 @@ let last = null, scanData = null, bindData = null, frontFile = null, backFile = 
 function load(){ try { return JSON.parse(localStorage.getItem(KEY)||"[]"); } catch(e){ return []; } }
 function saveAll(cards){ localStorage.setItem(KEY, JSON.stringify(cards)); paintTicker(); renderBinder(); }
 let openId = null;
+let editPhoto = "";
 function show(id){
   $("scanPage").classList.toggle("on", id==="scan");
   $("resultPage").classList.toggle("on", id==="result");
@@ -890,17 +936,49 @@ function pushCardHist(card){
   else h.push({ d: day, v: +card.comp, t: new Date().toISOString() });
   card.hist = h.slice(-400);
 }
+function miniSpark(vals, elId){
+  const el = $(elId);
+  if (!el) return;
+  const W = 280, H = 56, L = 4, R = 4, T = 6, B = 6;
+  const plotW = W - L - R, plotH = H - T - B;
+  if (!vals.length) {
+    el.innerHTML = "";
+    return;
+  }
+  const min = Math.min.apply(null, vals), max = Math.max.apply(null, vals);
+  const pad = (max-min)*0.18 || Math.max(1, Math.abs(max)*0.04);
+  const lo = min - pad, hi = max + pad, span = hi - lo || 1;
+  const xAt = i => L + (vals.length===1 ? plotW/2 : (i/(vals.length-1))*plotW);
+  const yAt = v => T + (1 - (v-lo)/span)*plotH;
+  const pts = vals.map((v,i) => xAt(i).toFixed(1)+","+yAt(v).toFixed(1)).join(" ");
+  const up = vals[vals.length-1] >= vals[0];
+  const col = vals.length < 2 ? "#8aa3b5" : (up ? "#26a69a" : "#ef5350");
+  const lastX = xAt(vals.length-1), lastY = yAt(vals[vals.length-1]);
+  const fill = pts+" "+lastX.toFixed(1)+","+(T+plotH)+" "+L+","+(T+plotH);
+  const gid = "mg-"+elId;
+  el.innerHTML =
+    "<defs><linearGradient id='"+gid+"' x1='0' y1='0' x2='0' y2='1'>"+
+    "<stop offset='0%' stop-color='"+col+"' stop-opacity='0.28'/>"+
+    "<stop offset='100%' stop-color='"+col+"' stop-opacity='0'/></linearGradient></defs>"+
+    "<polygon fill='url(#"+gid+")' points='"+fill+"'/>"+
+    "<polyline fill='none' stroke='"+col+"' stroke-width='2' stroke-linejoin='round' stroke-linecap='round' points='"+pts+"'/>"+
+    "<circle cx='"+lastX+"' cy='"+lastY+"' r='3' fill='"+col+"'/>";
+}
 function paintCardSpark(card, elId, noteId){
   let hist = (card && card.hist) || [];
   let vals = hist.map(x => +x.v).filter(v => !isNaN(v));
   if (!vals.length && card && card.comp != null && !isNaN(+card.comp)) vals = [+card.comp];
-  spark(vals, elId || "cardSpark");
+  miniSpark(vals, elId || "cardSpark");
+  const lastEl = elId === "pubSpark" ? $("pubTrendVal") : $("cardTrendVal");
   const note = $(noteId || "cardTrendNote");
+  if (lastEl) lastEl.textContent = vals.length ? money(vals[vals.length-1]) : "—";
   if (note) {
-    if (vals.length < 2) note.textContent = vals.length ? "Current book "+money(vals[0])+". Trend starts after the next refresh." : "No sold value yet.";
+    note.className = "mini-chg flat";
+    if (vals.length < 2) note.textContent = vals.length ? "—" : "No comps yet";
     else {
       const ch = vals[vals.length-1] - vals[0];
-      note.textContent = (ch>=0?"Up ":"Down ")+money(Math.abs(ch))+" across "+vals.length+" updates.";
+      note.className = "mini-chg " + (ch>0?"up":ch<0?"dn":"flat");
+      note.textContent = (ch>0?"+":ch<0?"−":"")+money(Math.abs(ch));
     }
   }
 }
@@ -1352,6 +1430,9 @@ function openDetail(id){
 function fillEdit(){
   const c = load().find(x => x.id===openId);
   if (!c) return;
+  editPhoto = "";
+  if ($("editNote")) $("editNote").textContent = "";
+  if ($("e_photo")) $("e_photo").value = "";
   $("e_player").value = c.player||"";
   $("e_year").value = c.year||"";
   $("e_number").value = c.number||"";
@@ -1379,7 +1460,8 @@ function cardRowHtml(c){
   return "<article class=\"item\" data-open=\""+c.id+"\">"+
     "<div class=\"item-top\"><img src=\""+img+"\" alt=\"\" /><div><h3>"+dash(c.player)+"</h3>"+
     "<div class=\"muted\">"+dash(line)+"</div>"+chips+
-    "<div class=\"muted\" style=\"margin-top:4px\">"+money(c.comp)+" market · "+money(c.cost)+" paid</div></div></div></article>";
+    "<div class=\"muted\" style=\"margin-top:4px\">"+money(c.comp)+" market · "+money(c.cost)+" paid</div>"+
+    "<button class=\"ghost\" data-edit=\""+c.id+"\" style=\"width:auto;margin-top:8px;padding:6px 12px\">Edit</button></div></div></article>";
 }
 function renderBinder(){
   const cards = load();
@@ -1442,6 +1524,14 @@ $("searchList") && ($("searchList").onclick = e => {
 if ($("sortBy")) $("sortBy").onchange = renderBinder;
 if ($("teamFilter")) $("teamFilter").onchange = renderBinder;
 $("list").onclick = e => {
+  const ed = e.target.closest("[data-edit]");
+  if (ed) {
+    e.preventDefault();
+    openId = ed.getAttribute("data-edit");
+    fillEdit();
+    show("edit");
+    return;
+  }
   const art = e.target.closest("[data-open]");
   if (art) openDetail(art.getAttribute("data-open"));
 };
@@ -1450,6 +1540,11 @@ $("gNum").onchange = paintGradePick;
 $("backBind").onclick = () => show("bind");
 $("editCardBtn").onclick = () => { fillEdit(); show("edit"); };
 $("backDetail").onclick = () => openDetail(openId);
+$("e_photo") && ($("e_photo").onchange = async ev => {
+  const f = ev.target.files && ev.target.files[0];
+  if (!f) return;
+  editPhoto = await toJpeg(f, 900);
+});
 $("saveEdit").onclick = () => {
   const cards = load();
   const i = cards.findIndex(c => c.id===openId);
@@ -1471,8 +1566,12 @@ $("saveEdit").onclick = () => {
     },
     compAt: new Date().toISOString()
   });
+  if (editPhoto) cards[i].photo = editPhoto;
+  pushCardHist(cards[i]);
   saveAll(cards);
   pushCard(cards[i]).catch(()=>{});
+  editPhoto = "";
+  if ($("editNote")) $("editNote").textContent = "Saved.";
   openDetail(openId);
 };
 $("dDel").onclick = () => {
@@ -2104,7 +2203,17 @@ function openPubCard(c){
   paintCardSpark(c, "pubSpark", "pubTrendNote");
   loadComments(viewSlug, c.id, $("pubComments"));
   paintLike();
+  if ($("pubEditBtn")) {
+    const mine = token() && mySlug && viewSlug === mySlug && load().some(x => x.id === c.id);
+    $("pubEditBtn").classList.toggle("hidden", !mine);
+  }
 }
+$("pubEditBtn") && ($("pubEditBtn").onclick = () => {
+  if (!viewCard) return;
+  openId = viewCard.id;
+  fillEdit();
+  show("edit");
+});
 let findCache = [];
 let following = {};
 let onlyFollow = false;
@@ -2138,7 +2247,8 @@ function renderFind(){
     const name = (b.display||"").toLowerCase();
     const players = (b.players||"").toLowerCase();
     const team = (b.team||"").toLowerCase();
-    return name.includes(q) || players.includes(q) || team.includes(q);
+    const bio = (b.bio||"").toLowerCase();
+    return name.includes(q) || players.includes(q) || team.includes(q) || bio.includes(q);
   });
   if (onlyFollow) rows = rows.filter(b => following[b.slug]);
   if (sort==="value") rows.sort((a,b)=>(+b.book||0)-(+a.book||0));
@@ -2154,7 +2264,8 @@ function renderFind(){
     const extra = [b.count+" cards", b.book?money(b.book):""].filter(Boolean).join(" · ");
     const heart = "<span class=\"heart\">♥ "+(b.likes||0)+"</span>";
     const fol = following[b.slug] ? " · Following" : "";
-    return "<article class=\"item\" data-slug=\""+b.slug+"\"><div class=\"pwid\"><div class=\"pava\" data-ava=\""+b.slug+"\" style=\"border-color:"+hue+";background:"+hue+"\">"+av+"</div><div><h3>"+name+" "+heart+"</h3><div class=\"muted\">"+extra+fol+"</div></div></div></article>";
+    const bio = (b.bio||"").replace(/[<>]/g,"");
+    return "<article class=\"item\" data-slug=\""+b.slug+"\"><div class=\"pwid\"><div class=\"pava\" data-ava=\""+b.slug+"\" style=\"border-color:"+hue+";background:"+hue+"\">"+av+"</div><div><h3>"+name+" "+heart+"</h3>"+(bio?"<div class=\"muted\" style=\"color:var(--text)\">"+bio+"</div>":"")+"<div class=\"muted\">"+extra+fol+"</div></div></div></article>";
   }).join("") : "<p class=\"muted\">"+(onlyFollow?"You’re not following anyone yet. Open a binder and tap Follow.":"No public binders yet.")+"</p>";
 }
 $("findQ") && ($("findQ").oninput = renderFind);
@@ -2389,7 +2500,20 @@ async function openPublic(slug, cardId){
   const r = await fetch("/u/"+encodeURIComponent(slug));
   if (!r.ok) { $("pubHead").textContent = "Binder not found."; show("pub"); return; }
   const d = await r.json();
-  $("pubHead").textContent = (d.display||"Collector")+" · "+d.count+" cards · book "+(d.book?money(d.book):"—")+(d.bio?" · "+d.bio:"");
+  const hue = d.hue || "#8fd4ee";
+  const name = d.display || "Collector";
+  if ($("pubName")) $("pubName").textContent = name;
+  if ($("pubBio")) {
+    $("pubBio").textContent = d.bio || "";
+    $("pubBio").style.display = d.bio ? "block" : "none";
+  }
+  $("pubHead").textContent = d.count+" cards · book "+(d.book?money(d.book):"—");
+  if ($("pubAva")) {
+    const ini = name.slice(0,2).toUpperCase();
+    $("pubAva").style.borderColor = hue;
+    $("pubAva").style.background = hue;
+    $("pubAva").innerHTML = ini+"<img alt=\"\" src=\"/u/"+encodeURIComponent(viewSlug)+"/avatar\" onerror=\"this.remove()\" />";
+  }
   if ($("pubBanner")) $("pubBanner").innerHTML = bannerHtml((d.banners||[])[0]);
   paintFollow();
   paintBinderLike(d.likes||0, false);
