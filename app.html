@@ -60,6 +60,9 @@
     .auth-card { background:linear-gradient(180deg,#18232d,#121b22); border:1px solid var(--line); border-radius:18px; padding:22px 20px 24px; box-shadow:0 18px 50px rgba(0,0,0,.35); }
     .mark { width:42px; height:42px; border-radius:12px; background:linear-gradient(135deg,#8fd4ee,#3d8fb0); margin-bottom:12px; }
     #resetBox { margin-top:8px; padding-top:8px; border-top:1px solid var(--line); }
+    .pw-wrap { position:relative; }
+    .pw-wrap input { padding-right:72px; }
+    .pw-wrap .eye { position:absolute; right:6px; top:4px; width:auto; margin:0; padding:8px 10px; font-size:12px; background:transparent; border:0; color:var(--ice); }
     .card { margin-top:14px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; }
     .card h2 { margin:0 0 4px; font-size:20px; }
     .line { color:var(--muted); font-size:14px; margin-bottom:10px; }
@@ -145,8 +148,13 @@
         <p class="muted">Your binder, scans, and comps — signed in so it isn’t stuck on one phone.</p>
         <label>Email</label>
         <input id="email" type="email" autocomplete="username" />
+        <label>Confirm email <span style="font-weight:400">(new accounts)</span></label>
+        <input id="email2" type="email" autocomplete="off" placeholder="Type it again" />
         <label>Password</label>
-        <input id="password" type="password" autocomplete="off" placeholder="6+ characters" />
+        <div class="pw-wrap">
+          <input id="password" type="password" autocomplete="off" placeholder="6+ characters" />
+          <button type="button" class="eye" data-eye="password">Show</button>
+        </div>
         <label style="margin-top:14px"><input id="agreeLegal" type="checkbox" style="width:auto;margin-right:8px" /> I agree to the <a href="/terms#terms-of-service" target="_blank" rel="noopener">Terms</a>, <a href="/aup#acceptable-use-policy" target="_blank" rel="noopener">Acceptable Use</a>, and <a href="/privacy#privacy-policy" target="_blank" rel="noopener">Privacy Policy</a></label>
         <button id="loginBtn">Sign in</button>
         <button class="ghost" id="signupBtn">Create account</button>
@@ -157,7 +165,10 @@
           <label>Code from email</label>
           <input id="resetCode" autocomplete="one-time-code" />
           <label>New password</label>
-          <input id="resetPw" type="password" autocomplete="new-password" />
+          <div class="pw-wrap">
+            <input id="resetPw" type="password" autocomplete="new-password" />
+            <button type="button" class="eye" data-eye="resetPw">Show</button>
+          </div>
           <button id="resetBtn">Set new password</button>
           <label>Ice+ secret (mail test only)</label>
           <input id="mailTestSecret" type="password" autocomplete="off" />
@@ -1438,13 +1449,29 @@ $("payBtn").onclick = async () => {
     if ($("plusNote")) $("plusNote").textContent = "Stripe isn’t live. Paste APP_SECRET below and tap Unlock Ice+.";
   } catch(e) { $("quotaBox").textContent = e.message; $("quotaBox").className = "status err"; }
 };
+document.querySelectorAll(".eye").forEach(btn => {
+  btn.onclick = ev => {
+    ev.preventDefault();
+    const el = $(btn.getAttribute("data-eye"));
+    if (!el) return;
+    const on = el.type === "password";
+    el.type = on ? "text" : "password";
+    btn.textContent = on ? "Hide" : "Show";
+  };
+});
 $("signupBtn").onclick = async () => {
   try {
     if (!$("agreeLegal") || !$("agreeLegal").checked) {
       flash("authStatus", "err", "Agree to the Terms and Privacy Policy first.");
       return;
     }
-    const d = await authPost("/signup", { email:$("email").value, password:$("password").value });
+    const a = ($("email").value || "").trim().toLowerCase();
+    const b = ($("email2").value || "").trim().toLowerCase();
+    if (!a || a !== b) {
+      flash("authStatus", "err", "Email and confirm email have to match.");
+      return;
+    }
+    const d = await authPost("/signup", { email:a, password:$("password").value });
     setToken(d.token); showApp(); await pullCloud(); paintTicker(); renderBinder();
   } catch(e) { flash("authStatus", "err", e.message); }
 };
