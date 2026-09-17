@@ -514,6 +514,15 @@ def init_db():
       created TEXT NOT NULL
     )
     """)
+    con.execute("""
+    CREATE TABLE IF NOT EXISTS likes (
+      slug TEXT NOT NULL,
+      card_id TEXT NOT NULL,
+      user_id INTEGER NOT NULL,
+      created TEXT NOT NULL,
+      PRIMARY KEY (slug, card_id, user_id)
+    )
+    """)
     con.commit()
     con.close()
 
@@ -779,6 +788,65 @@ async def delete_card(cid: str, request: Request, x_token: str | None = Header(d
     con.close()
     return {"ok": True}
 
+@app.get("/binders")
+async def list_binders():
+    con = db()
+    rows = con.execute(
+        """
+        SELECT u.slug, COUNT(c.id) AS n
+        FROM users u
+        JOIN cards c ON c.user_id = u.id
+        WHERE u.slug IS NOT NULL AND u.slug != ''
+        GROUP BY u.id
+        HAVING n > 0
+        ORDER BY n DESC
+        LIMIT 80
+        """
+    ).fetchall()
+    con.close()
+    return {"binders": [{"slug": r["slug"], "count": r["n"]} for r in rows]}
+
+@app.post("/u/{slug}/cards/{cid}/like")
+async def toggle_like(slug: str, cid: str, request: Request, x_token: str | None = Header(default=None)):
+    uid = require_user(request, x_token)
+    con = db()
+    owner = con.execute("SELECT id FROM users WHERE slug=?", (slug,)).fetchone()
+    if not owner:
+        con.close()
+        raise HTTPException(404, "binder not found")
+    row = con.execute(
+        "SELECT user_id FROM likes WHERE slug=? AND card_id=? AND user_id=?",
+        (slug, cid, uid),
+    ).fetchone()
+    if row:
+        con.execute("DELETE FROM likes WHERE slug=? AND card_id=? AND user_id=?", (slug, cid, uid))
+        liked = False
+    else:
+        con.execute(
+            "INSERT INTO likes(slug,card_id,user_id,created) VALUES(?,?,?,?)",
+            (slug, cid, uid, time.strftime("%Y-%m-%dT%H:%M:%SZ")),
+        )
+        liked = True
+    con.commit()
+    n = con.execute("SELECT COUNT(*) AS n FROM likes WHERE slug=? AND card_id=?", (slug, cid)).fetchone()["n"]
+    con.close()
+    return {"liked": liked, "likes": n}
+
+@app.get("/u/{slug}/cards/{cid}/likes")
+async def card_likes(slug: str, cid: str, request: Request, x_token: str | None = Header(default=None)):
+    tok = x_token or (request.headers.get("x-token") if request else None)
+    uid = user_from_token(tok)
+    con = db()
+    n = con.execute("SELECT COUNT(*) AS n FROM likes WHERE slug=? AND card_id=?", (slug, cid)).fetchone()["n"]
+    mine = False
+    if uid:
+        mine = bool(con.execute(
+            "SELECT 1 FROM likes WHERE slug=? AND card_id=? AND user_id=?",
+            (slug, cid, uid),
+        ).fetchone())
+    con.close()
+    return {"likes": n, "liked": mine}
+
 @app.get("/me")
 async def me(request: Request, x_token: str | None = Header(default=None)):
     uid = require_user(request, x_token)
@@ -842,87 +910,6 @@ async def add_comment(slug: str, cid: str, payload: dict, request: Request, x_to
     rid = con.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
     con.close()
     return {"ok": True, "id": rid, "name": name, "body": body, "created": created}
-
-@app.delete("/comments/{cid}")
-async def del_comment(cid: int, request: Request, x_token: str | None = Header(default=None)):
-    uid = require_user(request, x_token)
-    slug = ensure_slug(uid)
-    con = db()
-    row = con.execute("SELECT slug,user_id FROM comments WHERE id=?", (cid,)).fetchone()
-    if not row:
-        con.close()
-        raise HTTPException(404, "gone")
-    if row["user_id"] != uid and row["slug"] != slug:
-        con.close()
-        raise HTTPException(403, "not yours")
-    con.execute("DELETE FROM comments WHERE id=?", (cid,))
-    con.commit()
-    con.close()
-    return {"ok": True}
-
-@app.get("/me")
-async def me(request: Request, x_token: str | None = Header(default=None)):
-    uid = require_user(request, x_token)
-    slug = ensure_slug(uid)
-    return {"slug": slug, "url": f"/?b={slug}"}
-
-@app.get("/u/{slug}")
-async def public_binder(slug: str):
-    slug = re.sub(r"[^a-z0-9]", "", (slug or "").lower())
-    con = db()
-    u = con.execute("SELECT id FROM users WHERE slug=?", (slug,)).fetchone()
-    if not u:
-        con.close()
-        raise HTTPException(404, "binder not found")
-    rows = con.execute("SELECT data FROM cards WHERE user_id=?", (u["id"],)).fetchall()
-    con.close()
-    cards = [public_card(json.loads(r["data"])) for r in rows]
-    book = sum((c.get("comp") or 0) for c in cards if c.get("comp") is not None)
-    return {"slug": slug, "count": len(cards), "book": book, "cards": cards}
-
-@app.get("/u/{slug}/cards/{cid}/comments")
-async def list_comments(slug: str, cid: str):
-    con = db()
-    rows = con.execute(
-        "SELECT id,name,body,created FROM comments WHERE slug=? AND card_id=? ORDER BY id DESC LIMIT 80",
-        (slug, cid),
-    ).fetchall()
-    con.close()
-    return {"comments": [dict(r) for r in rows]}
-
-@app.post("/u/{slug}/cards/{cid}/comments")
-async def add_comment(slug: str, cid: str, payload: dict, request: Request, x_token: str | None = Header(default=None)):
-    uid = require_user(request, x_token)
-    body = (payload.get("body") or "").strip()
-    if len(body) < 2 or len(body) > 280:
-        raise HTTPException(400, "comment 2–280 characters")
-    con = db()
-    owner = con.execute("SELECT id FROM users WHERE slug=?", (slug,)).fetchone()
-    if not owner:
-        con.close()
-        raise HTTPException(404, "binder not found")
-    card = con.execute("SELECT id FROM cards WHERE id=? AND user_id=?", (cid, owner["id"])).fetchone()
-    if not card:
-        con.close()
-        raise HTTPException(404, "card not found")
-    hour = time.strftime("%Y-%m-%dT%H")
-    n = con.execute(
-        "SELECT COUNT(*) AS n FROM comments WHERE user_id=? AND created LIKE ?",
-        (uid, hour + "%"),
-    ).fetchone()["n"]
-    if n >= 12:
-        con.close()
-        raise HTTPException(429, "slow down — 12 comments an hour")
-    name = ensure_slug(uid)
-    created = time.strftime("%Y-%m-%dT%H:%M:%SZ")
-    con.execute(
-        "INSERT INTO comments(slug,card_id,user_id,name,body,created) VALUES(?,?,?,?,?,?)",
-        (slug, cid, uid, name, body, created),
-    )
-    con.commit()
-    cid_row = con.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
-    con.close()
-    return {"ok": True, "id": cid_row, "name": name, "body": body, "created": created}
 
 @app.delete("/comments/{cid}")
 async def del_comment(cid: int, request: Request, x_token: str | None = Header(default=None)):

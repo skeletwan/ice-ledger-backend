@@ -157,6 +157,7 @@
     <nav>
       <button class="ghost" id="tabScan">Scan</button>
       <button class="ghost" id="tabBind">Binder</button>
+      <button class="ghost" id="tabFind">Find</button>
       <button class="ghost" id="tabSet">Alerts</button>
       <button class="ghost" id="logoutBtn">Get out</button>
     </nav>
@@ -256,12 +257,19 @@
     <p class="muted" id="shareNote"></p>
     <button class="ghost" id="exportBtn">Export JSON</button>
   </section>
+  <section class="page" id="findPage">
+    <p class="muted">Open someone else’s public binder. Comment and like cards there.</p>
+    <input id="findQ" placeholder="Search a binder name…" />
+    <div id="findList"></div>
+  </section>
   <section class="page" id="pubPage">
+    <button class="ghost" id="backFind">All binders</button>
     <p class="muted" id="pubHead"></p>
     <div id="pubList"></div>
   </section>
   <section class="page" id="pubDetail">
     <button class="ghost" id="backPub">Back to binder</button>
+    <button class="ghost" id="likeBtn">Like · 0</button>
     <div class="hero"><img id="pubHero" alt="" /></div>
     <h2 id="pubTitle"></h2>
     <p class="muted" id="pubLine"></p>
@@ -516,13 +524,16 @@ function show(id){
   $("setPage").classList.toggle("on", id==="set");
   if ($("pubPage")) $("pubPage").classList.toggle("on", id==="pub");
   if ($("pubDetail")) $("pubDetail").classList.toggle("on", id==="pubDetail");
+  if ($("findPage")) $("findPage").classList.toggle("on", id==="find");
   if (id==="bind") renderBinder();
-  document.body.classList.toggle("bind-on", id==="bind" || id==="pub");
+  if (id==="find") loadFind();
+  document.body.classList.toggle("bind-on", id==="bind" || id==="pub" || id==="find");
   window.scrollTo(0,0);
 }
 $("tabScan").onclick = () => show("scan");
 $("backScan").onclick = () => show("scan");
 $("tabBind").onclick = () => show("bind");
+$("tabFind").onclick = () => show("find");
 $("tabSet").onclick = () => { loadNotePrefs(); show("set"); };
 $("fxCAD").onclick = () => setFx("CAD");
 $("fxUSD").onclick = () => setFx("USD");
@@ -1267,7 +1278,52 @@ function openPubCard(c){
   ).join("");
   show("pubDetail");
   loadComments(viewSlug, c.id, $("pubComments"));
+  paintLike();
 }
+let findCache = [];
+async function loadFind(){
+  const box = $("findList");
+  if (!box) return;
+  box.innerHTML = "<p class=\"muted\">Loading binders…</p>";
+  try {
+    const r = await fetch("/binders");
+    const d = await r.json();
+    findCache = d.binders || [];
+    renderFind();
+  } catch(e) {
+    box.innerHTML = "<p class=\"muted\">Could not load binders. Cards must be synced to the cloud first.</p>";
+  }
+}
+function renderFind(){
+  const q = (($("findQ")&&$("findQ").value)||"").toLowerCase();
+  const rows = findCache.filter(b => !q || (b.slug||"").toLowerCase().includes(q));
+  $("findList").innerHTML = rows.length ? rows.map(b =>
+    "<article class=\"item\" data-slug=\""+b.slug+"\"><h3>"+b.slug+"</h3><div class=\"muted\">"+b.count+" cards</div></article>"
+  ).join("") : "<p class=\"muted\">No public binders yet. Save a card while signed in, then this list fills in.</p>";
+}
+$("findQ") && ($("findQ").oninput = renderFind);
+$("findList") && ($("findList").onclick = e => {
+  const art = e.target.closest("[data-slug]");
+  if (art) openPublic(art.getAttribute("data-slug"));
+});
+$("backFind") && ($("backFind").onclick = () => show("find"));
+async function paintLike(){
+  if (!viewSlug || !viewCard || !$("likeBtn")) return;
+  try {
+    const r = await fetch("/u/"+encodeURIComponent(viewSlug)+"/cards/"+encodeURIComponent(viewCard.id)+"/likes", { headers:{ "x-token": token() } });
+    const d = await r.json();
+    $("likeBtn").textContent = (d.liked ? "Liked · " : "Like · ") + (d.likes||0);
+  } catch(e) { $("likeBtn").textContent = "Like · 0"; }
+}
+$("likeBtn") && ($("likeBtn").onclick = async () => {
+  if (!token()) { $("pubCStatus").textContent = "Sign in to like."; return; }
+  if (!viewSlug || !viewCard) return;
+  const r = await fetch("/u/"+encodeURIComponent(viewSlug)+"/cards/"+encodeURIComponent(viewCard.id)+"/like", {
+    method:"POST", headers:{ "x-token": token() }
+  });
+  const d = await r.json().catch(()=>({}));
+  if (r.ok) $("likeBtn").textContent = (d.liked ? "Liked · " : "Like · ") + (d.likes||0);
+});
 async function openPublic(slug){
   viewSlug = slug;
   $("authPage").classList.add("hidden");
