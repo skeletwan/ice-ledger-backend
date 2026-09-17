@@ -17,6 +17,46 @@ PLUS_SCANS = int(os.environ.get("PLUS_SCANS", "200"))
 FREE_BOOK = int(os.environ.get("FREE_BOOK", "8"))
 PLUS_BOOK = int(os.environ.get("PLUS_BOOK", "30"))
 STRIPE_PAY_LINK = os.environ.get("STRIPE_PAY_LINK", "")
+MAIL_TO = os.environ.get("MAIL_TO", "iceledger@outlook.com")
+MAIL_FROM = os.environ.get("MAIL_FROM", "Ice Ledger <iceledger@outlook.com>")
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+SMTP_HOST = os.environ.get("SMTP_HOST", "")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_USER = os.environ.get("SMTP_USER", "")
+SMTP_PASS = os.environ.get("SMTP_PASS", "")
+APP_URL = os.environ.get("APP_URL", "")
+
+def send_mail(subject: str, body: str, to: str | None = None) -> bool:
+    to = to or MAIL_TO
+    if not to:
+        return False
+    if RESEND_API_KEY:
+        try:
+            r = httpx.post(
+                "https://api.resend.com/emails",
+                headers={"Authorization": f"Bearer {RESEND_API_KEY}", "Content-Type": "application/json"},
+                json={"from": MAIL_FROM, "to": [to], "subject": subject, "text": body},
+                timeout=20,
+            )
+            return r.status_code < 300
+        except Exception:
+            return False
+    if SMTP_HOST and SMTP_USER and SMTP_PASS:
+        try:
+            import smtplib
+            from email.mime.text import MIMEText
+            msg = MIMEText(body)
+            msg["Subject"] = subject
+            msg["From"] = MAIL_FROM
+            msg["To"] = to
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=20) as s:
+                s.starttls()
+                s.login(SMTP_USER, SMTP_PASS)
+                s.sendmail(MAIL_FROM, [to], msg.as_string())
+            return True
+        except Exception:
+            return False
+    return False
 
 app = FastAPI(title="Ice Ledger Identify")
 app.add_middleware(
@@ -89,6 +129,28 @@ def home():
     if page.exists():
         return FileResponse(page)
     return HTMLResponse("<p>app.html missing</p>")
+
+def legal_file():
+    page = ROOT / "legal.html"
+    if page.exists():
+        return FileResponse(page)
+    return HTMLResponse("<p>legal.html missing</p>")
+
+@app.get("/legal")
+def legal_home():
+    return legal_file()
+
+@app.get("/terms")
+def legal_terms():
+    return legal_file()
+
+@app.get("/privacy")
+def legal_privacy():
+    return legal_file()
+
+@app.get("/aup")
+def legal_aup():
+    return legal_file()
 
 def check_cap():
     day = time.strftime("%Y-%m-%d")
@@ -571,6 +633,13 @@ def init_db():
         con.execute("ALTER TABLE notes ADD COLUMN card_id TEXT")
     except sqlite3.OperationalError:
         pass
+    con.execute("""
+    CREATE TABLE IF NOT EXISTS resets (
+      email TEXT NOT NULL,
+      token TEXT NOT NULL,
+      created INTEGER NOT NULL
+    )
+    """)
     con.commit()
     con.close()
 
@@ -775,25 +844,48 @@ async def plus(payload: dict, request: Request, x_token: str | None = Header(def
     return usage_of(uid)
 
 @app.post("/reset")
-async def reset(payload: dict):
+async def reset_request(payload: dict):
     email = (payload.get("email") or "").strip().lower()
-    pw = payload.get("password") or ""
-    secret = payload.get("secret") or ""
-    if APP_SECRET and secret != APP_SECRET:
-        raise HTTPException(401, "app secret does not match")
-    if "@" not in email or len(pw) < 6:
-        raise HTTPException(400, "email and a new password (6+ characters)")
+    if "@" not in email:
+        raise HTTPException(400, "enter the account email")
     con = db()
     row = con.execute("SELECT id FROM users WHERE email=?", (email,)).fetchone()
-    if not row:
+    if row:
+        token = secrets.token_urlsafe(8).lower()
+        con.execute("DELETE FROM resets WHERE email=?", (email,))
+        con.execute("INSERT INTO resets(email,token,created) VALUES(?,?,?)", (email, token, int(time.time())))
+        con.commit()
+        send_mail(
+            "Ice Ledger password reset",
+            f"Your Ice Ledger reset code is: {token}\n\nIt expires in 30 minutes. If you didn't ask for this, ignore the email.",
+            to=email,
+        )
+    con.close()
+    return {"ok": True}
+
+@app.post("/reset-confirm")
+async def reset_confirm(payload: dict):
+    email = (payload.get("email") or "").strip().lower()
+    code = (payload.get("code") or payload.get("token") or "").strip().lower()
+    pw = payload.get("password") or ""
+    if "@" not in email or len(pw) < 6 or len(code) < 4:
+        raise HTTPException(400, "email, reset code, and a new password (6+)")
+    con = db()
+    row = con.execute("SELECT token,created FROM resets WHERE email=?", (email,)).fetchone()
+    if not row or row["token"] != code or int(time.time()) - int(row["created"]) > 1800:
+        con.close()
+        raise HTTPException(400, "code is wrong or expired")
+    user = con.execute("SELECT id FROM users WHERE email=?", (email,)).fetchone()
+    if not user:
         con.close()
         raise HTTPException(404, "no account with that email")
-    con.execute("UPDATE users SET pw=? WHERE id=?", (hash_pw(pw), row["id"]))
-    con.execute("DELETE FROM sessions WHERE user_id=?", (row["id"],))
+    con.execute("UPDATE users SET pw=? WHERE id=?", (hash_pw(pw), user["id"]))
+    con.execute("DELETE FROM sessions WHERE user_id=?", (user["id"],))
+    con.execute("DELETE FROM resets WHERE email=?", (email,))
     token = secrets.token_urlsafe(24)
     con.execute(
         "INSERT INTO sessions(token,user_id,created) VALUES(?,?,?)",
-        (token, row["id"], time.strftime("%Y-%m-%dT%H:%M:%SZ")),
+        (token, user["id"], time.strftime("%Y-%m-%dT%H:%M:%SZ")),
     )
     con.commit()
     con.close()
@@ -956,6 +1048,7 @@ async def report_binder(slug: str, payload: dict, request: Request, x_token: str
         con.execute("UPDATE users SET avatar='' WHERE slug=?", (slug,))
     con.commit()
     con.close()
+    send_mail("Ice Ledger report", f"Binder photo report\nslug: {slug}\nreason: {reason}\ncount: {n}")
     return {"ok": True, "reports": n}
 
 @app.post("/admin/clear-avatar")
@@ -1180,6 +1273,7 @@ async def report_comment(cid: int, request: Request, x_token: str | None = Heade
         con.execute("UPDATE comments SET hidden=1 WHERE id=?", (cid,))
     con.commit()
     con.close()
+    send_mail("Ice Ledger comment report", f"Comment report\nid: {cid}\nslug: {row['slug']}\ntext: {(row['body'] or '')[:200]}\ncount: {n}")
     return {"ok": True, "reports": n}
 
 @app.get("/admin/inbox")

@@ -147,16 +147,18 @@
         <input id="email" type="email" autocomplete="username" />
         <label>Password</label>
         <input id="password" type="password" autocomplete="off" placeholder="6+ characters" />
+        <label style="margin-top:14px"><input id="agreeLegal" type="checkbox" style="width:auto;margin-right:8px" /> I agree to the <a href="/terms#terms-of-service" target="_blank" rel="noopener">Terms</a>, <a href="/aup#acceptable-use-policy" target="_blank" rel="noopener">Acceptable Use</a>, and <a href="/privacy#privacy-policy" target="_blank" rel="noopener">Privacy Policy</a></label>
         <button id="loginBtn">Sign in</button>
         <button class="ghost" id="signupBtn">Create account</button>
         <button class="ghost" id="showReset">Forgot password</button>
         <div id="resetBox" class="hidden">
-          <p class="muted">Needs the Railway app secret.</p>
-          <label>App secret</label>
-          <input id="resetSecret" type="password" autocomplete="off" />
+          <p class="muted">We’ll email a code to the address above.</p>
+          <button class="ghost" id="resetSend">Email me a code</button>
+          <label>Code from email</label>
+          <input id="resetCode" autocomplete="one-time-code" />
           <label>New password</label>
           <input id="resetPw" type="password" autocomplete="new-password" />
-          <button id="resetBtn">Reset password & sign in</button>
+          <button id="resetBtn">Set new password</button>
         </div>
         <p class="status" id="authStatus"></p>
       </div>
@@ -378,6 +380,13 @@
       <h3 style="margin:0 0 8px;font-size:15px">Contact</h3>
       <p class="muted"><a href="mailto:iceledger@outlook.com" style="color:var(--ice)">iceledger@outlook.com</a></p>
       <a class="btn" href="mailto:iceledger@outlook.com?subject=Ice%20Ledger%20feedback">Email support / feedback</a>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <h3 style="margin:0 0 8px;font-size:15px">Legal</h3>
+      <p class="muted">TWANTECH · Ice Ledger</p>
+      <a class="ghost btn" href="/terms#terms-of-service" target="_blank" rel="noopener">Terms of Service</a>
+      <a class="ghost btn" href="/aup#acceptable-use-policy" target="_blank" rel="noopener">Acceptable Use</a>
+      <a class="ghost btn" href="/privacy#privacy-policy" target="_blank" rel="noopener">Privacy Policy</a>
     </div>
   </section>
   <section class="page" id="detailPage">
@@ -639,6 +648,7 @@ function show(id){
   if ($("helpPage")) $("helpPage").classList.toggle("on", id==="help");
   if ($("searchPage")) $("searchPage").classList.toggle("on", id==="search");
   if ($("notesPage")) $("notesPage").classList.toggle("on", id==="notes");
+  if (id==="scan" && $("status")) $("status").textContent = "";
   if (id==="bind") renderBinder();
   if (id==="search") renderSearch();
   if (id==="find") loadFind();
@@ -1081,7 +1091,7 @@ $("saveBtn").onclick = () => {
   });
   saveAll(cards);
   pushCard(cards[0]).catch(()=>{});
-  $("status").textContent = "Saved. Ticker updated.";
+  $("status").textContent = "";
   clearIdFields();
   frontFile = null; backFile = null; scanData = null; bindData = null;
   $("scanBox").classList.add("hidden");
@@ -1398,12 +1408,18 @@ $("modLoad") && ($("modLoad").onclick = async () => {
 });
 if ($("followAlertOn")) $("followAlertOn").checked = localStorage.getItem("ice-follow-alerts") === "1";
 $("followAlertSave") && ($("followAlertSave").onclick = async () => {
-  const on = $("followAlertOn") && $("followAlertOn").checked;
-  localStorage.setItem("ice-follow-alerts", on ? "1" : "0");
-  if (on && "Notification" in window) {
+  if ($("followAlertOn")) $("followAlertOn").checked = true;
+  localStorage.setItem("ice-follow-alerts", "1");
+  let msg = "Alerts on for followed binders.";
+  if ("Notification" in window) {
     const perm = await Notification.requestPermission();
-    $("followAlertNote").textContent = perm === "granted" ? "Alerts on for followed binders." : "Allow notifications for Safari / the Home Screen icon.";
-  } else {
+    if (perm !== "granted") msg = "Alerts on in the app. Allow notifications in Settings if you want a banner.";
+  }
+  $("followAlertNote").textContent = msg;
+});
+$("followAlertOn") && ($("followAlertOn").onchange = () => {
+  if (!$("followAlertOn").checked) {
+    localStorage.setItem("ice-follow-alerts", "0");
     $("followAlertNote").textContent = "Follow alerts off.";
   }
 });
@@ -1421,6 +1437,10 @@ $("payBtn").onclick = async () => {
 };
 $("signupBtn").onclick = async () => {
   try {
+    if (!$("agreeLegal") || !$("agreeLegal").checked) {
+      flash("authStatus", "err", "Agree to the Terms and Privacy Policy first.");
+      return;
+    }
     const d = await authPost("/signup", { email:$("email").value, password:$("password").value });
     setToken(d.token); showApp(); await pullCloud(); paintTicker(); renderBinder();
   } catch(e) { flash("authStatus", "err", e.message); }
@@ -1435,12 +1455,18 @@ $("showReset").onclick = ev => {
   ev.preventDefault();
   $("resetBox").classList.toggle("hidden");
 };
+$("resetSend") && ($("resetSend").onclick = async () => {
+  try {
+    await authPost("/reset", { email: $("email").value });
+    flash("authStatus", "ok", "If that email has an account, a code is on the way.");
+  } catch(e) { flash("authStatus", "err", e.message); }
+});
 $("resetBtn").onclick = async () => {
   try {
-    const d = await authPost("/reset", {
+    const d = await authPost("/reset-confirm", {
       email: $("email").value,
-      password: $("resetPw").value,
-      secret: $("resetSecret").value
+      code: $("resetCode").value,
+      password: $("resetPw").value
     });
     flash("authStatus", "ok", "Password updated. Signing you in…");
     setToken(d.token); showApp(); await pullCloud(); paintTicker(); renderBinder();
