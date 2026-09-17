@@ -958,6 +958,18 @@ $("go").onclick = async () => {
     $("f_grader").value = d.grader || "Raw";
     $("f_grade").value = d.grade || "";
     $("f_cert").value = d.cert || "";
+    if (d.hockey === false) {
+      $("badge").textContent = "Not hockey — won’t save to binder";
+      $("badge").className = "badge review";
+      $("status").textContent = "That’s a " + (d.sport || "non-hockey") + " card. Ice Ledger only saves hockey right now.";
+      $("status").className = "status warn";
+      if ($("saveBtn")) $("saveBtn").disabled = true;
+      $("result").classList.remove("hidden");
+      show("result");
+      setCompBanner("bad", "Hockey only for now. Other sports / Pokemon will get their own binders later.");
+      return;
+    }
+    if ($("saveBtn")) $("saveBtn").disabled = false;
     $("badge").textContent = d.needs_review ? "Needs review — edit fields below" : "Looks good — still edit if wrong";
     $("badge").className = "badge" + (d.needs_review ? " review" : "");
     const qq = qstr({
@@ -1119,6 +1131,11 @@ if ($("refreshPhotos")) $("refreshPhotos").onclick = async ev => {
   }
 };
 $("saveBtn").onclick = () => {
+  if (last && last.hockey === false) {
+    $("status").textContent = "Hockey only for now. This card was not added.";
+    $("status").className = "status err";
+    return;
+  }
   const rec = readCard();
   if (!rec.player) { $("status").textContent = "Player is required."; $("status").className = "status err"; return; }
   const cards = load();

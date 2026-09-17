@@ -92,8 +92,10 @@ app.add_middleware(
 
 _hits = {}
 
-PROMPT = """Identify this HOCKEY trading card. Return ONLY JSON, no markdown.
-Hockey only (NHL / CHL / IIHF / Team Canada). If it is not hockey, still fill what you see and set notes.
+PROMPT = """Identify this trading card. Ice Ledger only catalogs HOCKEY right now.
+Hockey = NHL, AHL, CHL (OHL/WHL/QMJHL), IIHF, Team Canada/USA, PWHL, junior/international hockey.
+If the card is baseball, basketball, football, soccer, Pokemon, TCG, entertainment, or anything else: set hockey false and sport to that category. Do not pretend it is hockey.
+Return ONLY JSON, no markdown.
 You may get FRONT and sometimes BACK. Back is source of truth for year, set name, card number, copyright line.
 Slab: read the grading label first (grader, grade, cert), then the card through the case.
 
@@ -107,6 +109,7 @@ Upper Deck hockey rules (2015–2026 especially):
 
 If a field is not readable, use null. Never invent a rare parallel.
 {
+  "hockey": boolean,
   "player": string|null,
   "sport": string|null,
   "year": string|null,
@@ -261,6 +264,21 @@ async def identify(
     except json.JSONDecodeError:
         raise HTTPException(502, "model did not return JSON")
     data["model"] = MODEL
+    sport = str(data.get("sport") or "").strip().lower()
+    notes = str(data.get("notes") or "").lower()
+    hockey_words = ("hockey", "nhl", "ahl", "ohl", "whl", "qmjhl", "chl", "iihf", "pwhl")
+    other_words = ("pokemon", "pokémon", "baseball", "mlb", "basketball", "nba", "football", "nfl", "soccer", "fifa", "mtg", "magic", "yugioh", "yu-gi-oh")
+    hockey = data.get("hockey")
+    if hockey is None:
+        hockey = any(w in sport for w in hockey_words) or (not sport and not any(w in notes for w in other_words))
+    if any(w in sport for w in other_words):
+        hockey = False
+    data["hockey"] = bool(hockey)
+    if not data["hockey"]:
+        data["needs_review"] = True
+        data["blocked"] = True
+        label = data.get("sport") or "not hockey"
+        data["notes"] = (data.get("notes") or "") + f" Ice Ledger is hockey-only for now ({label})."
     return data
 
 
