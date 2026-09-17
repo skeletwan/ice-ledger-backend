@@ -93,7 +93,7 @@
     .quote-wrap { display:none; }
     body.chart-on .quote-wrap { display:block; }
     header { position:sticky; top:0; z-index:8; background:#071016; }
-    body.bind-on .stick { position:sticky; top:52px; z-index:7; padding:8px 16px 10px; margin:0 -16px; background:#071016; border-bottom:1px solid var(--line); }
+    body.bind-on .stick { position:static; padding:8px 0 10px; background:transparent; border:0; margin:0; }
     .bookbar { display:none; padding:10px 0 4px; }
     body.bind-on .bookbar { display:block; }
     .bookbar button { width:100%; text-align:left; background:#121c26; border:1px solid var(--line); border-radius:12px; padding:10px 12px; }
@@ -105,10 +105,11 @@
     .page { padding-bottom:88px; }
     .backrow { display:flex; gap:8px; }
     .backrow button { width:auto; flex:1; }
-    .shot { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; min-height:108px; margin-top:0; padding:16px 10px; background:linear-gradient(180deg,#182833,#101820); border:1px dashed #3d5a6a; border-radius:14px; color:var(--text); font-weight:700; font-size:14px; text-align:center; cursor:pointer; }
-    .shot span { display:block; font-size:11px; font-weight:600; color:var(--muted); text-transform:none; }
-    .shot.on { border-style:solid; border-color:var(--ice); background:#14303a; }
-    .shot input { display:none; }
+    .shot-wrap { position:relative; min-height:108px; border-radius:14px; overflow:hidden; background:linear-gradient(180deg,#182833,#101820); border:1px dashed #3d5a6a; }
+    .shot-wrap.on { border-style:solid; border-color:var(--ice); background:#14303a; }
+    .shot-ui { pointer-events:none; position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; font-weight:700; font-size:14px; text-align:center; padding:12px; }
+    .shot-ui span { font-size:11px; font-weight:600; color:var(--muted); }
+    .shot-file { position:absolute; inset:0; width:100%; height:100%; opacity:0.02; margin:0; padding:0; border:0; cursor:pointer; font-size:32px; }
     #go { margin-top:16px; padding:16px; font-size:17px; letter-spacing:.02em; border-radius:14px; background:linear-gradient(180deg,#3db4d8,#2a86a8); box-shadow:0 8px 24px rgba(47,158,196,.28); }
     .banner { display:none; margin:0 0 12px; padding:12px 14px; border-radius:12px; background:#173445; border:1px solid #2f6f86; color:var(--ice); font-weight:700; font-size:14px; }
     .banner.on { display:block; }
@@ -174,12 +175,14 @@
     <button class="ghost" id="payBtn">Upgrade Ice+</button>
     <input id="secret" type="hidden" value="" />
     <div class="row2" style="margin-top:14px">
-      <label class="shot" id="shotFront">Front photo<span>Camera or library</span>
-        <input id="file" type="file" accept="image/*" capture="environment" />
-      </label>
-      <label class="shot" id="shotBack">Back photo<span>Helps on raws</span>
-        <input id="fileBack" type="file" accept="image/*" capture="environment" />
-      </label>
+      <div class="shot-wrap" id="shotFront">
+        <input class="shot-file" id="file" type="file" accept="image/*" capture="environment" />
+        <div class="shot-ui">Front photo<span>Camera or library</span></div>
+      </div>
+      <div class="shot-wrap" id="shotBack">
+        <input class="shot-file" id="fileBack" type="file" accept="image/*" capture="environment" />
+        <div class="shot-ui">Back photo<span>Helps on raws</span></div>
+      </div>
     </div>
     <div class="row2">
       <div class="preview hidden" id="scanBox"><h3>Front</h3><img id="scanImg" alt="" /></div>
@@ -243,7 +246,7 @@
     <div class="bookbar" id="bookBar"></div>
     <p class="muted" id="valueNote"></p>
     <div class="stick" id="searchStick">
-    <input id="q" placeholder="Search binder…" />
+    <input id="q" placeholder="Search binder…" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search" />
     <div class="row2">
       <select id="sortBy">
         <option value="new">Newest</option>
@@ -705,7 +708,6 @@ $("file").onchange = async () => {
   $("status").textContent = backFile
     ? "New front loaded. Back is still attached. Identify when ready."
     : "Front loaded. Add the back on raws, then Identify.";
-  $("file").value = "";
 };
 $("fileBack").onchange = async () => {
   const f = $("fileBack").files[0];
@@ -718,21 +720,21 @@ $("fileBack").onchange = async () => {
   $("status").textContent = frontFile
     ? "Back loaded. Front is still attached. Identify when ready."
     : "Back loaded. Add the front, then Identify.";
-  $("fileBack").value = "";
 };
 $("go").onclick = async () => {
   if (!frontFile) { $("status").textContent = "Pick a front photo first."; $("status").className = "status err"; return; }
+  if (!token()) { $("status").textContent = "Sign in first — Identify needs an account."; $("status").className = "status err"; return; }
   $("go").disabled = true;
   $("status").className = "status";
   $("status").textContent = backFile ? "Identifying from front + back…" : "Identifying from front only…";
-  $("result").classList.add("hidden");
+  if ($("result")) $("result").classList.add("hidden");
   const fd = new FormData();
   fd.append("file", frontFile, frontFile.name || "front.jpg");
   if (backFile) fd.append("back", backFile, backFile.name || "back.jpg");
-  fd.append("secret", $("secret").value);
   try {
     const r = await fetch("/identify", { method:"POST", headers:{ "x-token": token() }, body: fd });
     const t = await r.text();
+    if (r.status === 401) throw new Error("Session expired. Sign in again.");
     if (r.status === 402) { showPaywall("No IDs left this month. Upgrade Ice+."); refreshUsage(); return; }
     if (!r.ok) throw new Error(t.slice(0,200));
     refreshUsage();
@@ -777,8 +779,9 @@ $("go").onclick = async () => {
   } catch(e) {
     $("status").textContent = "Failed: "+e.message;
     $("status").className = "status err";
+  } finally {
+    $("go").disabled = false;
   }
-  $("go").disabled = false;
 };
 
 function numOrNull(el){
@@ -1035,9 +1038,13 @@ function renderBinder(){
   const sort = $("sortBy") ? $("sortBy").value : "new";
   const teams = [...new Set(cards.map(teamName))].sort((a,b)=>a.localeCompare(b));
   if ($("teamFilter")) {
-    const cur = $("teamFilter").value;
-    $("teamFilter").innerHTML = "<option value=\"\">All teams</option>"+teams.map(t=>"<option>"+t+"</option>").join("");
-    if (teams.indexOf(cur)>=0 || cur==="") $("teamFilter").value = cur;
+    const next = ["All teams"].concat(teams).join("|");
+    if ($("teamFilter").dataset.keys !== next) {
+      const cur = $("teamFilter").value;
+      $("teamFilter").innerHTML = "<option value=\"\">All teams</option>"+teams.map(t=>"<option>"+t+"</option>").join("");
+      $("teamFilter").dataset.keys = next;
+      if (teams.indexOf(cur)>=0 || cur==="") $("teamFilter").value = cur;
+    }
   }
   let rows = cards.filter(c => {
     const hay = [c.player,c.team,c.set,c.year,c.number,c.insert,c.parallel,c.cert].join(" ").toLowerCase();
