@@ -111,6 +111,8 @@
     .ava-full { display:none; position:fixed; inset:0; z-index:40; background:rgba(0,0,0,.88); align-items:center; justify-content:center; padding:24px; }
     .ava-full.on { display:flex; }
     .ava-full img { max-width:92vw; max-height:80vh; border-radius:16px; border:4px solid var(--ice); }
+    .heart { display:inline-block; margin-left:6px; background:#2a1a28; color:#ff8fb3; border:1px solid #6a3a52; border-radius:999px; padding:2px 8px; font-size:12px; font-weight:800; letter-spacing:.02em; }
+    .heart.big { font-size:16px; padding:6px 12px; margin:8px 0 0; }
     .hue-swatch { width:48px; height:48px; padding:0; border:0; border-radius:12px; background:transparent; overflow:hidden; }
     .hue-swatch::-webkit-color-swatch-wrapper { padding:0; }
     .hue-swatch::-webkit-color-swatch { border:0; border-radius:12px; }
@@ -281,15 +283,16 @@
     <div id="searchList"></div>
   </section>
   <section class="page" id="findPage">
-    <p class="muted">Follow a binder to hear when they add cards.</p>
-    <button class="ghost" id="openNotes">Notifications <span id="noteBadge"></span></button>
+    <div class="row2">
+      <button class="ghost" id="openFollowing">Following</button>
+      <button class="ghost" id="openNotes">Alerts <span id="noteBadge"></span></button>
+    </div>
     <input id="findQ" placeholder="Screen name or player…" />
     <select id="findSort">
       <option value="cards">Most cards</option>
       <option value="value">Highest book</option>
       <option value="team">Team A–Z</option>
       <option value="name">Name A–Z</option>
-      <option value="following">Following</option>
       <option value="likes">Most liked</option>
     </select>
     <div id="findList"></div>
@@ -1534,6 +1537,7 @@ function openPubCard(c){
 }
 let findCache = [];
 let following = {};
+let onlyFollow = false;
 async function loadFind(){
   const box = $("findList");
   if (!box) return;
@@ -1566,23 +1570,30 @@ function renderFind(){
     const team = (b.team||"").toLowerCase();
     return name.includes(q) || players.includes(q) || team.includes(q);
   });
-  if (sort==="following") rows = rows.filter(b => following[b.slug]);
+  if (onlyFollow) rows = rows.filter(b => following[b.slug]);
   if (sort==="value") rows.sort((a,b)=>(+b.book||0)-(+a.book||0));
   else if (sort==="team") rows.sort((a,b)=>(a.team||"zzz").localeCompare(b.team||"zzz"));
   else if (sort==="name") rows.sort((a,b)=>(a.display||"").localeCompare(b.display||""));
   else if (sort==="likes") rows.sort((a,b)=>(+b.likes||0)-(+a.likes||0));
-  else if (sort!=="following") rows.sort((a,b)=>(+b.count||0)-(+a.count||0));
+  else rows.sort((a,b)=>(+b.count||0)-(+a.count||0));
   $("findList").innerHTML = rows.length ? rows.map(b => {
     const name = b.display || "Collector";
     const hue = b.hue || "#8fd4ee";
     const st = "object-fit:cover;object-position:"+(b.cropx||50)+"% "+(b.cropy||50)+"%;transform:scale("+((b.cropz||100)/100)+");transform-origin:"+(b.cropx||50)+"% "+(b.cropy||50)+"%";
     const av = b.avatar ? "<img alt=\"\" src=\""+b.avatar+"\" style=\""+st+"\" />" : name.slice(0,2).toUpperCase();
-    const extra = [b.count+" cards", (b.likes||0)+" likes", b.book?money(b.book):"", b.team||"", following[b.slug]?"Following":""].filter(Boolean).join(" · ");
-    return "<article class=\"item\" data-slug=\""+b.slug+"\"><div class=\"pwid\"><div class=\"pava\" data-full=\""+(b.avatar||"")+"\" style=\"border-color:"+hue+";background:"+hue+"\">"+av+"</div><div><h3>"+name+"</h3><div class=\"muted\">"+extra+"</div></div></div></article>";
-  }).join("") : "<p class=\"muted\">No public binders yet. Save a card while signed in, then this list fills in.</p>";
+    const extra = [b.count+" cards", b.book?money(b.book):"", b.team||""].filter(Boolean).join(" · ");
+    const heart = "<span class=\"heart\">♥ "+(b.likes||0)+"</span>";
+    const fol = following[b.slug] ? " · Following" : "";
+    return "<article class=\"item\" data-slug=\""+b.slug+"\"><div class=\"pwid\"><div class=\"pava\" data-full=\""+(b.avatar||"")+"\" style=\"border-color:"+hue+";background:"+hue+"\">"+av+"</div><div><h3>"+name+" "+heart+"</h3><div class=\"muted\">"+extra+fol+"</div></div></div></article>";
+  }).join("") : "<p class=\"muted\">"+(onlyFollow?"You’re not following anyone yet. Open a binder and tap Follow.":"No public binders yet.")+"</p>";
 }
 $("findQ") && ($("findQ").oninput = renderFind);
 $("findSort") && ($("findSort").onchange = renderFind);
+$("openFollowing") && ($("openFollowing").onclick = () => {
+  onlyFollow = !onlyFollow;
+  $("openFollowing").textContent = onlyFollow ? "Following · on" : "Following";
+  renderFind();
+});
 function showFull(src){
   if (!src) return;
   $("avaFullImg").src = src;
@@ -1613,7 +1624,7 @@ function paintFollow(){
 }
 function paintBinderLike(n, liked){
   if (!$("likeBinderBtn")) return;
-  $("likeBinderBtn").textContent = (liked ? "Liked · " : "Like binder · ") + (n||0);
+  $("likeBinderBtn").innerHTML = "<span class=\"heart big\">♥ "+(n||0)+"</span> " + (liked ? "Liked" : "Like binder");
 }
 $("followBtn") && ($("followBtn").onclick = async () => {
   if (!token()) { $("pubHead").textContent = "Sign in to follow."; return; }
@@ -1656,7 +1667,7 @@ async function paintLike(){
   try {
     const r = await fetch("/u/"+encodeURIComponent(viewSlug)+"/cards/"+encodeURIComponent(viewCard.id)+"/likes", { headers:{ "x-token": token() } });
     const d = await r.json();
-    $("likeBtn").textContent = (d.liked ? "Liked · " : "Like · ") + (d.likes||0);
+    $("likeBtn").innerHTML = "<span class=\"heart big\">♥ "+(d.likes||0)+"</span> " + (d.liked ? "Liked" : "Like");
   } catch(e) { $("likeBtn").textContent = "Like · 0"; }
 }
 $("likeBtn") && ($("likeBtn").onclick = async () => {
@@ -1666,7 +1677,7 @@ $("likeBtn") && ($("likeBtn").onclick = async () => {
     method:"POST", headers:{ "x-token": token() }
   });
   const d = await r.json().catch(()=>({}));
-  if (r.ok) $("likeBtn").textContent = (d.liked ? "Liked · " : "Like · ") + (d.likes||0);
+  if (r.ok) $("likeBtn").innerHTML = "<span class=\"heart big\">♥ "+(d.likes||0)+"</span> " + (d.liked ? "Liked" : "Like");
 });
 async function openPublic(slug){
   viewSlug = slug;
@@ -1687,7 +1698,7 @@ async function openPublic(slug){
   });
   pubCards = d.cards || [];
   $("pubList").innerHTML = pubCards.map(c =>
-    "<article class=\"item\" data-pub=\""+c.id+"\"><div class=\"item-top\"><img src=\""+(c.photo||"")+"\" alt=\"\" /><div><h3>"+(c.player||"—")+"</h3><div class=\"muted\">"+[c.team,c.year,c.set,c.number?"#"+c.number:"", (c.likes||0)+" likes"].filter(Boolean).join(" · ")+"</div></div></div></article>"
+    "<article class=\"item\" data-pub=\""+c.id+"\"><div class=\"item-top\"><img src=\""+(c.photo||"")+"\" alt=\"\" /><div><h3>"+(c.player||"—")+" <span class=\"heart\">♥ "+(c.likes||0)+"</span></h3><div class=\"muted\">"+[c.team,c.year,c.set,c.number?"#"+c.number:""].filter(Boolean).join(" · ")+"</div></div></div></article>"
   ).join("") || "<p class=\"muted\">Empty binder.</p>";
   show("pub");
 }
