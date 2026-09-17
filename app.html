@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Ice Ledger</title>
   <style>
-    :root { --bg:#071016; --card:#121c26; --line:#2a3d4d; --text:#eef6fb; --muted:#8aa3b5; --ice:#8fd4ee; --btn:#2f9ec4; --warn:#e6c07b; --bad:#f07178; --good:#6ee7a8; }
+:root { --bg:#071016; --card:#121c26; --line:#2a3d4d; --text:#eef6fb; --muted:#8aa3b5; --ice:#8fd4ee; --btn:#2f9ec4; --warn:#e6c07b; --bad:#f07178; --good:#6ee7a8; }
     * { box-sizing: border-box; }
     body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:
       radial-gradient(1200px 500px at 10% -10%, #163445 0%, transparent 50%),
@@ -120,10 +120,10 @@
     .pava { width:56px; height:56px; border-radius:16px; background:var(--ice); color:#071016; font-weight:800; display:flex; align-items:center; justify-content:center; font-size:16px; overflow:hidden; border:3px solid var(--ice); flex:0 0 auto; position:relative; }
     .pava img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; background:#0e171e; }
     .item.reply { margin-left:18px; border-left:2px solid var(--line); }
-    .banner { border-radius:14px; padding:12px 14px; margin:8px 0; border:1px solid var(--line); background:#121c26; }
-    .banner .k { font-size:11px; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); }
-    .banner h3 { margin:4px 0 2px; font-size:16px; }
-    .banner a { color:var(--ice); }
+    .board-post { display:block; border-radius:14px; padding:12px 14px; margin:8px 0; border:1px solid var(--line); background:#121c26; }
+    .board-post .k { font-size:11px; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); }
+    .board-post h3 { margin:4px 0 2px; font-size:16px; }
+    .board-post a { color:var(--ice); }
     .thread { margin-top:8px; }
     .c-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
     .c-actions button { width:auto; margin:0; padding:6px 10px; font-size:12px; }
@@ -158,6 +158,7 @@
     .banner.bad { background:#3a3018; border-color:#6b5420; color:#ffe7b3; animation:none; }
     @keyframes pulse { 50% { opacity:.55; } }
   </style>
+
 </head>
 <body>
   <section class="page on" id="authPage">
@@ -379,6 +380,17 @@
     <button class="ghost" id="likeBinderBtn">Like binder · 0</button>
     <p class="muted" id="pubHead"></p>
     <div id="pubBanner"></div>
+    <div class="row2">
+      <select id="pubSort">
+        <option value="new">Newest</option>
+        <option value="team">Team</option>
+        <option value="player">Player (last name)</option>
+        <option value="value">Highest book</option>
+      </select>
+      <select id="pubTeam">
+        <option value="">All teams</option>
+      </select>
+    </div>
     <div id="pubList"></div>
   </section>
   <section class="page" id="pubDetail">
@@ -1819,6 +1831,47 @@ let myAvatar = "";
 let viewSlug = "";
 let viewCard = null;
 let pubCards = [];
+function pubCardHtml(c){
+  return "<article class=\"item\" data-pub=\""+c.id+"\"><div class=\"item-top\"><img src=\""+(c.photo||"")+"\" alt=\"\" /><div><h3>"+(c.player||"—")+" <span class=\"heart\">♥ "+(c.likes||0)+"</span></h3><div class=\"muted\">"+[c.team,c.year,c.set,c.number?"#"+c.number:""].filter(Boolean).join(" · ")+"</div></div></div></article>";
+}
+function renderPubList(){
+  const box = $("pubList");
+  if (!box) return;
+  const teamF = $("pubTeam") ? $("pubTeam").value : "";
+  const sort = $("pubSort") ? $("pubSort").value : "new";
+  const teams = [];
+  pubCards.forEach(c => { const t = teamName(c); if (t && teams.indexOf(t)<0) teams.push(t); });
+  teams.sort((a,b)=>a.localeCompare(b));
+  if ($("pubTeam")) {
+    const next = teams.join("|");
+    if ($("pubTeam").dataset.keys !== next) {
+      const cur = $("pubTeam").value;
+      $("pubTeam").innerHTML = "<option value=\"\">All teams</option>"+teams.map(t=>"<option>"+t+"</option>").join("");
+      $("pubTeam").dataset.keys = next;
+      if (teams.indexOf(cur)>=0 || cur==="") $("pubTeam").value = cur;
+    }
+  }
+  let rows = pubCards.filter(c => !teamF || teamName(c)===teamF);
+  if (sort==="team") rows.sort((a,b)=> teamName(a).localeCompare(teamName(b)) || lastName(a.player).localeCompare(lastName(b.player)));
+  else if (sort==="player") rows.sort((a,b)=> lastName(a.player).localeCompare(lastName(b.player)));
+  else if (sort==="value") rows.sort((a,b)=> (+b.comp||0)-(+a.comp||0));
+  else rows.sort((a,b)=> String(b.added||b.id||"").localeCompare(String(a.added||a.id||"")));
+  if (!rows.length) { box.innerHTML = "<p class=\"muted\">No cards match.</p>"; return; }
+  if (sort==="team" && !teamF) {
+    let html = "", last = "";
+    rows.forEach(c => {
+      const tm = teamName(c);
+      if (tm !== last) {
+        html += "<p class=\"muted\" style=\"margin:14px 0 6px;font-weight:700;letter-spacing:.04em;text-transform:uppercase\">"+tm+"</p>";
+        last = tm;
+      }
+      html += pubCardHtml(c);
+    });
+    box.innerHTML = html;
+  } else box.innerHTML = rows.map(pubCardHtml).join("");
+}
+if ($("pubSort")) $("pubSort").onchange = renderPubList;
+if ($("pubTeam")) $("pubTeam").onchange = renderPubList;
 async function loadMe(){
   if (!token()) return;
   try {
@@ -1882,7 +1935,7 @@ function bannerHtml(b, mine){
   const col = b.color || "#8fd4ee";
   const link = b.url ? "<div><a href=\""+b.url.replace(/"/g,"")+"\" target=\"_blank\" rel=\"noopener\">Open link</a></div>" : "";
   const del = mine ? "<button class=\"ghost\" data-ban-del=\""+b.id+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Remove</button>" : "";
-  return "<div class=\"banner\" style=\"border-left:6px solid "+col+";box-shadow:inset 0 0 0 1px "+col+"22\"><div class=\"k\">"+(BAN_KIND[b.kind]||"Note")+"</div><h3>"+String(b.title||"").replace(/[<>]/g,"")+"</h3><div class=\"muted\">"+String(b.body||"").replace(/[<>]/g,"")+"</div>"+link+del+"</div>";
+  return "<div class=\"board-post\" style=\"display:block;border-left:6px solid "+col+";box-shadow:inset 0 0 0 1px "+col+"22\"><div class=\"k\">"+(BAN_KIND[b.kind]||"Note")+"</div><h3>"+String(b.title||"").replace(/[<>]/g,"")+"</h3><div class=\"muted\">"+String(b.body||"").replace(/[<>]/g,"")+"</div>"+link+del+"</div>";
 }
 async function loadBanners(){
   const box = $("banList");
@@ -2279,6 +2332,7 @@ async function paintNotesHub(){
 }
 async function openNoteCat(kind){
   const titles = { card:"New cards", like:"Likes", comment:"Comments" };
+  if ($("notesList")) $("notesList").innerHTML = "";
   if ($("notesCatTitle")) $("notesCatTitle").textContent = titles[kind] || "Alerts";
   show("notesCat");
   const box = $("notesList");
@@ -2337,9 +2391,9 @@ async function openPublic(slug, cardId){
     if (r.ok) { paintBinderLike(j.likes, j.liked); refreshNotesBadge(); }
   });
   pubCards = d.cards || [];
-  $("pubList").innerHTML = pubCards.map(c =>
-    "<article class=\"item\" data-pub=\""+c.id+"\"><div class=\"item-top\"><img src=\""+(c.photo||"")+"\" alt=\"\" /><div><h3>"+(c.player||"—")+" <span class=\"heart\">♥ "+(c.likes||0)+"</span></h3><div class=\"muted\">"+[c.team,c.year,c.set,c.number?"#"+c.number:""].filter(Boolean).join(" · ")+"</div></div></div></article>"
-  ).join("") || "<p class=\"muted\">Empty binder.</p>";
+  if ($("pubTeam")) $("pubTeam").dataset.keys = "";
+  if ($("pubSort")) $("pubSort").value = "new";
+  renderPubList();
   show("pub");
   if (cardId) {
     const c = pubCards.find(x => x.id === cardId);
@@ -2372,5 +2426,6 @@ if (guestB) {
 paintTicker();
 renderBinder();
 </script>
+
 </body>
 </html>

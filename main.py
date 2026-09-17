@@ -766,6 +766,7 @@ def public_card(raw: dict) -> dict:
         "comp": c.get("comp"),
         "book": c.get("book") or {},
         "hist": (c.get("hist") or [])[-60:],
+        "added": c.get("added"),
     }
 
 init_db()
