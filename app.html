@@ -174,16 +174,10 @@
     <div class="status" id="quotaBox">Free plan: 10 IDs / month. Ice+ is 200.</div>
     <button class="ghost" id="payBtn">Upgrade Ice+</button>
     <input id="secret" type="hidden" value="" />
-    <div class="row2" style="margin-top:14px">
-      <div class="shot-wrap" id="shotFront">
-        <input class="shot-file" id="file" type="file" accept="image/*" capture="environment" />
-        <div class="shot-ui">Front photo<span>Camera or library</span></div>
-      </div>
-      <div class="shot-wrap" id="shotBack">
-        <input class="shot-file" id="fileBack" type="file" accept="image/*" capture="environment" />
-        <div class="shot-ui">Back photo<span>Helps on raws</span></div>
-      </div>
-    </div>
+    <label>Front photo</label>
+    <input id="file" type="file" accept="image/*" />
+    <label>Back photo (raws)</label>
+    <input id="fileBack" type="file" accept="image/*" />
     <div class="row2">
       <div class="preview hidden" id="scanBox"><h3>Front</h3><img id="scanImg" alt="" /></div>
       <div class="preview hidden" id="backBox"><h3>Back</h3><img id="backImg" alt="" /></div>
@@ -722,6 +716,8 @@ $("fileBack").onchange = async () => {
     : "Back loaded. Add the front, then Identify.";
 };
 $("go").onclick = async () => {
+  frontFile = ($("file") && $("file").files[0]) || frontFile;
+  backFile = ($("fileBack") && $("fileBack").files[0]) || backFile;
   if (!frontFile) { $("status").textContent = "Pick a front photo first."; $("status").className = "status err"; return; }
   if (!token()) { $("status").textContent = "Sign in first — Identify needs an account."; $("status").className = "status err"; return; }
   $("go").disabled = true;
