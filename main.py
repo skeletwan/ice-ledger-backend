@@ -503,7 +503,7 @@ def init_db():
         con.execute("ALTER TABLE users ADD COLUMN slug TEXT")
     except sqlite3.OperationalError:
         pass
-    for col, spec in (("display", "TEXT"), ("hue", "TEXT"), ("bio", "TEXT")):
+    for col, spec in (("display", "TEXT"), ("hue", "TEXT"), ("bio", "TEXT"), ("avatar", "TEXT")):
         try:
             con.execute(f"ALTER TABLE users ADD COLUMN {col} {spec}")
         except sqlite3.OperationalError:
@@ -798,7 +798,7 @@ async def list_binders():
     con = db()
     rows = con.execute(
         """
-        SELECT u.slug, u.display, u.hue, u.bio, COUNT(c.id) AS n
+        SELECT u.slug, u.display, u.hue, u.bio, u.avatar, COUNT(c.id) AS n
         FROM users u
         JOIN cards c ON c.user_id = u.id
         WHERE u.slug IS NOT NULL AND u.slug != ''
@@ -809,7 +809,7 @@ async def list_binders():
         """
     ).fetchall()
     con.close()
-    return {"binders": [{"slug": r["slug"], "display": r["display"] or r["slug"], "hue": r["hue"] or "#8fd4ee", "bio": r["bio"] or "", "count": r["n"]} for r in rows]}
+    return {"binders": [{"slug": r["slug"], "display": r["display"] or "Collector", "hue": r["hue"] or "#8fd4ee", "bio": r["bio"] or "", "avatar": r["avatar"] or "", "count": r["n"]} for r in rows]}
 
 @app.post("/u/{slug}/cards/{cid}/like")
 async def toggle_like(slug: str, cid: str, request: Request, x_token: str | None = Header(default=None)):
@@ -857,14 +857,15 @@ async def me(request: Request, x_token: str | None = Header(default=None)):
     uid = require_user(request, x_token)
     slug = ensure_slug(uid)
     con = db()
-    row = con.execute("SELECT display,hue,bio FROM users WHERE id=?", (uid,)).fetchone()
+    row = con.execute("SELECT display,hue,bio,avatar FROM users WHERE id=?", (uid,)).fetchone()
     con.close()
     return {
         "slug": slug,
         "url": f"/?b={slug}",
-        "display": (row["display"] if row else None) or slug,
+        "display": (row["display"] if row else None) or "",
         "hue": (row["hue"] if row else None) or "#8fd4ee",
         "bio": (row["bio"] if row else None) or "",
+        "avatar": (row["avatar"] if row else None) or "",
     }
 
 @app.post("/profile")
@@ -873,19 +874,22 @@ async def save_profile(payload: dict, request: Request, x_token: str | None = He
     display = (payload.get("display") or "").strip()[:24]
     hue = (payload.get("hue") or "").strip()[:16] or "#8fd4ee"
     bio = (payload.get("bio") or "").strip()[:140]
+    avatar = payload.get("avatar") or ""
+    if isinstance(avatar, str) and len(avatar) > 180000:
+        avatar = ""
     if not display:
-        raise HTTPException(400, "pick a display name")
+        raise HTTPException(400, "pick a screen name")
     con = db()
-    con.execute("UPDATE users SET display=?, hue=?, bio=? WHERE id=?", (display, hue, bio, uid))
+    con.execute("UPDATE users SET display=?, hue=?, bio=?, avatar=? WHERE id=?", (display, hue, bio, avatar, uid))
     con.commit()
     con.close()
-    return {"ok": True, "display": display, "hue": hue, "bio": bio}
+    return {"ok": True, "display": display, "hue": hue, "bio": bio, "avatar": avatar}
 
 @app.get("/u/{slug}")
 async def public_binder(slug: str):
     slug = re.sub(r"[^a-z0-9]", "", (slug or "").lower())
     con = db()
-    u = con.execute("SELECT id,display,hue,bio FROM users WHERE slug=?", (slug,)).fetchone()
+    u = con.execute("SELECT id,display,hue,bio,avatar FROM users WHERE slug=?", (slug,)).fetchone()
     if not u:
         con.close()
         raise HTTPException(404, "binder not found")
@@ -895,9 +899,10 @@ async def public_binder(slug: str):
     book = sum((c.get("comp") or 0) for c in cards if isinstance(c.get("comp"), (int, float)))
     return {
         "slug": slug,
-        "display": u["display"] or slug,
+        "display": u["display"] or "Collector",
         "hue": u["hue"] or "#8fd4ee",
         "bio": u["bio"] or "",
+        "avatar": u["avatar"] or "",
         "count": len(cards),
         "book": book,
         "cards": cards,
@@ -936,7 +941,8 @@ async def add_comment(slug: str, cid: str, payload: dict, request: Request, x_to
     if n >= 12:
         con.close()
         raise HTTPException(429, "slow down — 12 comments an hour")
-    name = ensure_slug(uid)
+    who = con.execute("SELECT display FROM users WHERE id=?", (uid,)).fetchone()
+    name = ((who["display"] if who else None) or "Collector")[:24]
     created = time.strftime("%Y-%m-%dT%H:%M:%SZ")
     con.execute(
         "INSERT INTO comments(slug,card_id,user_id,name,body,created) VALUES(?,?,?,?,?,?)",

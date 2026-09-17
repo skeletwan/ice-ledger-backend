@@ -108,7 +108,8 @@
     .dock button.on { color:var(--ice); }
     .page { padding-bottom:88px; }
     .pwid { display:flex; align-items:center; gap:12px; margin-bottom:10px; }
-    .pava { width:48px; height:48px; border-radius:14px; background:var(--ice); color:#071016; font-weight:800; display:flex; align-items:center; justify-content:center; font-size:16px; }
+    .pava { width:52px; height:52px; border-radius:16px; background:var(--ice); color:#071016; font-weight:800; display:flex; align-items:center; justify-content:center; font-size:16px; overflow:hidden; border:3px solid var(--ice); flex:0 0 auto; }
+    .pava img { width:100%; height:100%; object-fit:cover; display:block; }
     .backrow { display:flex; gap:8px; }
     .backrow button { width:auto; flex:1; }
     .shot-wrap { position:relative; min-height:108px; border-radius:14px; overflow:hidden; background:linear-gradient(180deg,#182833,#101820); border:1px dashed #3d5a6a; }
@@ -302,7 +303,9 @@
       <div class="pwid" id="pWid"><div class="pava" id="pAva">IL</div><div><b id="pName">Collector</b><div class="muted" id="pSlug"></div></div></div>
       <label>Display name</label>
       <input id="pDisplay" maxlength="24" placeholder="Name on your public binder" />
-      <label>Widget colour</label>
+      <label>Widget photo</label>
+      <input id="pPhoto" type="file" accept="image/*" />
+      <label>Border colour</label>
       <input id="pHue" type="color" value="#8fd4ee" style="height:42px;padding:4px" />
       <label>Short bio</label>
       <input id="pBio" maxlength="140" placeholder="Team, era, what you collect" />
@@ -315,13 +318,7 @@
     <button id="plusBtn">Unlock Ice+ on this account</button>
     <p class="muted" id="plusNote"></p>
     <h3 style="font-size:15px;margin:16px 0 8px">Alerts</h3>
-    <p class="muted">Daily binder ping at a time you pick. Also fires if book value jumps while the app is open. iPhone only does this reliably if Ice Ledger is on the Home Screen and you granted notifications.</p>
-    <label><input id="nOn" type="checkbox" style="width:auto;margin-right:8px" /> Notify me</label>
-    <label>Time of day</label>
-    <input id="nTime" type="time" value="18:00" />
-    <label><input id="nJump" type="checkbox" style="width:auto;margin-right:8px" checked /> Also tell me when book value goes up</label>
-    <button id="nSave">Save & allow notifications</button>
-    <p class="status" id="nStatus"></p>
+    <p class="muted">Daily push pings are off for now. They only repeat yesterday’s book unless Refresh book runs, so a 6pm ping would be noise. We’ll turn them on when book can update itself.</p>
     <button class="ghost" id="logoutBtn">Get out</button>
   </section>
   <section class="page" id="helpPage">
@@ -758,6 +755,23 @@ $("fileBack").onchange = async () => {
     ? "Back loaded. Front is still attached. Identify when ready."
     : "Back loaded. Add the front, then Identify.";
 };
+function blobJpegUrl(file, max){
+  return new Promise(resolve => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const s = Math.min(1, max / Math.max(img.width||1, img.height||1));
+      const c = document.createElement("canvas");
+      c.width = Math.max(1, Math.round((img.width||1)*s));
+      c.height = Math.max(1, Math.round((img.height||1)*s));
+      c.getContext("2d").drawImage(img,0,0,c.width,c.height);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL("image/jpeg", 0.72));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(""); };
+    img.src = url;
+  });
+}
 function blobJpeg(file, max){
   return new Promise(resolve => {
     const img = new Image();
@@ -1333,7 +1347,7 @@ $("resetBtn").onclick = async () => {
     setToken(d.token); showApp(); await pullCloud(); paintTicker(); renderBinder();
   } catch(e) { flash("authStatus", "err", e.message); }
 };
-$("nSave").onclick = async () => {
+$("nSave") && ($("nSave").onclick = async () => {
   localStorage.setItem(NOTE, JSON.stringify({
     on: $("nOn").checked,
     jump: $("nJump").checked,
@@ -1348,8 +1362,9 @@ $("nSave").onclick = async () => {
     $("nStatus").className = "status ok";
   }
   scheduleDaily();
-};
+});
 let mySlug = "";
+let myAvatar = "";
 let viewSlug = "";
 let viewCard = null;
 let pubCards = [];
@@ -1359,31 +1374,43 @@ async function loadMe(){
     const r = await fetch("/me", { headers:{ "x-token": token() } });
     const d = await r.json();
     mySlug = d.slug || "";
-    if ($("shareNote")) $("shareNote").textContent = mySlug ? ("Public link: "+location.origin+"/?b="+mySlug) : "";
-    if ($("pDisplay") && d.display) $("pDisplay").value = d.display;
+    myAvatar = d.avatar || myAvatar || "";
+    if ($("shareNote")) $("shareNote").textContent = "Share link copies without showing your login name.";
+    if ($("pDisplay")) $("pDisplay").value = d.display || "";
     if ($("pHue") && d.hue) $("pHue").value = d.hue;
     if ($("pBio")) $("pBio").value = d.bio || "";
-    paintProfile(d.display || mySlug, d.hue || "#8fd4ee", mySlug);
+    paintProfile(d.display || "Collector", d.hue || "#8fd4ee", myAvatar);
   } catch(e){}
 }
-function paintProfile(name, hue, slug){
-  const ini = (name||"IL").slice(0,2).toUpperCase();
-  if ($("pAva")) { $("pAva").textContent = ini; $("pAva").style.background = hue || "#8fd4ee"; }
+function paintProfile(name, hue, avatar){
+  const ini = (name||"C").slice(0,2).toUpperCase();
+  if ($("pAva")) {
+    $("pAva").style.borderColor = hue || "#8fd4ee";
+    $("pAva").style.background = hue || "#8fd4ee";
+    if (avatar) $("pAva").innerHTML = "<img alt=\"\" src=\""+avatar+"\" />";
+    else $("pAva").textContent = ini;
+  }
   if ($("pName")) $("pName").textContent = name || "Collector";
-  if ($("pSlug")) $("pSlug").textContent = slug ? ("/"+slug) : "";
+  if ($("pSlug")) $("pSlug").textContent = "Screen name only — login stays private";
 }
-$("pHue") && ($("pHue").oninput = () => paintProfile(($("pDisplay").value||"Collector"), $("pHue").value, mySlug));
-$("pDisplay") && ($("pDisplay").oninput = () => paintProfile($("pDisplay").value, $("pHue").value, mySlug));
+$("pHue") && ($("pHue").oninput = () => paintProfile(($("pDisplay").value||"Collector"), $("pHue").value, myAvatar));
+$("pDisplay") && ($("pDisplay").oninput = () => paintProfile($("pDisplay").value, $("pHue").value, myAvatar));
+$("pPhoto") && ($("pPhoto").onchange = async () => {
+  const f = $("pPhoto").files[0];
+  if (!f) return;
+  myAvatar = await blobJpegUrl(f, 160);
+  paintProfile($("pDisplay").value||"Collector", $("pHue").value, myAvatar);
+});
 $("pSave") && ($("pSave").onclick = async () => {
   try {
     const r = await fetch("/profile", {
       method:"POST",
       headers:{ "Content-Type":"application/json", "x-token": token() },
-      body: JSON.stringify({ display:$("pDisplay").value, hue:$("pHue").value, bio:$("pBio").value })
+      body: JSON.stringify({ display:$("pDisplay").value, hue:$("pHue").value, bio:$("pBio").value, avatar: myAvatar })
     });
     const t = await r.text();
     if (!r.ok) throw new Error(t.slice(0,160));
-    $("pNote").textContent = "Profile saved. Find and public binders use this.";
+    $("pNote").textContent = "Saved. Find only shows this screen name.";
     loadMe();
   } catch(e) { $("pNote").textContent = e.message; }
 });
@@ -1457,10 +1484,13 @@ async function loadFind(){
 }
 function renderFind(){
   const q = (($("findQ")&&$("findQ").value)||"").toLowerCase();
-  const rows = findCache.filter(b => !q || (b.slug||"").toLowerCase().includes(q));
-  $("findList").innerHTML = rows.length ? rows.map(b =>
-    "<article class=\"item\" data-slug=\""+b.slug+"\"><div class=\"pwid\"><div class=\"pava\" style=\"background:"+(b.hue||"#8fd4ee")+"\">"+((b.display||b.slug||"IL").slice(0,2).toUpperCase())+"</div><div><h3>"+(b.display||b.slug)+"</h3><div class=\"muted\">/"+b.slug+" · "+b.count+" cards</div></div></div></article>"
-  ).join("") : "<p class=\"muted\">No public binders yet. Save a card while signed in, then this list fills in.</p>";
+  const rows = findCache.filter(b => !q || (b.display||"collector").toLowerCase().includes(q));
+  $("findList").innerHTML = rows.length ? rows.map(b => {
+    const name = b.display || "Collector";
+    const hue = b.hue || "#8fd4ee";
+    const av = b.avatar ? "<img alt=\"\" src=\""+b.avatar+"\" />" : name.slice(0,2).toUpperCase();
+    return "<article class=\"item\" data-slug=\""+b.slug+"\"><div class=\"pwid\"><div class=\"pava\" style=\"border-color:"+hue+";background:"+hue+"\">"+av+"</div><div><h3>"+name+"</h3><div class=\"muted\">"+b.count+" cards"+(b.bio?" · "+b.bio:"")+"</div></div></div></article>";
+  }).join("") : "<p class=\"muted\">No public binders yet. Save a card while signed in, then this list fills in.</p>";
 }
 $("findQ") && ($("findQ").oninput = renderFind);
 $("findList") && ($("findList").onclick = e => {
@@ -1493,8 +1523,7 @@ async function openPublic(slug){
   const r = await fetch("/u/"+encodeURIComponent(slug));
   if (!r.ok) { $("pubHead").textContent = "Binder not found."; show("pub"); return; }
   const d = await r.json();
-  $("pubHead").textContent = (d.display||slug)+" · "+d.count+" cards · book "+(d.book?money(d.book):"—");
-  if (d.bio) $("pubHead").textContent += " · "+d.bio;
+  $("pubHead").textContent = (d.display||"Collector")+" · "+d.count+" cards · book "+(d.book?money(d.book):"—")+(d.bio?" · "+d.bio:"");
   pubCards = d.cards || [];
   $("pubList").innerHTML = pubCards.map(c =>
     "<article class=\"item\" data-pub=\""+c.id+"\"><div class=\"item-top\"><img src=\""+(c.photo||"")+"\" alt=\"\" /><div><h3>"+(c.player||"—")+"</h3><div class=\"muted\">"+[c.team,c.year,c.set,c.number?"#"+c.number:""].filter(Boolean).join(" · ")+"</div></div></div></article>"
