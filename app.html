@@ -24,9 +24,10 @@
     .mini-chg.dn { color:#ef5350; }
     .mini-chg.flat { color:var(--muted); }
     .mini-spark { display:block; width:100%; height:52px; background:transparent; }
-    .tips { background:#0e171e; border:1px solid var(--line); border-radius:14px; padding:12px 14px; margin:10px 0 14px; }
-    .tips h3 { margin:0 0 6px; font-size:14px; }
-    .tips ul { margin:0; padding-left:18px; color:var(--muted); font-size:13px; line-height:1.45; }
+    .tips { background:#0e171e; border:1px solid var(--line); border-radius:14px; margin:10px 0 8px; overflow:hidden; }
+    .tips > button { width:100%; margin:0; text-align:left; background:transparent; border:0; border-radius:0; padding:10px 14px; font-size:14px; }
+    .tips ul { display:none; margin:0; padding:0 14px 12px 32px; color:var(--muted); font-size:13px; line-height:1.45; }
+    .tips.open ul { display:block; }
     .tips li { margin:0 0 4px; }
     .ranges { display:flex; gap:0; padding:0; background:#10161d; border-bottom:1px solid var(--line); }
     .ranges button { flex:1; width:auto; margin:0; padding:10px 0 8px; font-size:12px; font-weight:700; letter-spacing:.02em; border:0; border-bottom:2px solid transparent; border-radius:0; background:transparent; color:var(--muted); }
@@ -135,6 +136,8 @@
     .binder-hero .pava { width:88px; height:88px; border-radius:22px; font-size:22px; }
     .binder-hero h2 { margin:0 0 4px; font-size:22px; line-height:1.15; }
     .binder-hero .bio { margin:0 0 4px; color:var(--text); font-size:14px; }
+    .binder-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+    .binder-actions button { width:auto; margin:0; padding:7px 12px; font-size:13px; }
     .item.reply { margin-left:18px; border-left:2px solid var(--line); }
     .board-post { display:block; border-radius:16px; padding:14px 16px; margin:10px 0 14px; background:#0e171e; border:2px solid var(--ice); }
     .board-post .k { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin:0 0 6px; }
@@ -255,7 +258,6 @@
   </div>
 
   <section class="page on" id="scanPage">
-    <p class="muted">Raws: front and back. Slabs: front only (label + card in the case).</p>
     <div class="status" id="quotaBox">Free plan: 10 IDs / month. Ice+ is 200. Rip Night is 20 extra IDs.</div>
     <div class="row2">
       <button class="ghost" id="payBtn">Ice+ · $8/mo</button>
@@ -268,8 +270,8 @@
     </div>
     <p class="muted" id="ripNote"></p>
     <input id="secret" type="hidden" value="" />
-    <div class="tips">
-      <h3>Photo tips</h3>
+    <div class="tips" id="photoTips">
+      <button type="button" id="photoTipsBtn" class="ghost">Photo tips</button>
       <ul>
         <li>The front shot is the picture in your binder and on Community.</li>
         <li>Fill the frame with the card. Square up so edges are straight.</li>
@@ -403,14 +405,16 @@
   </section>
   <section class="page" id="pubPage">
     <button class="ghost" id="backFind">Community</button>
-    <button class="ghost" id="followBtn">Follow</button>
-    <button class="ghost" id="likeBinderBtn">Like binder · 0</button>
     <div class="binder-hero" id="pubHeroHead">
       <div class="pava" id="pubAva">IL</div>
       <div>
         <h2 id="pubName">Binder</h2>
         <p class="bio" id="pubBio"></p>
         <p class="muted" id="pubHead"></p>
+        <div class="binder-actions">
+          <button class="ghost" id="followBtn">Follow</button>
+          <button class="ghost" id="likeBinderBtn">Like binder · 0</button>
+        </div>
       </div>
     </div>
     <div id="pubBanner"></div>
@@ -438,7 +442,21 @@
       <div class="mini-trend-top"><span class="mini-last" id="pubTrendVal">—</span><span class="mini-chg flat" id="pubTrendNote"></span></div>
       <svg class="mini-spark" id="pubSpark" viewBox="0 0 280 56" preserveAspectRatio="none"></svg>
     </div>
-    <div class="vals" id="pubVals"></div>
+    <div class="vals">
+      <div class="val"><b id="pubHold">—</b><span>This copy</span></div>
+      <div class="val"><b id="pubRaw">—</b><span>Raw</span></div>
+    </div>
+    <label>Look up another grade</label>
+    <div class="row2">
+      <select id="pgSvc">
+        <option>Raw</option><option>PSA</option><option>BGS</option><option>SGC</option>
+        <option>CGC</option><option>TAG</option><option>HGA</option><option>ISA</option><option>ACE</option>
+      </select>
+      <select id="pgNum">
+        <option>10</option><option>9.5</option><option>9</option><option>8.5</option><option>8</option><option>7</option>
+      </select>
+    </div>
+    <div class="val" style="margin-top:8px"><b id="pubPick">—</b><span id="pubPickLbl">Pick grader + grade</span></div>
     <h3 style="font-size:14px">Comments</h3>
     <div id="pubComments"></div>
     <textarea id="pubBody" rows="2" placeholder="Say something about this card (signed in)"></textarea>
@@ -561,14 +579,11 @@
       <svg class="mini-spark" id="cardSpark" viewBox="0 0 280 56" preserveAspectRatio="none"></svg>
     </div>
     <div class="vals">
-      <div class="val"><b id="vHold">—</b><span>Your copy</span></div>
-      <div class="val"><b id="vPaid">—</b><span>Paid</span></div>
+      <div class="val"><b id="vHold">—</b><span>This copy</span></div>
       <div class="val"><b id="vRaw">—</b><span>Raw</span></div>
-      <div class="val"><b id="vPsa9">—</b><span>PSA 9</span></div>
-      <div class="val"><b id="vPsa10">—</b><span>PSA 10</span></div>
-      <div class="val"><b id="vBgs">—</b><span>BGS 9.5</span></div>
+      <div class="val"><b id="vPaid">—</b><span>Paid</span></div>
     </div>
-    <label>Other grader / grade sold</label>
+    <label>Look up another grade</label>
     <div class="row2">
       <select id="gSvc">
         <option>Raw</option><option>PSA</option><option>BGS</option><option>SGC</option>
@@ -816,6 +831,12 @@ function spark(vals, elId){
     "<polyline fill='none' stroke='"+col+"' stroke-width='2.2' stroke-linejoin='round' stroke-linecap='round' points='"+pts+"'/>"+
     "<circle cx='"+lastX+"' cy='"+lastY+"' r='3.5' fill='"+col+"'/>";
 }
+$("photoTipsBtn") && ($("photoTipsBtn").onclick = () => {
+  const box = $("photoTips");
+  if (!box) return;
+  box.classList.toggle("open");
+  $("photoTipsBtn").textContent = box.classList.contains("open") ? "Hide photo tips" : "Photo tips";
+});
 let last = null, scanData = null, bindData = null, frontFile = null, backFile = null;
 
 function load(){ try { return JSON.parse(localStorage.getItem(KEY)||"[]"); } catch(e){ return []; } }
@@ -1397,6 +1418,16 @@ function paintGradePick(){
   const v = bookGet(c, svc, num);
   $("vPick").textContent = money(v);
   $("vPickLbl").textContent = svc==="Raw" ? "Raw sold" : (svc+" "+num+" sold");
+  if ($("gNum")) $("gNum").style.visibility = svc==="Raw" ? "hidden" : "visible";
+}
+function paintPubGradePick(){
+  if (!viewCard || !$("pubPick")) return;
+  const svc = ($("pgSvc")&&$("pgSvc").value) || "Raw";
+  const num = ($("pgNum")&&$("pgNum").value) || "10";
+  const v = bookGet(viewCard, svc, num);
+  $("pubPick").textContent = money(v);
+  $("pubPickLbl").textContent = svc==="Raw" ? "Raw sold" : (svc+" "+num+" sold");
+  if ($("pgNum")) $("pgNum").style.visibility = svc==="Raw" ? "hidden" : "visible";
 }
 function openDetail(id){
   const c = load().find(x => x.id===id);
@@ -1415,9 +1446,6 @@ function openDetail(id){
   $("vHold").textContent = money(c.comp);
   $("vPaid").textContent = money(c.cost);
   $("vRaw").textContent = money(bookGet(c,"Raw",""));
-  $("vPsa9").textContent = money(bookGet(c,"PSA","9"));
-  $("vPsa10").textContent = money(bookGet(c,"PSA","10"));
-  $("vBgs").textContent = money(bookGet(c,"BGS","9.5"));
   paintCardSpark(c);
   paintGradePick();
   $("dNotes").textContent = c.notes || "";
@@ -1537,6 +1565,8 @@ $("list").onclick = e => {
 };
 $("gSvc").onchange = paintGradePick;
 $("gNum").onchange = paintGradePick;
+$("pgSvc") && ($("pgSvc").onchange = paintPubGradePick);
+$("pgNum") && ($("pgNum").onchange = paintPubGradePick);
 $("backBind").onclick = () => show("bind");
 $("editCardBtn").onclick = () => { fillEdit(); show("edit"); };
 $("backDetail").onclick = () => openDetail(openId);
@@ -2195,10 +2225,9 @@ function openPubCard(c){
   $("pubHero").src = c.photo || "";
   $("pubTitle").textContent = c.player || "Card";
   $("pubLine").textContent = [c.team,c.year,c.set,c.number?"#"+c.number:"",c.insert,c.parallel].filter(Boolean).join(" · ");
-  const b = c.book || {};
-  $("pubVals").innerHTML = ["Raw","PSA 8","PSA 9","PSA 10"].map(k =>
-    "<div class=\"val\"><b>"+(b[k]!=null?money(b[k]):(k==="Raw"&&c.comp!=null?money(c.comp):"—"))+"</b><span>"+k+"</span></div>"
-  ).join("");
+  if ($("pubHold")) $("pubHold").textContent = money(c.comp);
+  if ($("pubRaw")) $("pubRaw").textContent = money((c.book&&c.book.Raw)!=null?c.book.Raw:c.comp);
+  paintPubGradePick();
   show("pubDetail");
   paintCardSpark(c, "pubSpark", "pubTrendNote");
   loadComments(viewSlug, c.id, $("pubComments"));
