@@ -528,6 +528,24 @@ def init_db():
       PRIMARY KEY (slug, card_id, user_id)
     )
     """)
+    con.execute("""
+    CREATE TABLE IF NOT EXISTS follows (
+      follower INTEGER NOT NULL,
+      slug TEXT NOT NULL,
+      created TEXT NOT NULL,
+      PRIMARY KEY (follower, slug)
+    )
+    """)
+    con.execute("""
+    CREATE TABLE IF NOT EXISTS notes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      slug TEXT,
+      body TEXT NOT NULL,
+      created TEXT NOT NULL,
+      read INTEGER NOT NULL DEFAULT 0
+    )
+    """)
     con.commit()
     con.close()
 
@@ -776,10 +794,23 @@ async def upsert_card(payload: dict, request: Request, x_token: str | None = Hea
         if isinstance(v, str) and len(v) > 250000:
             card[k] = None
     con = db()
+    existed = con.execute("SELECT id FROM cards WHERE id=? AND user_id=?", (cid, uid)).fetchone()
     con.execute(
         "INSERT OR REPLACE INTO cards(id,user_id,data) VALUES(?,?,?)",
         (cid, uid, json.dumps(card)),
     )
+    if not existed:
+        owner = con.execute("SELECT slug, display FROM users WHERE id=?", (uid,)).fetchone()
+        slug = (owner["slug"] if owner else "") or ""
+        who = (owner["display"] if owner else None) or "Collector"
+        player = (card.get("player") or "a card")
+        created = time.strftime("%Y-%m-%dT%H:%M:%SZ")
+        fans = con.execute("SELECT follower FROM follows WHERE slug=?", (slug,)).fetchall() if slug else []
+        for f in fans:
+            con.execute(
+                "INSERT INTO notes(user_id,slug,body,created,read) VALUES(?,?,?,?,0)",
+                (f["follower"], slug, f"{who} added {player}", created),
+            )
     con.commit()
     con.close()
     return {"ok": True, "id": cid}
@@ -796,20 +827,98 @@ async def delete_card(cid: str, request: Request, x_token: str | None = Header(d
 @app.get("/binders")
 async def list_binders():
     con = db()
-    rows = con.execute(
-        """
-        SELECT u.slug, u.display, u.hue, u.bio, u.avatar, COUNT(c.id) AS n
-        FROM users u
-        JOIN cards c ON c.user_id = u.id
-        WHERE u.slug IS NOT NULL AND u.slug != ''
-        GROUP BY u.id
-        HAVING n > 0
-        ORDER BY n DESC
-        LIMIT 80
-        """
+    users = con.execute(
+        "SELECT id, slug, display, hue, bio, avatar FROM users WHERE slug IS NOT NULL AND slug != ''"
     ).fetchall()
+    out = []
+    for u in users:
+        rows = con.execute("SELECT data FROM cards WHERE user_id=?", (u["id"],)).fetchall()
+        if not rows:
+            continue
+        cards = []
+        for r in rows:
+            try:
+                cards.append(json.loads(r["data"]))
+            except Exception:
+                pass
+        book = 0.0
+        teams, players = [], []
+        for c in cards:
+            if isinstance(c.get("comp"), (int, float)):
+                book += float(c["comp"])
+            if c.get("team"):
+                teams.append(c["team"])
+            if c.get("player"):
+                players.append(c["player"])
+        top = max(set(teams), key=teams.count) if teams else ""
+        out.append({
+            "slug": u["slug"],
+            "display": u["display"] or "Collector",
+            "hue": u["hue"] or "#8fd4ee",
+            "bio": u["bio"] or "",
+            "avatar": u["avatar"] or "",
+            "count": len(cards),
+            "book": round(book, 2),
+            "team": top,
+            "players": " ".join(players).lower(),
+        })
     con.close()
-    return {"binders": [{"slug": r["slug"], "display": r["display"] or "Collector", "hue": r["hue"] or "#8fd4ee", "bio": r["bio"] or "", "avatar": r["avatar"] or "", "count": r["n"]} for r in rows]}
+    return {"binders": out}
+
+@app.post("/follow/{slug}")
+async def follow_binder(slug: str, request: Request, x_token: str | None = Header(default=None)):
+    uid = require_user(request, x_token)
+    slug = re.sub(r"[^a-z0-9]", "", (slug or "").lower())
+    con = db()
+    owner = con.execute("SELECT id FROM users WHERE slug=?", (slug,)).fetchone()
+    if not owner:
+        con.close()
+        raise HTTPException(404, "binder not found")
+    if owner["id"] == uid:
+        con.close()
+        raise HTTPException(400, "that's your binder")
+    row = con.execute("SELECT slug FROM follows WHERE follower=? AND slug=?", (uid, slug)).fetchone()
+    if row:
+        con.execute("DELETE FROM follows WHERE follower=? AND slug=?", (uid, slug))
+        con.commit()
+        con.close()
+        return {"following": False}
+    con.execute(
+        "INSERT INTO follows(follower,slug,created) VALUES(?,?,?)",
+        (uid, slug, time.strftime("%Y-%m-%dT%H:%M:%SZ")),
+    )
+    con.commit()
+    con.close()
+    return {"following": True}
+
+@app.get("/following")
+async def my_follows(request: Request, x_token: str | None = Header(default=None)):
+    uid = require_user(request, x_token)
+    con = db()
+    rows = con.execute("SELECT slug FROM follows WHERE follower=?", (uid,)).fetchall()
+    con.close()
+    return {"slugs": [r["slug"] for r in rows]}
+
+@app.get("/notes")
+async def list_notes(request: Request, x_token: str | None = Header(default=None)):
+    uid = require_user(request, x_token)
+    con = db()
+    rows = con.execute(
+        "SELECT id,slug,body,created,read FROM notes WHERE user_id=? ORDER BY id DESC LIMIT 60",
+        (uid,),
+    ).fetchall()
+    unread = con.execute("SELECT COUNT(*) AS n FROM notes WHERE user_id=? AND read=0", (uid,)).fetchone()["n"]
+    con.close()
+    return {"notes": [dict(r) for r in rows], "unread": unread}
+
+@app.post("/notes/read")
+async def read_notes(request: Request, x_token: str | None = Header(default=None)):
+    uid = require_user(request, x_token)
+    con = db()
+    con.execute("UPDATE notes SET read=1 WHERE user_id=?", (uid,))
+    con.commit()
+    con.close()
+    return {"ok": True}
 
 @app.post("/u/{slug}/cards/{cid}/like")
 async def toggle_like(slug: str, cid: str, request: Request, x_token: str | None = Header(default=None)):

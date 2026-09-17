@@ -106,6 +106,9 @@
     .pwid { display:flex; align-items:center; gap:12px; margin-bottom:10px; }
     .pava { width:52px; height:52px; border-radius:16px; background:var(--ice); color:#071016; font-weight:800; display:flex; align-items:center; justify-content:center; font-size:16px; overflow:hidden; border:3px solid var(--ice); flex:0 0 auto; }
     .pava img { width:100%; height:100%; object-fit:cover; display:block; }
+    .hue-swatch { width:48px; height:48px; padding:0; border:0; border-radius:12px; background:transparent; overflow:hidden; }
+    .hue-swatch::-webkit-color-swatch-wrapper { padding:0; }
+    .hue-swatch::-webkit-color-swatch { border:0; border-radius:12px; }
     .backrow { display:flex; gap:8px; }
     .backrow button { width:auto; flex:1; }
     .shot-wrap { position:relative; min-height:108px; border-radius:14px; overflow:hidden; background:linear-gradient(180deg,#182833,#101820); border:1px dashed #3d5a6a; }
@@ -273,12 +276,26 @@
     <div id="searchList"></div>
   </section>
   <section class="page" id="findPage">
-    <p class="muted">Open someone else’s public binder. Comment and like cards there.</p>
-    <input id="findQ" placeholder="Search a binder name…" />
+    <p class="muted">Community binders. Follow one to get a ping when they add a card.</p>
+    <button class="ghost" id="openNotes">Notifications <span id="noteBadge"></span></button>
+    <input id="findQ" placeholder="Screen name or player…" />
+    <select id="findSort">
+      <option value="cards">Most cards</option>
+      <option value="value">Highest book</option>
+      <option value="team">Team A–Z</option>
+      <option value="name">Name A–Z</option>
+    </select>
     <div id="findList"></div>
   </section>
+  <section class="page" id="notesPage">
+    <button class="ghost" id="backFindNotes">Community</button>
+    <h2 style="font-size:18px;margin:12px 0 8px">Notifications</h2>
+    <p class="muted">When someone you follow adds a card. Phone push needs the app open or a later push setup — this list always works.</p>
+    <div id="notesList"></div>
+  </section>
   <section class="page" id="pubPage">
-    <button class="ghost" id="backFind">All binders</button>
+    <button class="ghost" id="backFind">Community</button>
+    <button class="ghost" id="followBtn">Follow binder</button>
     <p class="muted" id="pubHead"></p>
     <div id="pubList"></div>
   </section>
@@ -302,10 +319,19 @@
       <div class="pwid" id="pWid"><div class="pava" id="pAva">IL</div><div><b id="pName">Collector</b><div class="muted" id="pSlug"></div></div></div>
       <label>Display name</label>
       <input id="pDisplay" maxlength="24" placeholder="Name on your public binder" />
-      <label>Widget photo</label>
-      <input id="pPhoto" type="file" accept="image/*" />
-      <label>Border colour</label>
-      <input id="pHue" type="color" value="#8fd4ee" style="height:42px;padding:4px" />
+      <div class="row2" style="margin-top:12px;align-items:end">
+        <div>
+          <label>Widget photo</label>
+          <div class="shot-wrap" id="shotProfile" style="min-height:88px;margin-top:4px">
+            <input class="shot-file" id="pPhoto" type="file" accept="image/*" />
+            <div class="shot-ui">Add photo<span>Camera or library</span></div>
+          </div>
+        </div>
+        <div>
+          <label>Border</label>
+          <input id="pHue" class="hue-swatch" type="color" value="#8fd4ee" />
+        </div>
+      </div>
       <label>Short bio</label>
       <input id="pBio" maxlength="140" placeholder="Team, era, what you collect" />
       <button id="pSave">Save profile</button>
@@ -409,7 +435,7 @@
   <nav class="dock" id="dock">
     <button id="tabScan">Scan</button>
     <button id="tabBind">Binder</button>
-    <button id="tabFind">Find</button>
+    <button id="tabFind">Community</button>
     <button id="tabSet">You</button>
   </nav>
   </div>
@@ -425,7 +451,7 @@ function showApp(){
   $("authPage").classList.add("hidden");
   $("appShell").classList.remove("hidden");
   document.body.classList.add("dock-on");
-  paintTicker(); renderBinder(); refreshUsage(); loadNotePrefs(); scheduleDaily(); loadMe();
+  paintTicker(); renderBinder(); refreshUsage(); loadNotePrefs(); scheduleDaily(); loadMe(); refreshNotesBadge();
 }
 function niceErr(raw){
   let msg = raw;
@@ -580,6 +606,7 @@ function show(id){
   if ($("findPage")) $("findPage").classList.toggle("on", id==="find");
   if ($("helpPage")) $("helpPage").classList.toggle("on", id==="help");
   if ($("searchPage")) $("searchPage").classList.toggle("on", id==="search");
+  if ($("notesPage")) $("notesPage").classList.toggle("on", id==="notes");
   if (id==="bind") renderBinder();
   if (id==="search") renderSearch();
   if (id==="find") loadFind();
@@ -587,7 +614,7 @@ function show(id){
   document.body.classList.toggle("dock-on", true);
   document.body.classList.toggle("chart-on", id==="bind" && document.body.classList.contains("chart-open"));
   ["tabScan","tabBind","tabFind","tabSet"].forEach(tid => {
-    if ($(tid)) $(tid).classList.toggle("on", (tid==="tabScan"&&id==="scan")||(tid==="tabBind"&&(id==="bind"||id==="detail"||id==="edit"||id==="search"))||(tid==="tabFind"&&(id==="find"||id==="pub"||id==="pubDetail"))||(tid==="tabSet"&&id==="set"));
+    if ($(tid)) $(tid).classList.toggle("on", (tid==="tabScan"&&id==="scan")||(tid==="tabBind"&&(id==="bind"||id==="detail"||id==="edit"||id==="search"))||(tid==="tabFind"&&(id==="find"||id==="pub"||id==="pubDetail"||id==="notes"))||(tid==="tabSet"&&id==="set"));
   });
   window.scrollTo(0,0);
 }
@@ -1410,6 +1437,7 @@ $("pPhoto") && ($("pPhoto").onchange = async () => {
   if (!f) return;
   myAvatar = await blobJpegUrl(f, 160);
   paintProfile($("pDisplay").value||"Collector", $("pHue").value, myAvatar);
+  if ($("shotProfile")) $("shotProfile").classList.add("on");
 });
 $("pSave") && ($("pSave").onclick = async () => {
   try {
@@ -1479,6 +1507,7 @@ function openPubCard(c){
   paintLike();
 }
 let findCache = [];
+let following = {};
 async function loadFind(){
   const box = $("findList");
   if (!box) return;
@@ -1487,6 +1516,15 @@ async function loadFind(){
     const r = await fetch("/binders");
     const d = await r.json();
     findCache = d.binders || [];
+    if (token()) {
+      const f = await fetch("/following", { headers:{ "x-token": token() } });
+      if (f.ok) {
+        const j = await f.json();
+        following = {};
+        (j.slugs||[]).forEach(s => following[s] = true);
+      }
+      refreshNotesBadge();
+    }
     renderFind();
   } catch(e) {
     box.innerHTML = "<p class=\"muted\">Could not load binders. Cards must be synced to the cloud first.</p>";
@@ -1494,20 +1532,75 @@ async function loadFind(){
 }
 function renderFind(){
   const q = (($("findQ")&&$("findQ").value)||"").toLowerCase();
-  const rows = findCache.filter(b => !q || (b.display||"collector").toLowerCase().includes(q));
+  const sort = ($("findSort") && $("findSort").value) || "cards";
+  let rows = findCache.filter(b => {
+    if (!q) return true;
+    const name = (b.display||"").toLowerCase();
+    const players = (b.players||"").toLowerCase();
+    const team = (b.team||"").toLowerCase();
+    return name.includes(q) || players.includes(q) || team.includes(q);
+  });
+  if (sort==="value") rows.sort((a,b)=>(+b.book||0)-(+a.book||0));
+  else if (sort==="team") rows.sort((a,b)=>(a.team||"zzz").localeCompare(b.team||"zzz"));
+  else if (sort==="name") rows.sort((a,b)=>(a.display||"").localeCompare(b.display||""));
+  else rows.sort((a,b)=>(+b.count||0)-(+a.count||0));
   $("findList").innerHTML = rows.length ? rows.map(b => {
     const name = b.display || "Collector";
     const hue = b.hue || "#8fd4ee";
     const av = b.avatar ? "<img alt=\"\" src=\""+b.avatar+"\" />" : name.slice(0,2).toUpperCase();
-    return "<article class=\"item\" data-slug=\""+b.slug+"\"><div class=\"pwid\"><div class=\"pava\" style=\"border-color:"+hue+";background:"+hue+"\">"+av+"</div><div><h3>"+name+"</h3><div class=\"muted\">"+b.count+" cards"+(b.bio?" · "+b.bio:"")+"</div></div></div></article>";
+    const extra = [b.count+" cards", b.book?money(b.book):"", b.team||"", following[b.slug]?"Following":""].filter(Boolean).join(" · ");
+    return "<article class=\"item\" data-slug=\""+b.slug+"\"><div class=\"pwid\"><div class=\"pava\" style=\"border-color:"+hue+";background:"+hue+"\">"+av+"</div><div><h3>"+name+"</h3><div class=\"muted\">"+extra+"</div></div></div></article>";
   }).join("") : "<p class=\"muted\">No public binders yet. Save a card while signed in, then this list fills in.</p>";
 }
 $("findQ") && ($("findQ").oninput = renderFind);
+$("findSort") && ($("findSort").onchange = renderFind);
 $("findList") && ($("findList").onclick = e => {
   const art = e.target.closest("[data-slug]");
   if (art) openPublic(art.getAttribute("data-slug"));
 });
 $("backFind") && ($("backFind").onclick = () => show("find"));
+$("backFindNotes") && ($("backFindNotes").onclick = () => show("find"));
+$("openNotes") && ($("openNotes").onclick = () => { show("notes"); loadNotes(); });
+function paintFollow(){
+  if (!$("followBtn") || !viewSlug) return;
+  $("followBtn").textContent = following[viewSlug] ? "Following" : "Follow binder";
+}
+$("followBtn") && ($("followBtn").onclick = async () => {
+  if (!token()) { $("pubHead").textContent = "Sign in to follow."; return; }
+  if (!viewSlug) return;
+  const r = await fetch("/follow/"+encodeURIComponent(viewSlug), { method:"POST", headers:{ "x-token": token() } });
+  const d = await r.json().catch(()=>({}));
+  if (r.ok) { following[viewSlug] = !!d.following; paintFollow(); }
+});
+async function refreshNotesBadge(){
+  if (!token()) return;
+  try {
+    const r = await fetch("/notes", { headers:{ "x-token": token() } });
+    if (!r.ok) return;
+    const d = await r.json();
+    const n = d.unread || 0;
+    const b = $("noteBadge");
+    if (b) b.textContent = n ? ("("+n+")") : "";
+    if ($("tabFind") && n) $("tabFind").textContent = "Community · "+n;
+    else if ($("tabFind")) $("tabFind").textContent = "Community";
+  } catch(e){}
+}
+async function loadNotes(){
+  const box = $("notesList");
+  if (!box) return;
+  if (!token()) { box.innerHTML = "<p class=\"muted\">Sign in to see notifications.</p>"; return; }
+  const r = await fetch("/notes", { headers:{ "x-token": token() } });
+  const d = await r.json();
+  box.innerHTML = (d.notes||[]).length ? d.notes.map(n =>
+    "<article class=\"item\" data-slug=\""+(n.slug||"")+"\"><b>"+(n.body||"")+"</b><div class=\"muted\">"+(n.created||"").slice(0,16)+(n.read?"":" · new")+"</div></article>"
+  ).join("") : "<p class=\"muted\">Nothing yet. Follow a binder first.</p>";
+  await fetch("/notes/read", { method:"POST", headers:{ "x-token": token() } });
+  refreshNotesBadge();
+}
+$("notesList") && ($("notesList").onclick = e => {
+  const art = e.target.closest("[data-slug]");
+  if (art && art.getAttribute("data-slug")) openPublic(art.getAttribute("data-slug"));
+});
 async function paintLike(){
   if (!viewSlug || !viewCard || !$("likeBtn")) return;
   try {
@@ -1534,6 +1627,7 @@ async function openPublic(slug){
   if (!r.ok) { $("pubHead").textContent = "Binder not found."; show("pub"); return; }
   const d = await r.json();
   $("pubHead").textContent = (d.display||"Collector")+" · "+d.count+" cards · book "+(d.book?money(d.book):"—")+(d.bio?" · "+d.bio:"");
+  paintFollow();
   pubCards = d.cards || [];
   $("pubList").innerHTML = pubCards.map(c =>
     "<article class=\"item\" data-pub=\""+c.id+"\"><div class=\"item-top\"><img src=\""+(c.photo||"")+"\" alt=\"\" /><div><h3>"+(c.player||"—")+"</h3><div class=\"muted\">"+[c.team,c.year,c.set,c.number?"#"+c.number:""].filter(Boolean).join(" · ")+"</div></div></div></article>"
