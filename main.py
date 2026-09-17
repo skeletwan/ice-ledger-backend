@@ -695,6 +695,18 @@ def init_db():
     )
     """)
     con.execute("""
+    CREATE TABLE IF NOT EXISTS banner_posts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      kind TEXT NOT NULL,
+      title TEXT NOT NULL,
+      body TEXT,
+      url TEXT,
+      color TEXT,
+      created TEXT NOT NULL
+    )
+    """)
+    con.execute("""
     CREATE TABLE IF NOT EXISTS notes (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
@@ -810,6 +822,18 @@ def add_note(con, user_id, slug, body, card_id=""):
         "INSERT INTO notes(user_id,slug,body,created,read,card_id) VALUES(?,?,?,?,0,?)",
         (user_id, slug or "", body[:180], time.strftime("%Y-%m-%dT%H:%M:%SZ"), card_id or ""),
     )
+
+def notify_activity(con, owner_id, slug, body, card_id="", actor_id=None):
+    seen = set()
+    targets = [owner_id]
+    if slug:
+        for f in con.execute("SELECT follower FROM follows WHERE slug=?", (slug,)).fetchall():
+            targets.append(f["follower"])
+    for tid in targets:
+        if not tid or tid in seen:
+            continue
+        seen.add(tid)
+        add_note(con, tid, slug, body, card_id)
 
 def display_of(con, uid: int) -> str:
     row = con.execute("SELECT display FROM users WHERE id=?", (uid,)).fetchone()
@@ -1251,8 +1275,8 @@ async def like_binder(slug: str, request: Request, x_token: str | None = Header(
         )
         liked = True
         owner = con.execute("SELECT id FROM users WHERE slug=?", (slug,)).fetchone()
-        if owner and owner["id"] != uid:
-            add_note(con, owner["id"], slug, display_of(con, uid)+" liked your binder")
+        if owner:
+            notify_activity(con, owner["id"], slug, display_of(con, uid)+" liked the binder", "", uid)
     con.commit()
     n = con.execute("SELECT COUNT(*) AS n FROM binder_likes WHERE slug=?", (slug,)).fetchone()["n"]
     con.close()
@@ -1417,8 +1441,7 @@ async def toggle_like(slug: str, cid: str, request: Request, x_token: str | None
             (slug, cid, uid, time.strftime("%Y-%m-%dT%H:%M:%SZ")),
         )
         liked = True
-        if owner and owner["id"] != uid:
-            add_note(con, owner["id"], slug, display_of(con, uid)+" liked your card", cid)
+        notify_activity(con, owner["id"], slug, display_of(con, uid)+" liked a card", cid, uid)
     con.commit()
     n = con.execute("SELECT COUNT(*) AS n FROM likes WHERE slug=? AND card_id=?", (slug, cid)).fetchone()["n"]
     con.close()
@@ -1501,6 +1524,10 @@ async def public_binder(slug: str):
         ).fetchone()["n"]
         c["likes"] = n
     blink = con.execute("SELECT COUNT(*) AS n FROM binder_likes WHERE slug=?", (slug,)).fetchone()["n"]
+    banners = con.execute(
+        "SELECT id,kind,title,body,url,color,created FROM banner_posts WHERE user_id=? ORDER BY id DESC LIMIT 12",
+        (u["id"],),
+    ).fetchall()
     con.close()
     book = sum((c.get("comp") or 0) for c in cards if isinstance(c.get("comp"), (int, float)))
     return {
@@ -1516,7 +1543,70 @@ async def public_binder(slug: str):
         "book": book,
         "likes": blink,
         "cards": cards,
+        "banners": [dict(b) for b in banners],
     }
+
+
+def _clean_banner_url(url: str) -> str:
+    url = (url or "").strip()
+    if not url:
+        return ""
+    if not re.match(r"^https?://", url, re.I):
+        url = "https://" + url
+    if not re.match(r"^https?://[^\s]+$", url, re.I):
+        return ""
+    return url[:300]
+
+
+@app.get("/banners")
+async def my_banners(request: Request, x_token: str | None = Header(default=None)):
+    uid = require_user(request, x_token)
+    con = db()
+    rows = con.execute(
+        "SELECT id,kind,title,body,url,color,created FROM banner_posts WHERE user_id=? ORDER BY id DESC LIMIT 12",
+        (uid,),
+    ).fetchall()
+    con.close()
+    return {"banners": [dict(r) for r in rows]}
+
+
+@app.post("/banners")
+async def add_banner(payload: dict, request: Request, x_token: str | None = Header(default=None)):
+    uid = require_user(request, x_token)
+    kind = (payload.get("kind") or "note").strip()[:24]
+    if kind not in ("show", "break", "episode", "live", "note"):
+        kind = "note"
+    title = (payload.get("title") or "").strip()[:80]
+    body = (payload.get("body") or "").strip()[:280]
+    url = _clean_banner_url(payload.get("url") or "")
+    color = (payload.get("color") or "#8fd4ee").strip()[:16]
+    if not re.match(r"^#[0-9a-fA-F]{3,8}$", color):
+        color = "#8fd4ee"
+    if len(title) < 2:
+        raise HTTPException(400, "give the post a title")
+    con = db()
+    n = con.execute("SELECT COUNT(*) AS n FROM banner_posts WHERE user_id=?", (uid,)).fetchone()["n"]
+    if n >= 12:
+        con.close()
+        raise HTTPException(400, "12 posts max — delete one first")
+    con.execute(
+        "INSERT INTO banner_posts(user_id,kind,title,body,url,color,created) VALUES(?,?,?,?,?,?,?)",
+        (uid, kind, title, body, url, color, time.strftime("%Y-%m-%dT%H:%M:%SZ")),
+    )
+    con.commit()
+    rid = con.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
+    con.close()
+    return {"ok": True, "id": rid}
+
+
+@app.delete("/banners/{bid}")
+async def del_banner(bid: int, request: Request, x_token: str | None = Header(default=None)):
+    uid = require_user(request, x_token)
+    con = db()
+    con.execute("DELETE FROM banner_posts WHERE id=? AND user_id=?", (bid, uid))
+    con.commit()
+    con.close()
+    return {"ok": True}
 
 @app.get("/u/{slug}/cards/{cid}/comments")
 async def list_comments(slug: str, cid: str):
@@ -1586,9 +1676,12 @@ async def add_comment(slug: str, cid: str, payload: dict, request: Request, x_to
         (slug, cid, uid, name, body, created, parent_id),
     )
     rid = con.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
-    if owner["id"] != uid:
-        add_note(con, owner["id"], slug, name+(" replied on your card" if parent_id else " commented on your card"), cid)
-    if parent and parent["user_id"] != uid and parent["user_id"] != owner["id"]:
+    notify_activity(
+        con, owner["id"], slug,
+        name+(" replied" if parent_id else " commented")+" on a card",
+        cid, uid
+    )
+    if parent and parent["user_id"] not in (uid, owner["id"]):
         add_note(con, parent["user_id"], slug, name+" replied to you", cid)
     con.commit()
     con.close()
@@ -1654,11 +1747,31 @@ async def admin_inbox(request: Request, secret: str = "", x_token: str | None = 
         "SELECT slug, display FROM users WHERE IFNULL(avatar_hidden,0)=1 AND slug IS NOT NULL AND slug != ''"
     ).fetchall()
     comments = con.execute(
-        "SELECT id, slug, body FROM comments WHERE IFNULL(hidden,0)=1 ORDER BY id DESC LIMIT 80"
+        "SELECT id, slug, card_id, body FROM comments WHERE IFNULL(hidden,0)=1 ORDER BY id DESC LIMIT 80"
     ).fetchall()
+    reports = []
+    for r in rows:
+        item = dict(r)
+        reason = item.get("reason") or ""
+        if reason.startswith("comment:"):
+            raw = reason[8:].split("|", 1)[0]
+            try:
+                cid = int(raw)
+            except Exception:
+                cid = 0
+            item["kind"] = "comment"
+            item["comment_id"] = cid
+            rowc = con.execute("SELECT slug, card_id, body FROM comments WHERE id=?", (cid,)).fetchone()
+            if rowc:
+                item["slug"] = rowc["slug"]
+                item["card_id"] = rowc["card_id"]
+                item["preview"] = rowc["body"]
+        else:
+            item["kind"] = "photo"
+        reports.append(item)
     con.close()
     return {
-        "reports": [dict(r) for r in rows],
+        "reports": reports,
         "hidden_photos": [dict(r) for r in photos],
         "hidden_comments": [dict(r) for r in comments],
     }

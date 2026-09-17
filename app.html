@@ -120,6 +120,10 @@
     .pava { width:56px; height:56px; border-radius:16px; background:var(--ice); color:#071016; font-weight:800; display:flex; align-items:center; justify-content:center; font-size:16px; overflow:hidden; border:3px solid var(--ice); flex:0 0 auto; position:relative; }
     .pava img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; background:#0e171e; }
     .item.reply { margin-left:18px; border-left:2px solid var(--line); }
+    .banner { border-radius:14px; padding:12px 14px; margin:8px 0; border:1px solid var(--line); background:#121c26; }
+    .banner .k { font-size:11px; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); }
+    .banner h3 { margin:4px 0 2px; font-size:16px; }
+    .banner a { color:var(--ice); }
     .thread { margin-top:8px; }
     .c-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
     .c-actions button { width:auto; margin:0; padding:6px 10px; font-size:12px; }
@@ -233,11 +237,11 @@
   </div>
 
   <section class="page on" id="scanPage">
-    <p class="muted">Front and back, then Identify.</p>
+    <p class="muted">Raws: front and back. Slabs: front only (label + card in the case).</p>
     <div class="status" id="quotaBox">Free plan: 10 IDs / month. Ice+ is 200. Rip Night is 20 extra IDs.</div>
     <div class="row2">
       <button class="ghost" id="payBtn">Ice+ · $8/mo</button>
-      <button class="ghost" id="ripBtn">Rip Night · $2.99</button>
+      <button class="ghost" id="ripBtn">Rip Night · 20 IDs · $2.99</button>
     </div>
     <label>Have a code?</label>
     <div class="row2" style="align-items:end">
@@ -322,7 +326,7 @@
       <select id="sortBy">
         <option value="new">Newest</option>
         <option value="team">Team</option>
-        <option value="player">Player</option>
+        <option value="player">Player (last name)</option>
         <option value="value">Highest book</option>
       </select>
       <select id="teamFilter">
@@ -368,6 +372,7 @@
     <button class="ghost" id="followBtn">Follow</button>
     <button class="ghost" id="likeBinderBtn">Like binder · 0</button>
     <p class="muted" id="pubHead"></p>
+    <div id="pubBanner"></div>
     <div id="pubList"></div>
   </section>
   <section class="page" id="pubDetail">
@@ -409,15 +414,49 @@
       <button class="ghost" id="pClearPhoto">Remove photo</button>
       <p class="muted" id="pNote"></p>
     </div>
+    <div class="card" style="margin-top:12px">
+      <h3 style="margin:0 0 6px;font-size:16px">Binder banner</h3>
+      <p class="muted">Posts sit on top of your public binder. Shows, breaks, episodes, or a note.</p>
+      <label>Type</label>
+      <select id="banKind">
+        <option value="show">Card show</option>
+        <option value="break">YouTube break</option>
+        <option value="episode">Channel episode</option>
+        <option value="live">Live / stream</option>
+        <option value="note">Note</option>
+      </select>
+      <label>Title</label>
+      <input id="banTitle" maxlength="80" placeholder="Saturday rip · Toronto card show" />
+      <label>Details</label>
+      <input id="banBody" maxlength="280" placeholder="Booth 14, 10am–4pm or episode notes" />
+      <label>Link</label>
+      <input id="banUrl" placeholder="https://youtube.com/…" />
+      <label>Color</label>
+      <input id="banColor" class="hue-swatch" type="color" value="#8fd4ee" />
+      <button id="banAdd">Post to banner</button>
+      <p class="muted" id="banNote"></p>
+      <div id="banList"></div>
+    </div>
     <button class="ghost" id="tabHelp">Support / feedback</button>
-    <div id="opsBox" class="hidden">
-    <h3 style="font-size:15px;margin:16px 0 8px">Owner tools</h3>
+    <button class="ghost hidden" id="ownerToolsBtn">Owner tools</button>
+    <h3 style="font-size:15px;margin:16px 0 8px">Follow alerts</h3>
+    <p class="muted">Ping when a binder you follow adds a card. Works with the app open or on the Home Screen.</p>
+    <label><input id="followAlertOn" type="checkbox" style="width:auto;margin-right:8px" /> New cards on binders I follow</label>
+    <label><input id="likeAlertOn" type="checkbox" style="width:auto;margin-right:8px" /> Likes on my binder and cards</label>
+    <label><input id="commentAlertOn" type="checkbox" style="width:auto;margin-right:8px" /> Comments and replies</label>
+    <button class="ghost" id="followAlertSave">Save alerts</button>
+    <p class="muted" id="followAlertNote"></p>
+    <button class="ghost" id="logoutBtn">Get out</button>
+  </section>
+  <section class="page" id="opsPage">
+    <button class="ghost" id="backYouOps">Back to You</button>
+    <h2 style="font-size:18px;margin:12px 0 8px">Owner tools</h2>
     <label>App secret</label>
     <input id="plusSecret" type="password" autocomplete="off" />
     <button id="plusBtn">Unlock Ice+ on this account</button>
     <p class="muted" id="plusNote"></p>
     <h3 style="font-size:15px;margin:16px 0 8px">Moderation</h3>
-    <p class="muted">Every new report emails you. Three unique reports hide the photo or comment. Restore below if people are messing around.</p>
+    <p class="muted">Tap a report to open the photo or comment. Three unique reports hide it. Restore below if people are messing around.</p>
     <button class="ghost" id="modLoad">Load reports</button>
     <div id="modList"></div>
     <h3 style="font-size:15px;margin:16px 0 8px">Rip codes</h3>
@@ -430,15 +469,6 @@
     <button class="ghost" id="ripMake">Make code</button>
     <p class="muted" id="ripMakeNoteOut"></p>
     <div id="ripCodeList"></div>
-    </div>
-    <h3 style="font-size:15px;margin:16px 0 8px">Follow alerts</h3>
-    <p class="muted">Ping when a binder you follow adds a card. Works with the app open or on the Home Screen.</p>
-    <label><input id="followAlertOn" type="checkbox" style="width:auto;margin-right:8px" /> New cards on binders I follow</label>
-    <label><input id="likeAlertOn" type="checkbox" style="width:auto;margin-right:8px" /> Likes on my binder and cards</label>
-    <label><input id="commentAlertOn" type="checkbox" style="width:auto;margin-right:8px" /> Comments and replies</label>
-    <button class="ghost" id="followAlertSave">Save alerts</button>
-    <p class="muted" id="followAlertNote"></p>
-    <button class="ghost" id="logoutBtn">Get out</button>
   </section>
   <section class="page" id="helpPage">
     <button class="ghost" id="backYou">Back to You</button>
@@ -466,6 +496,8 @@
     <h2 id="dPlayer" style="margin:14px 0 4px"></h2>
     <div id="dChips"></div>
     <p class="muted" id="dLine"></p>
+    <svg class="spark" id="cardSpark" viewBox="0 0 360 120" preserveAspectRatio="none"></svg>
+    <p class="muted" id="cardTrendNote">Value over time for this card. Updates when comps refresh.</p>
     <div class="vals">
       <div class="val"><b id="vHold">—</b><span>Your copy</span></div>
       <div class="val"><b id="vPaid">—</b><span>Paid</span></div>
@@ -678,8 +710,8 @@ function histForRange(){
   const ds = cut.toISOString().slice(0,10);
   return h.filter(x => x.d >= ds);
 }
-function spark(vals){
-  const el = $("spark");
+function spark(vals, elId){
+  const el = $(elId || "spark");
   if (!el) return;
   const W = 360, H = 200, L = 8, R = 52, T = 12, B = 18;
   const plotW = W - L - R, plotH = H - T - B;
@@ -733,14 +765,17 @@ function show(id){
   if ($("searchPage")) $("searchPage").classList.toggle("on", id==="search");
   if ($("notesPage")) $("notesPage").classList.toggle("on", id==="notes");
   if (id==="scan" && $("status")) $("status").textContent = "";
+  if (id!=="set" && $("pNote")) $("pNote").textContent = "";
+  if ($("opsPage")) $("opsPage").classList.toggle("on", id==="ops");
   if (id==="bind") renderBinder();
   if (id==="search") renderSearch();
+  if (id==="find" || id==="pub" || id==="notes") refreshNotesBadge();
   if (id==="find") loadFind();
   document.body.classList.toggle("bind-on", id==="bind");
   document.body.classList.toggle("dock-on", true);
   document.body.classList.toggle("chart-on", id==="bind" && document.body.classList.contains("chart-open"));
   ["tabScan","tabBind","tabFind","tabSet"].forEach(tid => {
-    if ($(tid)) $(tid).classList.toggle("on", (tid==="tabScan"&&id==="scan")||(tid==="tabBind"&&(id==="bind"||id==="detail"||id==="edit"||id==="search"))||(tid==="tabFind"&&(id==="find"||id==="pub"||id==="pubDetail"||id==="notes"))||(tid==="tabSet"&&id==="set"));
+    if ($(tid)) $(tid).classList.toggle("on", (tid==="tabScan"&&id==="scan")||(tid==="tabBind"&&(id==="bind"||id==="detail"||id==="edit"||id==="search"))||(tid==="tabFind"&&(id==="find"||id==="pub"||id==="pubDetail"||id==="notes"))||(tid==="tabSet"&&(id==="set"||id==="ops"||id==="help")));
   });
   window.scrollTo(0,0);
 }
@@ -751,6 +786,8 @@ $("tabFind").onclick = () => show("find");
 $("tabSet").onclick = () => { loadNotePrefs(); loadMe(); show("set"); };
 $("tabHelp") && ($("tabHelp").onclick = () => show("help"));
 $("backYou") && ($("backYou").onclick = () => show("set"));
+$("ownerToolsBtn") && ($("ownerToolsBtn").onclick = () => { show("ops"); loadRipCodes(); if ($("modLoad")) $("modLoad").click(); });
+$("backYouOps") && ($("backYouOps").onclick = () => show("set"));
 $("fxCAD").onclick = () => setFx("CAD");
 $("fxUSD").onclick = () => setFx("USD");
 $("ranges").onclick = e => {
@@ -813,6 +850,30 @@ function paintTicker(){
   spark(histForRange().map(x => x.v));
   document.querySelectorAll("#ranges [data-r]").forEach(b => b.classList.toggle("on", b.getAttribute("data-r")===rangeKey()));
   maybeJumpNote(t.mkt, ch);
+}
+function lastName(p){
+  const parts = String(p||"").trim().split(/\s+/);
+  return ((parts[parts.length-1]||"")+" "+(p||"")).toLowerCase();
+}
+function pushCardHist(card){
+  if (!card || card.comp==null || isNaN(+card.comp)) return;
+  const day = new Date().toISOString().slice(0,10);
+  const h = Array.isArray(card.hist) ? card.hist : [];
+  const last = h[h.length-1];
+  if (last && last.d === day) last.v = +card.comp;
+  else h.push({ d: day, v: +card.comp, t: new Date().toISOString() });
+  card.hist = h.slice(-400);
+}
+function paintCardSpark(card){
+  const vals = ((card && card.hist) || []).map(x => +x.v).filter(v => !isNaN(v));
+  spark(vals, "cardSpark");
+  if ($("cardTrendNote")) {
+    if (vals.length < 2) $("cardTrendNote").textContent = "Value over time. Needs at least two comp updates.";
+    else {
+      const ch = vals[vals.length-1] - vals[0];
+      $("cardTrendNote").textContent = (ch>=0?"Up ":"Down ")+money(Math.abs(ch))+" across "+vals.length+" updates.";
+    }
+  }
 }
 const NOTE = "ice-note";
 let noteTimer = null;
@@ -1190,6 +1251,7 @@ $("saveBtn").onclick = () => {
     scan: scanData, photo: scanData,
     added: new Date().toISOString()
   });
+  pushCardHist(cards[0]);
   saveAll(cards);
   pushCard(cards[0]).catch(()=>{});
   $("status").textContent = "";
@@ -1249,6 +1311,7 @@ function openDetail(id){
   $("vPsa9").textContent = money(bookGet(c,"PSA","9"));
   $("vPsa10").textContent = money(bookGet(c,"PSA","10"));
   $("vBgs").textContent = money(bookGet(c,"BGS","9.5"));
+  paintCardSpark(c);
   paintGradePick();
   $("dNotes").textContent = c.notes || "";
   const qq = qstr(c);
@@ -1309,7 +1372,7 @@ function renderBinder(){
     return true;
   });
   if (sort==="team") rows.sort((a,b)=> teamName(a).localeCompare(teamName(b)) || (a.player||"").localeCompare(b.player||""));
-  else if (sort==="player") rows.sort((a,b)=> (a.player||"").localeCompare(b.player||""));
+  else if (sort==="player") rows.sort((a,b)=> lastName(a.player).localeCompare(lastName(b.player)));
   else if (sort==="value") rows.sort((a,b)=> (+b.comp||0)-(+a.comp||0));
   const t = totals();
   $("valueNote").textContent = "";
@@ -1407,6 +1470,7 @@ function applyCompObj(card, c){
     "PSA 10": c.psa10_cad ?? card.psa10Comp
   });
   card.compAt = new Date().toISOString();
+  pushCardHist(card);
 }
 $("refreshBook") && ($("refreshBook").onclick = async () => {
   const note = $("bookNote");
@@ -1502,18 +1566,31 @@ $("modLoad") && ($("modLoad").onclick = async () => {
   const t = await r.text();
   if (!r.ok) { box.textContent = t.slice(0,160); return; }
   const d = JSON.parse(t);
-  const reports = (d.reports||[]).map(x =>
-    "<div class=\"item\" style=\"cursor:default\"><b>"+x.slug+"</b> <span class=\"muted\">"+(x.created||"").slice(0,16)+"</span><p style=\"margin:6px 0 0\">"+String(x.reason||"").replace(/[<>]/g,"")+"</p></div>"
-  ).join("") || "<p class=\"muted\">No reports yet.</p>";
+  const reports = (d.reports||[]).map(x => {
+    const kind = x.kind || "photo";
+    const label = kind==="comment" ? "Comment" : "Photo";
+    return "<div class=\"item\" data-review-kind=\""+kind+"\" data-review-slug=\""+(x.slug||"")+"\" data-review-card=\""+(x.card_id||"")+"\"><b>"+label+" · "+(x.slug||"")+"</b> <span class=\"muted\">"+(x.created||"").slice(0,16)+"</span><p style=\"margin:6px 0 0\">"+String(x.preview||x.reason||"").replace(/[<>]/g,"")+"</p><button class=\"ghost\" data-open-report=\"1\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Review</button></div>";
+  }).join("") || "<p class=\"muted\">No reports yet.</p>";
   const photos = (d.hidden_photos||[]).map(x =>
-    "<div class=\"item\" style=\"cursor:default\"><b>Photo · "+(x.display||x.slug)+"</b><button class=\"ghost\" data-restore-photo=\""+x.slug+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Restore photo</button></div>"
+    "<div class=\"item\" data-review-kind=\"photo\" data-review-slug=\""+x.slug+"\"><b>Photo · "+(x.display||x.slug)+"</b><button class=\"ghost\" data-open-report=\"1\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Review</button><button class=\"ghost\" data-restore-photo=\""+x.slug+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Restore photo</button></div>"
   ).join("") || "<p class=\"muted\">No hidden photos.</p>";
   const comments = (d.hidden_comments||[]).map(x =>
-    "<div class=\"item\" style=\"cursor:default\"><b>Comment · "+x.slug+" #"+x.id+"</b><p style=\"margin:6px 0 0\">"+String(x.body||"").replace(/[<>]/g,"")+"</p><button class=\"ghost\" data-restore-comment=\""+x.id+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Restore comment</button></div>"
+    "<div class=\"item\" data-review-kind=\"comment\" data-review-slug=\""+x.slug+"\" data-review-card=\""+(x.card_id||"")+"\"><b>Comment · "+x.slug+" #"+x.id+"</b><p style=\"margin:6px 0 0\">"+String(x.body||"").replace(/[<>]/g,"")+"</p><button class=\"ghost\" data-open-report=\"1\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Review</button><button class=\"ghost\" data-restore-comment=\""+x.id+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Restore comment</button></div>"
   ).join("") || "<p class=\"muted\">No hidden comments.</p>";
   box.innerHTML = "<h3 style=\"font-size:14px\">Inbox</h3>"+reports+"<h3 style=\"font-size:14px;margin-top:14px\">Removed</h3>"+photos+comments;
 });
 $("modList") && ($("modList").onclick = async ev => {
+  const open = ev.target.closest("[data-open-report]");
+  if (open) {
+    const row = open.closest("[data-review-kind]");
+    if (!row) return;
+    const slug = row.getAttribute("data-review-slug") || "";
+    const card = row.getAttribute("data-review-card") || "";
+    const kind = row.getAttribute("data-review-kind");
+    if (kind === "photo" && slug) { showFull("/u/"+slug+"/avatar", slug); return; }
+    if (slug) { openPublic(slug, card || null); return; }
+    return;
+  }
   const p = ev.target.closest("[data-restore-photo]");
   const c = ev.target.closest("[data-restore-comment]");
   if (!p && !c) return;
@@ -1702,8 +1779,9 @@ async function loadMe(){
     if ($("pCropY")) $("pCropY").value = d.cropy || "50";
     if ($("pCropZ")) $("pCropZ").value = d.cropz || "100";
     paintProfile(d.display || "Collector", d.hue || "#8fd4ee", myAvatar);
-    if ($("opsBox")) $("opsBox").classList.toggle("hidden", !d.operator);
+    if ($("ownerToolsBtn")) $("ownerToolsBtn").classList.toggle("hidden", !d.operator);
     if (d.operator) loadRipCodes();
+    loadBanners();
   } catch(e){}
 }
 function cropStyle(){
@@ -1740,9 +1818,46 @@ $("pSave") && ($("pSave").onclick = async () => {
     });
     const t = await r.text();
     if (!r.ok) throw new Error(t.slice(0,160));
-    $("pNote").textContent = "Saved. Find only shows this screen name.";
+    $("pNote").textContent = "Saved profile";
     loadMe();
   } catch(e) { $("pNote").textContent = e.message; }
+});
+const BAN_KIND = { show:"Card show", break:"YouTube break", episode:"Episode", live:"Live", note:"Note" };
+function bannerHtml(b, mine){
+  const col = b.color || "#8fd4ee";
+  const link = b.url ? "<div><a href=\""+b.url.replace(/"/g,"")+"\" target=\"_blank\" rel=\"noopener\">Open link</a></div>" : "";
+  const del = mine ? "<button class=\"ghost\" data-ban-del=\""+b.id+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Remove</button>" : "";
+  return "<div class=\"banner\" style=\"border-left:6px solid "+col+";box-shadow:inset 0 0 0 1px "+col+"22\"><div class=\"k\">"+(BAN_KIND[b.kind]||"Note")+"</div><h3>"+String(b.title||"").replace(/[<>]/g,"")+"</h3><div class=\"muted\">"+String(b.body||"").replace(/[<>]/g,"")+"</div>"+link+del+"</div>";
+}
+async function loadBanners(){
+  const box = $("banList");
+  if (!box || !token()) return;
+  const r = await fetch("/banners", { headers:{ "x-token": token() } });
+  if (!r.ok) return;
+  const d = await r.json();
+  box.innerHTML = (d.banners||[]).map(b => bannerHtml(b, true)).join("") || "<p class=\"muted\">Nothing on your banner yet.</p>";
+}
+$("banAdd") && ($("banAdd").onclick = async () => {
+  try {
+    await authPost("/banners", {
+      kind: ($("banKind")&&$("banKind").value) || "note",
+      title: ($("banTitle")&&$("banTitle").value) || "",
+      body: ($("banBody")&&$("banBody").value) || "",
+      url: ($("banUrl")&&$("banUrl").value) || "",
+      color: ($("banColor")&&$("banColor").value) || "#8fd4ee"
+    });
+    if ($("banTitle")) $("banTitle").value = "";
+    if ($("banBody")) $("banBody").value = "";
+    if ($("banUrl")) $("banUrl").value = "";
+    if ($("banNote")) $("banNote").textContent = "Posted to your public binder.";
+    loadBanners();
+  } catch(e) { if ($("banNote")) $("banNote").textContent = e.message; }
+});
+$("banList") && ($("banList").onclick = async ev => {
+  const b = ev.target.closest("[data-ban-del]");
+  if (!b) return;
+  await fetch("/banners/"+b.getAttribute("data-ban-del"), { method:"DELETE", headers:{ "x-token": token() } });
+  loadBanners();
 });
 $("pClearPhoto") && ($("pClearPhoto").onclick = async () => {
   myAvatar = "";
@@ -1851,6 +1966,7 @@ async function postComment(slug, cid, ta, box, note, parentId){
   if (!r.ok) { if (note) note.textContent = t.slice(0,160); return; }
   ta.value = "";
   loadComments(slug, cid, box);
+  refreshNotesBadge();
 }
 $("ownPost") && ($("ownPost").onclick = () => {
   if (mySlug && openId) postComment(mySlug, openId, $("ownBody"), $("ownComments"), $("ownCNote"));
@@ -2047,7 +2163,7 @@ $("followBtn") && ($("followBtn").onclick = async () => {
   if (!viewSlug) return;
   const r = await fetch("/follow/"+encodeURIComponent(viewSlug), { method:"POST", headers:{ "x-token": token() } });
   const d = await r.json().catch(()=>({}));
-  if (r.ok) { following[viewSlug] = !!d.following; paintFollow(); }
+  if (r.ok) { following[viewSlug] = !!d.following; paintFollow(); refreshNotesBadge(); }
 });
 async function refreshNotesBadge(){
   if (!token()) return;
@@ -2078,7 +2194,7 @@ async function refreshNotesBadge(){
     localStorage.setItem("ice-note-unread", String(n));
   } catch(e){}
 }
-setInterval(() => { if (token()) refreshNotesBadge(); }, 40000);
+setInterval(() => { if (token()) refreshNotesBadge(); }, 15000);
 async function loadNotes(){
   const box = $("notesList");
   if (!box) return;
@@ -2110,7 +2226,10 @@ $("likeBtn") && ($("likeBtn").onclick = async () => {
     method:"POST", headers:{ "x-token": token() }
   });
   const d = await r.json().catch(()=>({}));
-  if (r.ok) $("likeBtn").innerHTML = "<span class=\"heart big\">♥ "+(d.likes||0)+"</span> " + (d.liked ? "Liked" : "Like");
+  if (r.ok) {
+    $("likeBtn").innerHTML = "<span class=\"heart big\">♥ "+(d.likes||0)+"</span> " + (d.liked ? "Liked" : "Like");
+    refreshNotesBadge();
+  }
 });
 async function openPublic(slug, cardId){
   viewSlug = slug;
@@ -2121,13 +2240,14 @@ async function openPublic(slug, cardId){
   if (!r.ok) { $("pubHead").textContent = "Binder not found."; show("pub"); return; }
   const d = await r.json();
   $("pubHead").textContent = (d.display||"Collector")+" · "+d.count+" cards · book "+(d.book?money(d.book):"—")+(d.bio?" · "+d.bio:"");
+  if ($("pubBanner")) $("pubBanner").innerHTML = (d.banners||[]).map(b => bannerHtml(b, false)).join("");
   paintFollow();
   paintBinderLike(d.likes||0, false);
   $("likeBinderBtn") && ($("likeBinderBtn").onclick = async () => {
     if (!token()) return;
     const r = await fetch("/u/"+encodeURIComponent(viewSlug)+"/like", { method:"POST", headers:{ "x-token": token() } });
     const j = await r.json().catch(()=>({}));
-    if (r.ok) paintBinderLike(j.likes, j.liked);
+    if (r.ok) { paintBinderLike(j.likes, j.liked); refreshNotesBadge(); }
   });
   pubCards = d.cards || [];
   $("pubList").innerHTML = pubCards.map(c =>
