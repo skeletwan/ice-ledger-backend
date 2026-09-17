@@ -138,6 +138,8 @@
     .binder-hero .bio { margin:0 0 4px; color:var(--text); font-size:14px; }
     .binder-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
     .binder-actions button { width:auto; margin:0; padding:7px 12px; font-size:13px; }
+    .socials { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+    .socials a { color:var(--ice); font-size:13px; font-weight:700; text-decoration:none; }
     .item.reply { margin-left:18px; border-left:2px solid var(--line); }
     .board-post { display:block; border-radius:16px; padding:14px 16px; margin:10px 0 14px; background:#0e171e; border:2px solid var(--ice); }
     .board-post .k { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin:0 0 6px; }
@@ -263,6 +265,7 @@
       <button class="ghost" id="payBtn">Ice+ · $8/mo</button>
       <button class="ghost" id="ripBtn">Rip Night · 20 IDs · $2.99</button>
     </div>
+    <p class="muted" id="plusPitch">Ice+ is $8/mo for 200 IDs and 30 book refreshes. Free is 10 IDs and 8 refreshes. Rip Night is $2.99 for 20 extra IDs on a box night.</p>
     <label>Have a code?</label>
     <div class="row2" style="align-items:end">
       <input id="ripCode" placeholder="RIP-XXXXXX" autocomplete="off" />
@@ -411,6 +414,7 @@
         <h2 id="pubName">Binder</h2>
         <p class="bio" id="pubBio"></p>
         <p class="muted" id="pubHead"></p>
+        <div class="socials" id="pubSocials"></div>
         <div class="binder-actions">
           <button class="ghost" id="followBtn">Follow</button>
           <button class="ghost" id="likeBinderBtn">Like binder · 0</button>
@@ -434,7 +438,6 @@
   <section class="page" id="pubDetail">
     <button class="ghost" id="backPub">Back to binder</button>
     <button class="ghost" id="likeBtn">Like · 0</button>
-    <button class="ghost hidden" id="pubEditBtn">Edit card</button>
     <div class="hero"><img id="pubHero" alt="" /></div>
     <h2 id="pubTitle"></h2>
     <p class="muted" id="pubLine"></p>
@@ -485,6 +488,18 @@
       </div>
       <label>Short bio</label>
       <input id="pBio" maxlength="140" placeholder="Team, era, what you collect" />
+      <label>Instagram</label>
+      <input id="s_instagram" placeholder="@handle or link" />
+      <label>YouTube</label>
+      <input id="s_youtube" placeholder="channel or link" />
+      <label>X</label>
+      <input id="s_x" placeholder="@handle or link" />
+      <label>eBay</label>
+      <input id="s_ebay" placeholder="username or store link" />
+      <label>TikTok</label>
+      <input id="s_tiktok" placeholder="@handle or link" />
+      <label>Website</label>
+      <input id="s_site" placeholder="https://" />
       <button id="pSave">Save profile</button>
       <button class="ghost" id="pClearPhoto">Remove photo</button>
       <p class="muted" id="pNote"></p>
@@ -525,8 +540,8 @@
     <button id="plusBtn">Unlock Ice+ on this account</button>
     <p class="muted" id="plusNote"></p>
     <h3 style="font-size:15px;margin:16px 0 8px">Moderation</h3>
-    <p class="muted">Tap a report to open the photo or comment. Three unique reports hide it. Restore below if people are messing around.</p>
-    <button class="ghost" id="modLoad">Load reports</button>
+    <p class="muted" id="modStats">Load the inbox to see reports. Hide and unhide from each card.</p>
+    <button class="ghost" id="modLoad">Load inbox</button>
     <div id="modList"></div>
     <h3 style="font-size:15px;margin:16px 0 8px">Rip codes</h3>
     <label>IDs on the code</label>
@@ -538,9 +553,20 @@
     <button class="ghost" id="ripMake">Make code</button>
     <p class="muted" id="ripMakeNoteOut"></p>
     <div id="ripCodeList"></div>
-    <h3 style="font-size:15px;margin:16px 0 8px">Accounts</h3>
-    <p class="muted">Email or binder slug of the user.</p>
+    <h3 style="font-size:15px;margin:16px 0 8px">Look up a user</h3>
+    <p class="muted">Email or binder slug.</p>
     <input id="modUser" placeholder="email or slug" />
+    <button class="ghost" id="modLookup">Look up</button>
+    <div id="modUserCard"></div>
+    <div class="row2">
+      <button class="ghost" id="modHidePhoto">Hide photo</button>
+      <button class="ghost" id="modShowPhoto">Unhide photo</button>
+    </div>
+    <div class="row2">
+      <button class="ghost" id="modHideComments">Hide their comments</button>
+      <button class="ghost" id="modShowComments">Unhide their comments</button>
+    </div>
+    <button class="ghost" id="modClearBanner">Remove banner</button>
     <div class="row2">
       <button class="ghost" id="modSuspend">Suspend</button>
       <button class="ghost" id="modUnsuspend">Unsuspend</button>
@@ -1719,13 +1745,20 @@ $("modLoad") && ($("modLoad").onclick = async () => {
   const t = await r.text();
   if (!r.ok) { box.textContent = t.slice(0,160); return; }
   const d = JSON.parse(t);
+  if ($("modStats") && d.stats) {
+    $("modStats").textContent = d.stats.users+" accounts · "+d.stats.suspended+" suspended · "+d.stats.reports+" reports in view · "+d.stats.hidden_photos+" hidden photos · "+d.stats.hidden_comments+" hidden comments";
+  }
   const reports = (d.reports||[]).map(x => {
     const kind = x.kind || "photo";
     const label = kind==="comment" ? "Comment" : "Photo";
+    const hidden = x.hidden ? " · hidden now" : "";
+    const why = String(x.why||x.reason||"").replace(/[<>]/g,"");
+    const prev = String(x.preview||"").replace(/[<>]/g,"");
+    const who = String(x.reporter_name||"")+" "+String(x.reporter_email||"");
     const hide = kind==="comment"
-      ? "<button class=\"ghost\" data-hide-comment=\""+(x.comment_id||"")+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Hide comment</button>"
-      : "<button class=\"ghost\" data-hide-photo=\""+(x.slug||"")+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Hide photo</button>";
-    return "<div class=\"item\" data-review-kind=\""+kind+"\" data-review-slug=\""+(x.slug||"")+"\" data-review-card=\""+(x.card_id||"")+"\"><b>"+label+" · "+(x.slug||"")+"</b> <span class=\"muted\">"+(x.created||"").slice(0,16)+"</span><p style=\"margin:6px 0 0\">"+String(x.preview||x.reason||"").replace(/[<>]/g,"")+"</p><button class=\"ghost\" data-open-report=\"1\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Review</button>"+hide+"</div>";
+      ? "<button class=\"ghost\" data-hide-comment=\""+(x.comment_id||"")+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Hide</button><button class=\"ghost\" data-restore-comment=\""+(x.comment_id||"")+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Unhide</button>"
+      : "<button class=\"ghost\" data-hide-photo=\""+(x.slug||"")+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Hide</button><button class=\"ghost\" data-restore-photo=\""+(x.slug||"")+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Unhide</button>";
+    return "<div class=\"item\" data-review-kind=\""+kind+"\" data-review-slug=\""+(x.slug||"")+"\" data-review-card=\""+(x.card_id||"")+"\"><b>"+label+" · "+(x.slug||"")+hidden+"</b> <span class=\"muted\">"+(x.created||"").slice(0,16)+" · "+(x.report_n||1)+" report(s)</span><p style=\"margin:6px 0 0\"><b>Why: </b>"+why+"</p><p class=\"muted\" style=\"margin:4px 0 0\">From "+who+"</p><p style=\"margin:6px 0 0\">"+prev+"</p><button class=\"ghost\" data-open-report=\"1\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Review</button>"+hide+"<button class=\"ghost\" data-dismiss-report=\""+x.id+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Dismiss</button></div>";
   }).join("") || "<p class=\"muted\">No reports yet.</p>";
   const photos = (d.hidden_photos||[]).map(x =>
     "<div class=\"item\" data-review-kind=\"photo\" data-review-slug=\""+x.slug+"\"><b>Photo · "+(x.display||x.slug)+"</b><button class=\"ghost\" data-open-report=\"1\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Review</button><button class=\"ghost\" data-restore-photo=\""+x.slug+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Restore photo</button></div>"
@@ -1745,6 +1778,12 @@ $("modList") && ($("modList").onclick = async ev => {
     const kind = row.getAttribute("data-review-kind");
     if (kind === "photo" && slug) { showFull("/u/"+slug+"/avatar", slug); return; }
     if (slug) { openPublic(slug, card || null); return; }
+    return;
+  }
+  const ds = ev.target.closest("[data-dismiss-report]");
+  if (ds) {
+    await fetch("/admin/dismiss-report", { method:"POST", headers:{ "Content-Type":"application/json", "x-token": token() }, body: JSON.stringify({ id: +ds.getAttribute("data-dismiss-report") }) });
+    if ($("modLoad")) $("modLoad").click();
     return;
   }
   const hp = ev.target.closest("[data-hide-photo]");
@@ -1834,16 +1873,43 @@ async function loadRipCodes(){
     "<div class=\"item\" style=\"cursor:default\"><b>"+c.code+"</b> · "+c.scans+" IDs · "+c.used+"/"+c.max_uses+" used"+(c.note?" · "+c.note:"")+"</div>"
   ).join("") || "<p class=\"muted\">No codes yet.</p>";
 }
+let lastModSlug = "";
 async function modAccount(path, extra){
   const raw = (($("modUser")&&$("modUser").value)||"").trim();
   const body = Object.assign({}, extra||{});
   if (raw.indexOf("@")>=0) body.email = raw.toLowerCase();
-  else body.slug = raw.toLowerCase();
+  else body.slug = raw.toLowerCase().replace(/[^a-z0-9]/g,"");
+  if (lastModSlug) body.slug = lastModSlug;
   const r = await fetch(path, { method:"POST", headers:{ "Content-Type":"application/json", "x-token": token() }, body: JSON.stringify(body) });
   const t = await r.text();
   if (!r.ok) throw new Error(t.slice(0,160));
   return JSON.parse(t||"{}");
 }
+$("modLookup") && ($("modLookup").onclick = async () => {
+  const q = (($("modUser")&&$("modUser").value)||"").trim();
+  try {
+    const r = await fetch("/admin/lookup?q="+encodeURIComponent(q), { headers:{ "x-token": token() } });
+    const t = await r.text();
+    if (!r.ok) throw new Error(t.slice(0,160));
+    const d = JSON.parse(t);
+    const ban = d.banner ? (d.banner.title||"banner") : "none";
+    $("modUserCard").innerHTML = "<div class=\"item\" style=\"cursor:default\"><b>"+(d.display||d.slug||"")+"</b><div class=\"muted\">"+d.email+" · /"+d.slug+"</div><div class=\"muted\">Joined "+String(d.created||"").slice(0,10)+" · "+(d.plan||"free")+" · "+(d.suspended?"SUSPENDED":"active")+"</div><div class=\"muted\">"+d.cards+" cards · "+d.comments+" comments ("+d.hidden_comments+" hidden) · "+d.reports+" reports · photo "+(d.avatar_hidden?"hidden":(d.has_avatar?"on":"none"))+" · banner "+ban+"</div></div>";
+    lastModSlug = d.slug || "";
+    $("modUserNote").textContent = "Loaded. Use hide / unhide / suspend below.";
+  } catch(e) { $("modUserNote").textContent = e.message; if ($("modUserCard")) $("modUserCard").innerHTML = ""; }
+});
+async function modUserAction(path, extra){
+  const d = await modAccount(path, extra||{});
+  $("modUserNote").textContent = "Done.";
+  if ($("modLookup")) $("modLookup").click();
+  if ($("modLoad")) $("modLoad").click();
+  return d;
+}
+$("modHidePhoto") && ($("modHidePhoto").onclick = () => modUserAction("/admin/hide-photo").catch(e => $("modUserNote").textContent = e.message));
+$("modShowPhoto") && ($("modShowPhoto").onclick = () => modUserAction("/admin/restore-photo").catch(e => $("modUserNote").textContent = e.message));
+$("modHideComments") && ($("modHideComments").onclick = () => modUserAction("/admin/hide-user-comments", { on:true }).catch(e => $("modUserNote").textContent = e.message));
+$("modShowComments") && ($("modShowComments").onclick = () => modUserAction("/admin/hide-user-comments", { on:false }).catch(e => $("modUserNote").textContent = e.message));
+$("modClearBanner") && ($("modClearBanner").onclick = () => modUserAction("/admin/clear-banner").catch(e => $("modUserNote").textContent = e.message));
 $("modSuspend") && ($("modSuspend").onclick = async () => {
   try { const d = await modAccount("/admin/suspend", { on:true }); $("modUserNote").textContent = "Suspended "+(d.email||d.slug); }
   catch(e){ $("modUserNote").textContent = e.message; }
@@ -2007,6 +2073,8 @@ async function loadMe(){
     if ($("pDisplay")) $("pDisplay").value = d.display || "";
     if ($("pHue") && d.hue) $("pHue").value = d.hue;
     if ($("pBio")) $("pBio").value = d.bio || "";
+    const so = d.socials || {};
+    ["instagram","youtube","x","ebay","tiktok","site"].forEach(k => { if ($("s_"+k)) $("s_"+k).value = so[k] || ""; });
     if ($("pCropX")) $("pCropX").value = d.cropx || "50";
     if ($("pCropY")) $("pCropY").value = d.cropy || "50";
     if ($("pCropZ")) $("pCropZ").value = d.cropz || "100";
@@ -2046,7 +2114,7 @@ $("pSave") && ($("pSave").onclick = async () => {
     const r = await fetch("/profile", {
       method:"POST",
       headers:{ "Content-Type":"application/json", "x-token": token() },
-      body: JSON.stringify({ display:$("pDisplay").value, hue:$("pHue").value, bio:$("pBio").value, avatar: myAvatar, cropx:$("pCropX")&&$("pCropX").value, cropy:$("pCropY")&&$("pCropY").value, cropz:$("pCropZ")&&$("pCropZ").value })
+      body: JSON.stringify({ display:$("pDisplay").value, hue:$("pHue").value, bio:$("pBio").value, avatar: myAvatar, cropx:$("pCropX")&&$("pCropX").value, cropy:$("pCropY")&&$("pCropY").value, cropz:$("pCropZ")&&$("pCropZ").value, socials:{ instagram:$("s_instagram")&&$("s_instagram").value, youtube:$("s_youtube")&&$("s_youtube").value, x:$("s_x")&&$("s_x").value, ebay:$("s_ebay")&&$("s_ebay").value, tiktok:$("s_tiktok")&&$("s_tiktok").value, site:$("s_site")&&$("s_site").value } })
     });
     const t = await r.text();
     if (!r.ok) throw new Error(t.slice(0,160));
@@ -2232,17 +2300,7 @@ function openPubCard(c){
   paintCardSpark(c, "pubSpark", "pubTrendNote");
   loadComments(viewSlug, c.id, $("pubComments"));
   paintLike();
-  if ($("pubEditBtn")) {
-    const mine = token() && mySlug && viewSlug === mySlug && load().some(x => x.id === c.id);
-    $("pubEditBtn").classList.toggle("hidden", !mine);
-  }
 }
-$("pubEditBtn") && ($("pubEditBtn").onclick = () => {
-  if (!viewCard) return;
-  openId = viewCard.id;
-  fillEdit();
-  show("edit");
-});
 let findCache = [];
 let following = {};
 let onlyFollow = false;
@@ -2537,6 +2595,13 @@ async function openPublic(slug, cardId){
     $("pubBio").style.display = d.bio ? "block" : "none";
   }
   $("pubHead").textContent = d.count+" cards · book "+(d.book?money(d.book):"—");
+  const labs = { instagram:"Instagram", youtube:"YouTube", x:"X", ebay:"eBay", tiktok:"TikTok", site:"Site" };
+  const so = d.socials || {};
+  if ($("pubSocials")) {
+    $("pubSocials").innerHTML = Object.keys(labs).filter(k => so[k]).map(k =>
+      "<a href=\""+String(so[k]).replace(/"/g,"")+"\" target=\"_blank\" rel=\"noopener\">"+labs[k]+"</a>"
+    ).join("");
+  }
   if ($("pubAva")) {
     const ini = name.slice(0,2).toUpperCase();
     $("pubAva").style.borderColor = hue;

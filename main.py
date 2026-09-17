@@ -618,7 +618,7 @@ def init_db():
         con.execute("ALTER TABLE users ADD COLUMN slug TEXT")
     except sqlite3.OperationalError:
         pass
-    for col, spec in (("display", "TEXT"), ("hue", "TEXT"), ("bio", "TEXT"), ("avatar", "TEXT"), ("cropx", "TEXT"), ("cropy", "TEXT"), ("cropz", "TEXT"), ("avatar_hidden", "INTEGER NOT NULL DEFAULT 0"), ("credits", "INTEGER NOT NULL DEFAULT 0"), ("suspended", "INTEGER NOT NULL DEFAULT 0")):
+    for col, spec in (("display", "TEXT"), ("hue", "TEXT"), ("bio", "TEXT"), ("avatar", "TEXT"), ("cropx", "TEXT"), ("cropy", "TEXT"), ("cropz", "TEXT"), ("avatar_hidden", "INTEGER NOT NULL DEFAULT 0"), ("credits", "INTEGER NOT NULL DEFAULT 0"), ("suspended", "INTEGER NOT NULL DEFAULT 0"), ("socials", "TEXT")):
         try:
             con.execute(f"ALTER TABLE users ADD COLUMN {col} {spec}")
         except sqlite3.OperationalError:
@@ -1484,7 +1484,7 @@ async def me(request: Request, x_token: str | None = Header(default=None)):
     uid = require_user(request, x_token)
     slug = ensure_slug(uid)
     con = db()
-    row = con.execute("SELECT email,display,hue,bio,avatar,cropx,cropy,cropz FROM users WHERE id=?", (uid,)).fetchone()
+    row = con.execute("SELECT email,display,hue,bio,avatar,cropx,cropy,cropz,socials FROM users WHERE id=?", (uid,)).fetchone()
     con.close()
     return {
         "slug": slug,
@@ -1497,6 +1497,7 @@ async def me(request: Request, x_token: str | None = Header(default=None)):
         "cropx": (row["cropx"] if row else None) or "50",
         "cropy": (row["cropy"] if row else None) or "50",
         "cropz": (row["cropz"] if row else None) or "100",
+        "socials": parse_socials(row["socials"] if row else ""),
     }
 
 @app.post("/profile")
@@ -1513,22 +1514,23 @@ async def save_profile(payload: dict, request: Request, x_token: str | None = He
     cropx = str(payload.get("cropx") or "50")[:4]
     cropy = str(payload.get("cropy") or "50")[:4]
     cropz = str(payload.get("cropz") or "100")[:4]
+    socials = parse_socials(payload.get("socials") or {})
     if not display:
         raise HTTPException(400, "pick a screen name")
     con = db()
     con.execute(
-        "UPDATE users SET display=?, hue=?, bio=?, avatar=?, cropx=?, cropy=?, cropz=? WHERE id=?",
-        (display, hue, bio, avatar, cropx, cropy, cropz, uid),
+        "UPDATE users SET display=?, hue=?, bio=?, avatar=?, cropx=?, cropy=?, cropz=?, socials=? WHERE id=?",
+        (display, hue, bio, avatar, cropx, cropy, cropz, json.dumps(socials), uid),
     )
     con.commit()
     con.close()
-    return {"ok": True, "display": display, "hue": hue, "bio": bio, "avatar": avatar}
+    return {"ok": True, "display": display, "hue": hue, "bio": bio, "avatar": avatar, "socials": socials}
 
 @app.get("/u/{slug}")
 async def public_binder(slug: str):
     slug = re.sub(r"[^a-z0-9]", "", (slug or "").lower())
     con = db()
-    u = con.execute("SELECT id,display,hue,bio,avatar,avatar_hidden,cropx,cropy,cropz,IFNULL(suspended,0) AS suspended FROM users WHERE slug=?", (slug,)).fetchone()
+    u = con.execute("SELECT id,display,hue,bio,avatar,avatar_hidden,cropx,cropy,cropz,socials,IFNULL(suspended,0) AS suspended FROM users WHERE slug=?", (slug,)).fetchone()
     if not u or int(u["suspended"] or 0):
         con.close()
         raise HTTPException(404, "binder not found")
@@ -1552,6 +1554,7 @@ async def public_binder(slug: str):
         "display": u["display"] or "Collector",
         "hue": u["hue"] or "#8fd4ee",
         "bio": u["bio"] or "",
+        "socials": parse_socials(u["socials"] if "socials" in u.keys() else ""),
         "avatar": "" if int(u["avatar_hidden"] or 0) else (u["avatar"] or ""),
         "cropx": u["cropx"] or "50",
         "cropy": u["cropy"] or "50",
@@ -1574,6 +1577,38 @@ def _clean_banner_url(url: str) -> str:
         return ""
     return url[:300]
 
+SOCIAL_KEYS = ("instagram", "youtube", "x", "ebay", "tiktok", "site")
+SOCIAL_PREFIX = {
+    "instagram": "https://instagram.com/",
+    "youtube": "https://youtube.com/",
+    "x": "https://x.com/",
+    "ebay": "https://www.ebay.com/usr/",
+    "tiktok": "https://www.tiktok.com/@",
+    "site": "https://",
+}
+
+def parse_socials(raw) -> dict:
+    data = {}
+    if isinstance(raw, str) and raw.strip():
+        try:
+            raw = json.loads(raw)
+        except Exception:
+            raw = {}
+    if not isinstance(raw, dict):
+        raw = {}
+    for k in SOCIAL_KEYS:
+        v = (raw.get(k) or "").strip()
+        if not v:
+            continue
+        v = v.split()[0]
+        if v.startswith("@"):
+            v = v[1:]
+        if not re.match(r"^https?://", v, re.I):
+            v = SOCIAL_PREFIX[k] + v.lstrip("/")
+        v = _clean_banner_url(v)
+        if v:
+            data[k] = v[:200]
+    return data
 
 @app.get("/banners")
 async def my_banners(request: Request, x_token: str | None = Header(default=None)):
@@ -1763,33 +1798,55 @@ async def admin_inbox(request: Request, secret: str = "", x_token: str | None = 
         "SELECT slug, display FROM users WHERE IFNULL(avatar_hidden,0)=1 AND slug IS NOT NULL AND slug != ''"
     ).fetchall()
     comments = con.execute(
-        "SELECT id, slug, card_id, body FROM comments WHERE IFNULL(hidden,0)=1 ORDER BY id DESC LIMIT 80"
+        "SELECT id, slug, card_id, body, user_id FROM comments WHERE IFNULL(hidden,0)=1 ORDER BY id DESC LIMIT 80"
     ).fetchall()
     reports = []
     for r in rows:
         item = dict(r)
         reason = item.get("reason") or ""
+        rep = con.execute("SELECT email, display, slug FROM users WHERE id=?", (item.get("reporter"),)).fetchone()
+        item["reporter_email"] = (rep["email"] if rep else "") or ""
+        item["reporter_name"] = (rep["display"] if rep else "") or (rep["slug"] if rep else "") or ("user "+str(item.get("reporter")))
         if reason.startswith("comment:"):
-            raw = reason[8:].split("|", 1)[0]
+            parts = reason[8:].split("|", 1)
             try:
-                cid = int(raw)
+                cid = int(parts[0])
             except Exception:
                 cid = 0
+            why = parts[1] if len(parts) > 1 else reason
             item["kind"] = "comment"
             item["comment_id"] = cid
-            rowc = con.execute("SELECT slug, card_id, body FROM comments WHERE id=?", (cid,)).fetchone()
+            item["why"] = why
+            rowc = con.execute("SELECT slug, card_id, body, IFNULL(hidden,0) AS hidden FROM comments WHERE id=?", (cid,)).fetchone()
             if rowc:
                 item["slug"] = rowc["slug"]
                 item["card_id"] = rowc["card_id"]
                 item["preview"] = rowc["body"]
+                item["hidden"] = int(rowc["hidden"] or 0)
+            item["report_n"] = con.execute(
+                "SELECT COUNT(DISTINCT reporter) AS n FROM reports WHERE reason LIKE ?",
+                (f"comment:{cid}|%",),
+            ).fetchone()["n"]
         else:
             item["kind"] = "photo"
+            item["why"] = reason
+            tgt = con.execute("SELECT display, IFNULL(avatar_hidden,0) AS hidden FROM users WHERE slug=?", (item.get("slug"),)).fetchone()
+            item["target_name"] = (tgt["display"] if tgt else "") or item.get("slug")
+            item["hidden"] = int(tgt["hidden"] if tgt else 0)
+            item["preview"] = "Profile photo · "+(item.get("slug") or "")
+            item["report_n"] = con.execute(
+                "SELECT COUNT(DISTINCT reporter) AS n FROM reports WHERE slug=? AND reason NOT LIKE 'comment:%'",
+                (item.get("slug"),),
+            ).fetchone()["n"]
         reports.append(item)
+    users_n = con.execute("SELECT COUNT(*) AS n FROM users").fetchone()["n"]
+    sus_n = con.execute("SELECT COUNT(*) AS n FROM users WHERE IFNULL(suspended,0)=1").fetchone()["n"]
     con.close()
     return {
         "reports": reports,
         "hidden_photos": [dict(r) for r in photos],
         "hidden_comments": [dict(r) for r in comments],
+        "stats": {"users": users_n, "suspended": sus_n, "reports": len(reports), "hidden_photos": len(photos), "hidden_comments": len(comments)},
     }
 
 @app.post("/admin/restore-photo")
@@ -1824,6 +1881,90 @@ async def admin_hide(payload: dict, request: Request, x_token: str | None = Head
     con.close()
     send_mail("Ice Ledger comment hidden", f"Comment {cid} hidden by operator")
     return {"ok": True}
+
+@app.post("/admin/dismiss-report")
+async def admin_dismiss(payload: dict, request: Request, x_token: str | None = Header(default=None)):
+    require_operator(request, x_token)
+    rid = int(payload.get("id") or 0)
+    con = db()
+    con.execute("DELETE FROM reports WHERE id=?", (rid,))
+    con.commit()
+    con.close()
+    return {"ok": True}
+
+@app.get("/admin/lookup")
+async def admin_lookup(q: str = "", request: Request = None, x_token: str | None = Header(default=None)):
+    require_operator(request, x_token)
+    raw = (q or "").strip().lower()
+    if not raw:
+        raise HTTPException(400, "email or slug")
+    con = db()
+    row = None
+    if "@" in raw:
+        row = con.execute("SELECT * FROM users WHERE email=?", (raw,)).fetchone()
+    if not row:
+        slug = re.sub(r"[^a-z0-9]", "", raw)
+        row = con.execute("SELECT * FROM users WHERE slug=?", (slug,)).fetchone()
+    if not row:
+        con.close()
+        raise HTTPException(404, "no user with that email or slug")
+    uid = row["id"]
+    slug = row["slug"] or ""
+    cards = con.execute("SELECT COUNT(*) AS n FROM cards WHERE user_id=?", (uid,)).fetchone()["n"]
+    comments = con.execute("SELECT COUNT(*) AS n FROM comments WHERE user_id=?", (uid,)).fetchone()["n"]
+    hidden_c = con.execute("SELECT COUNT(*) AS n FROM comments WHERE user_id=? AND IFNULL(hidden,0)=1", (uid,)).fetchone()["n"]
+    reports = con.execute("SELECT COUNT(*) AS n FROM reports WHERE slug=?", (slug,)).fetchone()["n"] if slug else 0
+    ban = con.execute("SELECT id,title,body,url,color FROM banner_posts WHERE user_id=? ORDER BY id DESC LIMIT 1", (uid,)).fetchone()
+    plan = plan_of(uid)
+    usage = usage_of(uid)
+    con.close()
+    return {
+        "id": uid,
+        "email": row["email"],
+        "slug": slug,
+        "display": row["display"] or "",
+        "created": row["created"] or "",
+        "suspended": int(row["suspended"] or 0) if "suspended" in row.keys() else 0,
+        "avatar_hidden": int(row["avatar_hidden"] or 0) if "avatar_hidden" in row.keys() else 0,
+        "has_avatar": bool(row["avatar"]),
+        "plan": plan,
+        "usage": usage,
+        "cards": cards,
+        "comments": comments,
+        "hidden_comments": hidden_c,
+        "reports": reports,
+        "banner": dict(ban) if ban else None,
+    }
+
+@app.post("/admin/clear-banner")
+async def admin_clear_banner(payload: dict, request: Request, x_token: str | None = Header(default=None)):
+    require_operator(request, x_token)
+    slug = re.sub(r"[^a-z0-9]", "", (payload.get("slug") or "").lower())
+    con = db()
+    u = con.execute("SELECT id FROM users WHERE slug=?", (slug,)).fetchone()
+    if not u:
+        con.close()
+        raise HTTPException(404, "binder not found")
+    con.execute("DELETE FROM banner_posts WHERE user_id=?", (u["id"],))
+    con.commit()
+    con.close()
+    send_mail("Ice Ledger banner removed", f"Banner cleared for {slug}")
+    return {"ok": True}
+
+@app.post("/admin/hide-user-comments")
+async def admin_hide_user_comments(payload: dict, request: Request, x_token: str | None = Header(default=None)):
+    require_operator(request, x_token)
+    on = 1 if payload.get("on", True) else 0
+    slug = re.sub(r"[^a-z0-9]", "", (payload.get("slug") or "").lower())
+    con = db()
+    u = con.execute("SELECT id FROM users WHERE slug=?", (slug,)).fetchone()
+    if not u:
+        con.close()
+        raise HTTPException(404, "binder not found")
+    con.execute("UPDATE comments SET hidden=? WHERE user_id=?", (on, u["id"]))
+    con.commit()
+    con.close()
+    return {"ok": True, "hidden": bool(on)}
 
 @app.post("/admin/hide-photo")
 async def admin_hide_photo(payload: dict, request: Request, x_token: str | None = Header(default=None)):
