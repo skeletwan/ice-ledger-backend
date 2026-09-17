@@ -90,9 +90,19 @@
     .val span { font-size:11px; color:var(--muted); text-transform:uppercase; }
     .item { cursor:pointer; }
     .stick { background:var(--bg); padding:0 0 10px; }
-    body.bind-on .yf, body.bind-on .ticker, body.bind-on .fxbar { display:none; }
-    body.bind-on header { position:sticky; top:0; z-index:8; background:#071016; }
+    .quote-wrap { display:none; }
+    body.chart-on .quote-wrap { display:block; }
+    header { position:sticky; top:0; z-index:8; background:#071016; }
     body.bind-on .stick { position:sticky; top:52px; z-index:7; padding:8px 16px 10px; margin:0 -16px; background:#071016; border-bottom:1px solid var(--line); }
+    .bookbar { display:none; padding:10px 0 4px; }
+    body.bind-on .bookbar { display:block; }
+    .bookbar button { width:100%; text-align:left; background:#121c26; border:1px solid var(--line); border-radius:12px; padding:10px 12px; }
+    .bookbar b { font-size:22px; }
+    .dock { position:fixed; left:0; right:0; bottom:0; z-index:20; display:none; grid-template-columns:repeat(4,1fr); gap:0; background:#0c141b; border-top:1px solid var(--line); padding:6px 4px calc(6px + env(safe-area-inset-bottom)); }
+    body.dock-on .dock { display:grid; }
+    .dock button { width:auto; margin:0; padding:10px 4px; font-size:12px; background:transparent; color:var(--muted); border:0; border-radius:0; }
+    .dock button.on { color:var(--ice); }
+    .page { padding-bottom:88px; }
     .backrow { display:flex; gap:8px; }
     .backrow button { width:auto; flex:1; }
     .shot { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; min-height:108px; margin-top:0; padding:16px 10px; background:linear-gradient(180deg,#182833,#101820); border:1px dashed #3d5a6a; border-radius:14px; color:var(--text); font-weight:700; font-size:14px; text-align:center; cursor:pointer; }
@@ -135,6 +145,10 @@
     </div>
   </section>
   <div id="appShell" class="hidden">
+  <header>
+    <h1>Ice <span>Ledger</span></h1>
+  </header>
+  <div class="quote-wrap" id="quoteWrap">
   <div class="fxbar">
     <button class="ghost fx" id="fxCAD" data-fx="CAD">CAD</button>
     <button class="ghost fx" id="fxUSD" data-fx="USD">USD</button>
@@ -152,16 +166,7 @@
     <button data-r="ALL">MAX</button>
   </div>
   </div>
-  <header>
-    <h1>Ice <span>Ledger</span></h1>
-    <nav>
-      <button class="ghost" id="tabScan">Scan</button>
-      <button class="ghost" id="tabBind">Binder</button>
-      <button class="ghost" id="tabFind">Find</button>
-      <button class="ghost" id="tabSet">Alerts</button>
-      <button class="ghost" id="logoutBtn">Get out</button>
-    </nav>
-  </header>
+  </div>
 
   <section class="page on" id="scanPage">
     <p class="muted">Front and back photos. Identify files the card.</p>
@@ -235,6 +240,7 @@
   </section>
 
   <section class="page" id="bindPage">
+    <div class="bookbar" id="bookBar"></div>
     <p class="muted" id="valueNote"></p>
     <div class="stick" id="searchStick">
     <input id="q" placeholder="Search binder…" />
@@ -281,7 +287,9 @@
     <p class="status" id="pubCStatus"></p>
   </section>
   <section class="page" id="setPage">
-    <h2 style="font-size:18px;margin:0 0 8px">Alerts</h2>
+    <h2 style="font-size:18px;margin:0 0 8px">You</h2>
+    <p class="muted">Plan, alerts, sign out.</p>
+    <h3 style="font-size:15px;margin:16px 0 8px">Alerts</h3>
     <p class="muted">Daily binder ping at a time you pick. Also fires if book value jumps while the app is open. iPhone only does this reliably if Ice Ledger is on the Home Screen and you granted notifications.</p>
     <label><input id="nOn" type="checkbox" style="width:auto;margin-right:8px" /> Notify me</label>
     <label>Time of day</label>
@@ -289,6 +297,7 @@
     <label><input id="nJump" type="checkbox" style="width:auto;margin-right:8px" checked /> Also tell me when book value goes up</label>
     <button id="nSave">Save & allow notifications</button>
     <p class="status" id="nStatus"></p>
+    <button class="ghost" id="logoutBtn">Get out</button>
   </section>
   <section class="page" id="detailPage">
     <div class="backrow">
@@ -366,6 +375,12 @@
     <label>Notes</label><textarea id="e_notes" rows="2"></textarea>
     <button id="saveEdit">Save changes</button>
   </section>
+  <nav class="dock" id="dock">
+    <button id="tabScan">Scan</button>
+    <button id="tabBind">Binder</button>
+    <button id="tabFind">Find</button>
+    <button id="tabSet">You</button>
+  </nav>
   </div>
 
 <script>
@@ -378,6 +393,7 @@ function showApp(){
   $("authPage").classList.remove("on");
   $("authPage").classList.add("hidden");
   $("appShell").classList.remove("hidden");
+  document.body.classList.add("dock-on");
   paintTicker(); renderBinder(); refreshUsage(); loadNotePrefs(); scheduleDaily(); loadMe();
 }
 function niceErr(raw){
@@ -456,8 +472,12 @@ function pushHist(bookCad){
   const h = loadHist();
   const day = new Date().toISOString().slice(0,10);
   const last = h[h.length-1];
-  if (last && last.d === day) last.v = bookCad;
-  else h.push({ d: day, v: bookCad });
+  if (last && last.d === day && Math.abs((+last.v||0) - bookCad) < 0.5) {
+    last.v = bookCad;
+    last.t = new Date().toISOString();
+  } else {
+    h.push({ d: day, v: bookCad, t: new Date().toISOString() });
+  }
   localStorage.setItem(HIST, JSON.stringify(h.slice(-400)));
 }
 function histForRange(){
@@ -527,7 +547,12 @@ function show(id){
   if ($("findPage")) $("findPage").classList.toggle("on", id==="find");
   if (id==="bind") renderBinder();
   if (id==="find") loadFind();
-  document.body.classList.toggle("bind-on", id==="bind" || id==="pub" || id==="find");
+  document.body.classList.toggle("bind-on", id==="bind");
+  document.body.classList.toggle("dock-on", true);
+  document.body.classList.toggle("chart-on", id==="bind" && document.body.classList.contains("chart-open"));
+  ["tabScan","tabBind","tabFind","tabSet"].forEach(tid => {
+    if ($(tid)) $(tid).classList.toggle("on", (tid==="tabScan"&&id==="scan")||(tid==="tabBind"&&(id==="bind"||id==="detail"||id==="edit"))||(tid==="tabFind"&&(id==="find"||id==="pub"||id==="pubDetail"))||(tid==="tabSet"&&id==="set"));
+  });
   window.scrollTo(0,0);
 }
 $("tabScan").onclick = () => show("scan");
@@ -579,6 +604,17 @@ function paintTicker(){
     "<div class=\"qs\"><b>"+(t.paidN?money(t.paid):"—")+"</b><span>Paid · "+t.paidN+"/"+t.cards+"</span></div>"+
     "<div class=\"qs\"><b class=\""+plCls+"\">"+(t.pl==null?"—":((t.pl>=0?"+":"")+money(Math.abs(t.pl))))+"</b><span>Up / down</span></div>"+
     "</div>";
+  if ($("bookBar")) {
+    const pts = slice.map(x=>x.v);
+    const flat = pts.length < 2 || Math.max.apply(null,pts) === Math.min.apply(null,pts);
+    $("bookBar").innerHTML = "<button type=\"button\" id=\"openChart\"><b>"+last+"</b> · "+(chTxt==="—"?"no day change yet":chTxt)+
+      "<div class=\"muted\">"+(flat?"Chart is flat until book changes (refresh or another day). Tap for chart.":"Tap for chart")+"</div></button>";
+    const ob = $("openChart");
+    if (ob) ob.onclick = () => {
+      document.body.classList.toggle("chart-open");
+      document.body.classList.toggle("chart-on", $("bindPage").classList.contains("on") && document.body.classList.contains("chart-open"));
+    };
+  }
   if ($("fxCAD")) {
     $("fxCAD").classList.toggle("on", fx()==="CAD");
     $("fxUSD").classList.toggle("on", fx()==="USD");
