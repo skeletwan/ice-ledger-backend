@@ -159,6 +159,9 @@
           <label>New password</label>
           <input id="resetPw" type="password" autocomplete="new-password" />
           <button id="resetBtn">Set new password</button>
+          <label>Ice+ secret (mail test only)</label>
+          <input id="mailTestSecret" type="password" autocomplete="off" />
+          <button class="ghost" id="mailTestBtn">Send test email now</button>
         </div>
         <p class="status" id="authStatus"></p>
       </div>
@@ -1457,8 +1460,22 @@ $("showReset").onclick = ev => {
 };
 $("resetSend") && ($("resetSend").onclick = async () => {
   try {
-    await authPost("/reset", { email: $("email").value });
-    flash("authStatus", "ok", "If that email has an account, a code is on the way.");
+    const body = { email: $("email").value };
+    if ($("mailTestSecret") && $("mailTestSecret").value) body.secret = $("mailTestSecret").value;
+    const d = await authPost("/reset", body);
+    if (d && d.found === false) flash("authStatus", "err", "No account uses that email. Use the address that said already in use.");
+    else if (d && d.mailed === false) flash("authStatus", "err", d.error || "Mail did not send. Check MAIL_FROM / Resend.");
+    else flash("authStatus", "ok", "If that email has an account, a code is on the way.");
+  } catch(e) { flash("authStatus", "err", e.message); }
+});
+$("mailTestBtn") && ($("mailTestBtn").onclick = async () => {
+  try {
+    const d = await authPost("/mail-test", {
+      secret: ($("mailTestSecret") && $("mailTestSecret").value) || "",
+      email: $("email").value || "iceledger@outlook.com"
+    });
+    if (d && d.ok) flash("authStatus", "ok", "Test sent to " + d.to + ". Check that inbox and Resend → Emails.");
+    else flash("authStatus", "err", (d && d.error) || "Test did not send.");
   } catch(e) { flash("authStatus", "err", e.message); }
 });
 $("resetBtn").onclick = async () => {
