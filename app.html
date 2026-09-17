@@ -262,10 +262,9 @@
   <section class="page on" id="scanPage">
     <div class="status" id="quotaBox">Free plan: 10 IDs / month. Ice+ is 200. Rip Night is 20 extra IDs.</div>
     <div class="row2">
-      <button class="ghost" id="payBtn">Ice+ · $8/mo</button>
-      <button class="ghost" id="ripBtn">Rip Night · 20 IDs · $2.99</button>
+      <button class="ghost" id="payBtn">Ice+ · $8/mo · 200 IDs + 30 refreshes</button>
+      <button class="ghost" id="ripBtn">Rip Night · $2.99 · 20 IDs</button>
     </div>
-    <p class="muted" id="plusPitch">Ice+ is $8/mo for 200 IDs and 30 book refreshes. Free is 10 IDs and 8 refreshes. Rip Night is $2.99 for 20 extra IDs on a box night.</p>
     <label>Have a code?</label>
     <div class="row2" style="align-items:end">
       <input id="ripCode" placeholder="RIP-XXXXXX" autocomplete="off" />
@@ -488,18 +487,22 @@
       </div>
       <label>Short bio</label>
       <input id="pBio" maxlength="140" placeholder="Team, era, what you collect" />
-      <label>Instagram</label>
-      <input id="s_instagram" placeholder="@handle or link" />
-      <label>YouTube</label>
-      <input id="s_youtube" placeholder="channel or link" />
-      <label>X</label>
-      <input id="s_x" placeholder="@handle or link" />
-      <label>eBay</label>
-      <input id="s_ebay" placeholder="username or store link" />
-      <label>TikTok</label>
-      <input id="s_tiktok" placeholder="@handle or link" />
-      <label>Website</label>
-      <input id="s_site" placeholder="https://" />
+      <button class="ghost" type="button" id="socialsToggle">Social links</button>
+      <div id="socialsBox" class="hidden">
+        <p class="muted">Shown on your public binder. Handle or full link.</p>
+        <label>Instagram</label>
+        <input id="s_instagram" placeholder="@handle or link" />
+        <label>YouTube</label>
+        <input id="s_youtube" placeholder="channel or link" />
+        <label>X</label>
+        <input id="s_x" placeholder="@handle or link" />
+        <label>eBay</label>
+        <input id="s_ebay" placeholder="username or store link" />
+        <label>TikTok</label>
+        <input id="s_tiktok" placeholder="@handle or link" />
+        <label>Website</label>
+        <input id="s_site" placeholder="https://" />
+      </div>
       <button id="pSave">Save profile</button>
       <button class="ghost" id="pClearPhoto">Remove photo</button>
       <p class="muted" id="pNote"></p>
@@ -2108,6 +2111,12 @@ $("pPhoto") && ($("pPhoto").onchange = async () => {
   const f = $("pPhoto").files[0];
   if (!f) return;
   openCrop(URL.createObjectURL(f));
+});
+$("socialsToggle") && ($("socialsToggle").onclick = () => {
+  const box = $("socialsBox");
+  if (!box) return;
+  box.classList.toggle("hidden");
+  $("socialsToggle").textContent = box.classList.contains("hidden") ? "Social links" : "Hide social links";
 });
 $("pSave") && ($("pSave").onclick = async () => {
   try {
