@@ -1604,10 +1604,7 @@ async def add_banner(payload: dict, request: Request, x_token: str | None = Head
     if len(title) < 2:
         raise HTTPException(400, "give the post a title")
     con = db()
-    n = con.execute("SELECT COUNT(*) AS n FROM banner_posts WHERE user_id=?", (uid,)).fetchone()["n"]
-    if n >= 12:
-        con.close()
-        raise HTTPException(400, "12 posts max — delete one first")
+    con.execute("DELETE FROM banner_posts WHERE user_id=?", (uid,))
     con.execute(
         "INSERT INTO banner_posts(user_id,kind,title,body,url,color,created) VALUES(?,?,?,?,?,?,?)",
         (uid, kind, title, body, url, color, time.strftime("%Y-%m-%dT%H:%M:%SZ")),

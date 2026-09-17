@@ -120,10 +120,11 @@
     .pava { width:56px; height:56px; border-radius:16px; background:var(--ice); color:#071016; font-weight:800; display:flex; align-items:center; justify-content:center; font-size:16px; overflow:hidden; border:3px solid var(--ice); flex:0 0 auto; position:relative; }
     .pava img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; background:#0e171e; }
     .item.reply { margin-left:18px; border-left:2px solid var(--line); }
-    .board-post { display:block; border-radius:14px; padding:12px 14px; margin:8px 0; border:1px solid var(--line); background:#121c26; }
-    .board-post .k { font-size:11px; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); }
-    .board-post h3 { margin:4px 0 2px; font-size:16px; }
-    .board-post a { color:var(--ice); }
+    .board-post { display:block; border-radius:16px; padding:14px 16px; margin:10px 0 14px; background:#0e171e; border:2px solid var(--ice); }
+    .board-post .k { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin:0 0 6px; }
+    .board-post h3 { margin:0 0 4px; font-size:17px; font-weight:700; line-height:1.25; }
+    .board-post .muted { margin:0; }
+    .board-post a { color:inherit; font-weight:700; text-decoration:underline; }
     .thread { margin-top:8px; }
     .c-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
     .c-actions button { width:auto; margin:0; padding:6px 10px; font-size:12px; }
@@ -436,16 +437,9 @@
     </div>
     <div class="card" style="margin-top:12px">
       <h3 style="margin:0 0 6px;font-size:16px">Binder banner</h3>
-      <p class="muted">Posts sit on top of your public binder. Shows, breaks, episodes, or a note.</p>
-      <label>Type</label>
-      <select id="banKind">
-        <option value="show">Card show</option>
-        <option value="break">YouTube break</option>
-        <option value="episode">Channel episode</option>
-        <option value="live">Live / stream</option>
-        <option value="note">Note</option>
-      </select>
-      <label>Title</label>
+      <p class="muted">One banner on your public binder. Edit it, then save. A new save replaces the old one.</p>
+      <div id="banPreview"></div>
+      <label>Title <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0"> · card show, YouTube break, episode, live</span></label>
       <input id="banTitle" maxlength="80" placeholder="Saturday rip · Toronto card show" />
       <label>Details</label>
       <input id="banBody" maxlength="280" placeholder="Booth 14, 10am–4pm or episode notes" />
@@ -453,7 +447,8 @@
       <input id="banUrl" placeholder="https://youtube.com/…" />
       <label>Color</label>
       <input id="banColor" class="hue-swatch" type="color" value="#8fd4ee" />
-      <button id="banAdd">Post to banner</button>
+      <button id="banAdd">Save banner</button>
+      <button class="ghost" id="banClear">Remove banner</button>
       <p class="muted" id="banNote"></p>
       <div id="banList"></div>
     </div>
@@ -1930,36 +1925,50 @@ $("pSave") && ($("pSave").onclick = async () => {
     loadMe();
   } catch(e) { $("pNote").textContent = e.message; }
 });
-const BAN_KIND = { show:"Card show", break:"YouTube break", episode:"Episode", live:"Live", note:"Note" };
-function bannerHtml(b, mine){
+function bannerHtml(b){
+  if (!b || !b.title) return "";
   const col = b.color || "#8fd4ee";
-  const link = b.url ? "<div><a href=\""+b.url.replace(/"/g,"")+"\" target=\"_blank\" rel=\"noopener\">Open link</a></div>" : "";
-  const del = mine ? "<button class=\"ghost\" data-ban-del=\""+b.id+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Remove</button>" : "";
-  return "<div class=\"board-post\" style=\"display:block;border-left:6px solid "+col+";box-shadow:inset 0 0 0 1px "+col+"22\"><div class=\"k\">"+(BAN_KIND[b.kind]||"Note")+"</div><h3>"+String(b.title||"").replace(/[<>]/g,"")+"</h3><div class=\"muted\">"+String(b.body||"").replace(/[<>]/g,"")+"</div>"+link+del+"</div>";
+  const link = b.url ? "<div style=\"margin-top:8px\"><a href=\""+b.url.replace(/"/g,"")+"\" target=\"_blank\" rel=\"noopener\">Open link</a></div>" : "";
+  return "<div class=\"board-post\" style=\"border-color:"+col+"\"><h3>"+String(b.title||"").replace(/[<>]/g,"")+"</h3>"+(b.body?"<div class=\"muted\">"+String(b.body).replace(/[<>]/g,"")+"</div>":"")+link+"</div>";
+}
+function fillBannerForm(b){
+  if (!b) return;
+  if ($("banTitle")) $("banTitle").value = b.title || "";
+  if ($("banBody")) $("banBody").value = b.body || "";
+  if ($("banUrl")) $("banUrl").value = b.url || "";
+  if ($("banColor") && b.color) $("banColor").value = b.color;
 }
 async function loadBanners(){
-  const box = $("banList");
-  if (!box || !token()) return;
+  const box = $("banPreview") || $("banList");
+  if (!token()) return;
   const r = await fetch("/banners", { headers:{ "x-token": token() } });
   if (!r.ok) return;
   const d = await r.json();
-  box.innerHTML = (d.banners||[]).map(b => bannerHtml(b, true)).join("") || "<p class=\"muted\">Nothing on your banner yet.</p>";
+  const b = (d.banners||[])[0];
+  if (box) box.innerHTML = b ? bannerHtml(b) : "<p class=\"muted\">No banner yet.</p>";
+  if (b) fillBannerForm(b);
 }
 $("banAdd") && ($("banAdd").onclick = async () => {
   try {
     await authPost("/banners", {
-      kind: ($("banKind")&&$("banKind").value) || "note",
+      kind: "note",
       title: ($("banTitle")&&$("banTitle").value) || "",
       body: ($("banBody")&&$("banBody").value) || "",
       url: ($("banUrl")&&$("banUrl").value) || "",
       color: ($("banColor")&&$("banColor").value) || "#8fd4ee"
     });
-    if ($("banTitle")) $("banTitle").value = "";
-    if ($("banBody")) $("banBody").value = "";
-    if ($("banUrl")) $("banUrl").value = "";
-    if ($("banNote")) $("banNote").textContent = "Posted to your public binder.";
+    if ($("banNote")) $("banNote").textContent = "Banner saved. It replaced the old one.";
     loadBanners();
   } catch(e) { if ($("banNote")) $("banNote").textContent = e.message; }
+});
+$("banClear") && ($("banClear").onclick = async () => {
+  const r = await fetch("/banners", { headers:{ "x-token": token() } });
+  const d = await r.json().catch(()=>({}));
+  const b = (d.banners||[])[0];
+  if (b && b.id) await fetch("/banners/"+b.id, { method:"DELETE", headers:{ "x-token": token() } });
+  ["banTitle","banBody","banUrl"].forEach(id => { if ($(id)) $(id).value = ""; });
+  if ($("banNote")) $("banNote").textContent = "Banner removed.";
+  if ($("banPreview")) $("banPreview").innerHTML = "<p class=\"muted\">No banner yet.</p>";
 });
 $("banList") && ($("banList").onclick = async ev => {
   const b = ev.target.closest("[data-ban-del]");
@@ -2381,7 +2390,7 @@ async function openPublic(slug, cardId){
   if (!r.ok) { $("pubHead").textContent = "Binder not found."; show("pub"); return; }
   const d = await r.json();
   $("pubHead").textContent = (d.display||"Collector")+" · "+d.count+" cards · book "+(d.book?money(d.book):"—")+(d.bio?" · "+d.bio:"");
-  if ($("pubBanner")) $("pubBanner").innerHTML = (d.banners||[]).map(b => bannerHtml(b, false)).join("");
+  if ($("pubBanner")) $("pubBanner").innerHTML = bannerHtml((d.banners||[])[0]);
   paintFollow();
   paintBinderLike(d.likes||0, false);
   $("likeBinderBtn") && ($("likeBinderBtn").onclick = async () => {
