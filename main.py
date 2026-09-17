@@ -17,45 +17,76 @@ PLUS_SCANS = int(os.environ.get("PLUS_SCANS", "200"))
 FREE_BOOK = int(os.environ.get("FREE_BOOK", "8"))
 PLUS_BOOK = int(os.environ.get("PLUS_BOOK", "30"))
 STRIPE_PAY_LINK = os.environ.get("STRIPE_PAY_LINK", "")
-MAIL_TO = os.environ.get("MAIL_TO", "iceledger@outlook.com")
-MAIL_FROM = os.environ.get("MAIL_FROM", "Ice Ledger <iceledger@outlook.com>")
-RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
-SMTP_HOST = os.environ.get("SMTP_HOST", "")
-SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
-SMTP_USER = os.environ.get("SMTP_USER", "")
-SMTP_PASS = os.environ.get("SMTP_PASS", "")
-APP_URL = os.environ.get("APP_URL", "")
+def _env(name: str, default: str = "") -> str:
+    return (os.environ.get(name, default) or default).strip().strip('"').strip("'")
+
+MAIL_TO = _env("MAIL_TO", "iceledger@outlook.com")
+MAIL_FROM = _env("MAIL_FROM", "Ice Ledger <noreply@contact.iceledgerz.com>")
+RESEND_API_KEY = _env("RESEND_API_KEY")
+SMTP_HOST = _env("SMTP_HOST")
+SMTP_PORT = int(_env("SMTP_PORT", "587") or "587")
+SMTP_USER = _env("SMTP_USER")
+SMTP_PASS = _env("SMTP_PASS")
+APP_URL = _env("APP_URL")
+MAIL_LAST_ERROR = ""
+
+def _from_address(raw: str) -> str:
+    raw = (raw or "").strip()
+    if "<" in raw and ">" in raw:
+        return raw[raw.find("<") + 1:raw.find(">")].strip()
+    return raw
 
 def send_mail(subject: str, body: str, to: str | None = None) -> bool:
-    to = to or MAIL_TO
-    if not to:
+    global MAIL_LAST_ERROR
+    MAIL_LAST_ERROR = ""
+    to = (to or MAIL_TO or "").strip().lower()
+    if not to or "@" not in to:
+        MAIL_LAST_ERROR = "no recipient"
         return False
+    sender = MAIL_FROM or f"Ice Ledger <{MAIL_TO}>"
+    addr = _from_address(sender)
     if RESEND_API_KEY:
-        try:
-            r = httpx.post(
-                "https://api.resend.com/emails",
-                headers={"Authorization": f"Bearer {RESEND_API_KEY}", "Content-Type": "application/json"},
-                json={"from": MAIL_FROM, "to": [to], "subject": subject, "text": body},
-                timeout=20,
+        host = addr.split("@")[-1].lower() if "@" in addr else ""
+        if host in {"outlook.com", "hotmail.com", "gmail.com", "yahoo.com", "live.com"}:
+            MAIL_LAST_ERROR = (
+                f"MAIL_FROM is {addr}. Resend cannot send from that inbox. "
+                "Use Ice Ledger <noreply@contact.iceledgerz.com>"
             )
-            return r.status_code < 300
-        except Exception:
-            return False
+            print("MAIL_FAIL", MAIL_LAST_ERROR)
+        else:
+            try:
+                r = httpx.post(
+                    "https://api.resend.com/emails",
+                    headers={"Authorization": f"Bearer {RESEND_API_KEY}", "Content-Type": "application/json"},
+                    json={"from": sender, "to": [to], "subject": subject, "text": body},
+                    timeout=20,
+                )
+                if r.status_code < 300:
+                    return True
+                MAIL_LAST_ERROR = f"Resend {r.status_code}: {(r.text or '')[:400]}"
+                print("MAIL_FAIL", MAIL_LAST_ERROR)
+            except Exception as e:
+                MAIL_LAST_ERROR = f"Resend error: {e}"
+                print("MAIL_FAIL", MAIL_LAST_ERROR)
     if SMTP_HOST and SMTP_USER and SMTP_PASS:
         try:
             import smtplib
             from email.mime.text import MIMEText
             msg = MIMEText(body)
             msg["Subject"] = subject
-            msg["From"] = MAIL_FROM
+            msg["From"] = sender
             msg["To"] = to
             with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=20) as s:
                 s.starttls()
                 s.login(SMTP_USER, SMTP_PASS)
-                s.sendmail(MAIL_FROM, [to], msg.as_string())
+                s.sendmail(addr or sender, [to], msg.as_string())
             return True
-        except Exception:
+        except Exception as e:
+            MAIL_LAST_ERROR = f"SMTP error: {e}"
+            print("MAIL_FAIL", MAIL_LAST_ERROR)
             return False
+    if not MAIL_LAST_ERROR:
+        MAIL_LAST_ERROR = "no RESEND_API_KEY and no SMTP settings"
     return False
 
 app = FastAPI(title="Ice Ledger Identify")
@@ -169,7 +200,15 @@ def shrink(data: bytes) -> bytes:
 
 @app.get("/health")
 def health():
-    return {"ok": True, "model": MODEL, "key_set": bool(XAI_API_KEY)}
+    return {
+        "ok": True,
+        "model": MODEL,
+        "key_set": bool(XAI_API_KEY),
+        "resend_key": bool(RESEND_API_KEY),
+        "mail_from": MAIL_FROM,
+        "mail_to": MAIL_TO,
+        "smtp_set": bool(SMTP_HOST and SMTP_USER and SMTP_PASS),
+    }
 
 async def _jpeg_part(up: UploadFile, label: str):
     raw = await up.read()
@@ -855,13 +894,24 @@ async def reset_request(payload: dict):
         con.execute("DELETE FROM resets WHERE email=?", (email,))
         con.execute("INSERT INTO resets(email,token,created) VALUES(?,?,?)", (email, token, int(time.time())))
         con.commit()
-        send_mail(
+        sent = send_mail(
             "Ice Ledger password reset",
             f"Your Ice Ledger reset code is: {token}\n\nIt expires in 30 minutes. If you didn't ask for this, ignore the email.",
             to=email,
         )
+        if not sent:
+            print("RESET_MAIL_FAIL", email, MAIL_LAST_ERROR)
     con.close()
     return {"ok": True}
+
+
+@app.post("/mail-test")
+async def mail_test(payload: dict):
+    if not APP_SECRET or payload.get("secret") != APP_SECRET:
+        raise HTTPException(401, "app secret does not match")
+    to = (payload.get("email") or MAIL_TO or "").strip().lower()
+    ok = send_mail("Ice Ledger mail test", "If you got this, mail is working on Ice Ledger.", to=to)
+    return {"ok": ok, "to": to, "from": MAIL_FROM, "error": MAIL_LAST_ERROR}
 
 @app.post("/reset-confirm")
 async def reset_confirm(payload: dict):
