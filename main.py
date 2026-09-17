@@ -1527,7 +1527,7 @@ async def save_profile(payload: dict, request: Request, x_token: str | None = He
     return {"ok": True, "display": display, "hue": hue, "bio": bio, "avatar": avatar, "socials": socials}
 
 @app.get("/u/{slug}")
-async def public_binder(slug: str):
+async def public_binder(slug: str, request: Request, x_token: str | None = Header(default=None)):
     slug = re.sub(r"[^a-z0-9]", "", (slug or "").lower())
     con = db()
     u = con.execute("SELECT id,display,hue,bio,avatar,avatar_hidden,cropx,cropy,cropz,socials,IFNULL(suspended,0) AS suspended FROM users WHERE slug=?", (slug,)).fetchone()
@@ -1543,6 +1543,13 @@ async def public_binder(slug: str):
         ).fetchone()["n"]
         c["likes"] = n
     blink = con.execute("SELECT COUNT(*) AS n FROM binder_likes WHERE slug=?", (slug,)).fetchone()["n"]
+    tok = x_token or (request.headers.get("x-token") if request else None)
+    me = user_from_token(tok)
+    liked = False
+    is_following = False
+    if me:
+        liked = bool(con.execute("SELECT user_id FROM binder_likes WHERE slug=? AND user_id=?", (slug, me)).fetchone())
+        is_following = bool(con.execute("SELECT slug FROM follows WHERE follower=? AND slug=?", (me, slug)).fetchone())
     banners = con.execute(
         "SELECT id,kind,title,body,url,color,created FROM banner_posts WHERE user_id=? ORDER BY id DESC LIMIT 12",
         (u["id"],),
@@ -1562,6 +1569,8 @@ async def public_binder(slug: str):
         "count": len(cards),
         "book": book,
         "likes": blink,
+        "liked": liked,
+        "following": is_following,
         "cards": cards,
         "banners": [dict(b) for b in banners],
     }
@@ -1659,6 +1668,18 @@ async def del_banner(bid: int, request: Request, x_token: str | None = Header(de
     con.close()
     return {"ok": True}
 
+def decorate_comment(con, r) -> dict:
+    item = dict(r)
+    uid = item.get("user_id")
+    u = con.execute(
+        "SELECT slug, display, IFNULL(avatar_hidden,0) AS avatar_hidden, avatar FROM users WHERE id=?",
+        (uid,),
+    ).fetchone() if uid else None
+    item["author_slug"] = (u["slug"] if u else "") or ""
+    item["name"] = (u["display"] if u and u["display"] else item.get("name")) or "Collector"
+    item["has_avatar"] = bool(u and u["avatar"] and not int(u["avatar_hidden"] or 0))
+    return item
+
 @app.get("/u/{slug}/cards/{cid}/comments")
 async def list_comments(slug: str, cid: str):
     con = db()
@@ -1668,7 +1689,7 @@ async def list_comments(slug: str, cid: str):
     ).fetchall()
     out = []
     for r in rows:
-        item = dict(r)
+        item = decorate_comment(con, r)
         item["replies"] = con.execute(
             "SELECT COUNT(*) AS n FROM comments WHERE parent_id=? AND IFNULL(hidden,0)=0",
             (r["id"],),
@@ -1684,8 +1705,9 @@ async def list_replies(cid: int):
         "SELECT id,name,body,created,user_id,parent_id FROM comments WHERE parent_id=? AND IFNULL(hidden,0)=0 ORDER BY id ASC LIMIT 80",
         (cid,),
     ).fetchall()
+    out = [decorate_comment(con, r) for r in rows]
     con.close()
-    return {"comments": [dict(r) for r in rows]}
+    return {"comments": out}
 
 @app.post("/u/{slug}/cards/{cid}/comments")
 async def add_comment(slug: str, cid: str, payload: dict, request: Request, x_token: str | None = Header(default=None)):
@@ -1737,6 +1759,49 @@ async def add_comment(slug: str, cid: str, payload: dict, request: Request, x_to
     con.commit()
     con.close()
     return {"ok": True, "id": rid, "name": name, "body": body, "created": created, "parent_id": parent_id}
+
+@app.post("/u/{slug}/report")
+async def report_user(slug: str, payload: dict, request: Request, x_token: str | None = Header(default=None)):
+    uid = require_user(request, x_token)
+    slug = re.sub(r"[^a-z0-9]", "", (slug or "").lower())
+    reason = re.sub(r"\s+", " ", (payload.get("reason") or "").strip())[:180]
+    if len(reason) < 3:
+        raise HTTPException(400, "pick a reason")
+    con = db()
+    target = con.execute("SELECT id, email, display FROM users WHERE slug=?", (slug,)).fetchone()
+    if not target:
+        con.close()
+        raise HTTPException(404, "binder not found")
+    if target["id"] == uid:
+        con.close()
+        raise HTTPException(400, "you can't report your own binder")
+    already = con.execute(
+        "SELECT id FROM reports WHERE reporter=? AND reason LIKE ?",
+        (uid, f"user:{slug}|%"),
+    ).fetchone()
+    if already:
+        n = con.execute(
+            "SELECT COUNT(DISTINCT reporter) AS n FROM reports WHERE reason LIKE ?",
+            (f"user:{slug}|%",),
+        ).fetchone()["n"]
+        con.close()
+        return {"ok": True, "reports": n, "already": True}
+    con.execute(
+        "INSERT INTO reports(slug,reporter,reason,created) VALUES(?,?,?,?)",
+        (slug, uid, f"user:{slug}|{reason}", time.strftime("%Y-%m-%dT%H:%M:%SZ")),
+    )
+    n = con.execute(
+        "SELECT COUNT(DISTINCT reporter) AS n FROM reports WHERE reason LIKE ?",
+        (f"user:{slug}|%",),
+    ).fetchone()["n"]
+    who = email_of(uid)
+    con.commit()
+    con.close()
+    send_mail(
+        "Ice Ledger user report",
+        f"Collector report\nBinder: {slug}\nDisplay: {target['display']}\nEmail: {target['email']}\nReporter: {who} (id {uid})\nReason: {reason}\nUnique reports: {n}\nLook them up in Owner tools. Accounts are not auto-deleted.",
+    )
+    return {"ok": True, "reports": n, "already": False}
 
 @app.post("/comments/{cid}/report")
 async def report_comment(cid: int, payload: dict, request: Request, x_token: str | None = Header(default=None)):
@@ -1807,7 +1872,21 @@ async def admin_inbox(request: Request, secret: str = "", x_token: str | None = 
         rep = con.execute("SELECT email, display, slug FROM users WHERE id=?", (item.get("reporter"),)).fetchone()
         item["reporter_email"] = (rep["email"] if rep else "") or ""
         item["reporter_name"] = (rep["display"] if rep else "") or (rep["slug"] if rep else "") or ("user "+str(item.get("reporter")))
-        if reason.startswith("comment:"):
+        if reason.startswith("user:"):
+            parts = reason[5:].split("|", 1)
+            who_slug = re.sub(r"[^a-z0-9]", "", (parts[0] or item.get("slug") or "").lower())
+            item["kind"] = "user"
+            item["slug"] = who_slug
+            item["why"] = parts[1] if len(parts) > 1 else reason
+            tgt = con.execute("SELECT display, email, IFNULL(suspended,0) AS suspended FROM users WHERE slug=?", (who_slug,)).fetchone()
+            item["target_name"] = (tgt["display"] if tgt else "") or who_slug
+            item["preview"] = "Collector · "+((tgt["email"] if tgt else "") or who_slug)
+            item["hidden"] = int(tgt["suspended"] if tgt else 0)
+            item["report_n"] = con.execute(
+                "SELECT COUNT(DISTINCT reporter) AS n FROM reports WHERE reason LIKE ?",
+                (f"user:{who_slug}|%",),
+            ).fetchone()["n"]
+        elif reason.startswith("comment:"):
             parts = reason[8:].split("|", 1)
             try:
                 cid = int(parts[0])
@@ -1891,6 +1970,21 @@ async def admin_dismiss(payload: dict, request: Request, x_token: str | None = H
     con.commit()
     con.close()
     return {"ok": True}
+
+@app.get("/admin/users")
+async def admin_users(request: Request, x_token: str | None = Header(default=None)):
+    require_operator(request, x_token)
+    con = db()
+    rows = con.execute(
+        "SELECT id,email,slug,display,created,IFNULL(plan,'free') AS plan,IFNULL(suspended,0) AS suspended FROM users ORDER BY id DESC LIMIT 300"
+    ).fetchall()
+    out = []
+    for r in rows:
+        item = dict(r)
+        item["cards"] = con.execute("SELECT COUNT(*) AS n FROM cards WHERE user_id=?", (r["id"],)).fetchone()["n"]
+        out.append(item)
+    con.close()
+    return {"users": out}
 
 @app.get("/admin/lookup")
 async def admin_lookup(q: str = "", request: Request = None, x_token: str | None = Header(default=None)):

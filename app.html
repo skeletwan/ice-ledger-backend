@@ -132,12 +132,16 @@
     .pwid { display:flex; align-items:center; gap:12px; margin-bottom:10px; }
     .pava { width:56px; height:56px; border-radius:16px; background:var(--ice); color:#071016; font-weight:800; display:flex; align-items:center; justify-content:center; font-size:16px; overflow:hidden; border:3px solid var(--ice); flex:0 0 auto; position:relative; }
     .pava img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; background:#0e171e; }
+    .cava { width:28px; height:28px; border-radius:8px; background:var(--ice); color:#071016; font-weight:800; font-size:10px; display:inline-flex; align-items:center; justify-content:center; overflow:hidden; position:relative; vertical-align:middle; margin-right:6px; flex:0 0 auto; }
+    .cava img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+    .cname { color:var(--ice); font-weight:800; cursor:pointer; }
     .binder-hero { display:flex; align-items:center; gap:14px; margin:12px 0 14px; }
     .binder-hero .pava { width:88px; height:88px; border-radius:22px; font-size:22px; }
     .binder-hero h2 { margin:0 0 4px; font-size:22px; line-height:1.15; }
     .binder-hero .bio { margin:0 0 4px; color:var(--text); font-size:14px; }
     .binder-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
-    .binder-actions button { width:auto; margin:0; padding:7px 12px; font-size:13px; }
+    .binder-actions button { width:auto; margin:0; padding:7px 12px; font-size:13px; display:inline-flex; align-items:center; justify-content:center; gap:6px; line-height:1.1; }
+    .binder-actions .heart { display:inline; line-height:1; }
     .socials { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
     .socials a { color:var(--ice); font-size:13px; font-weight:700; text-decoration:none; }
     .item.reply { margin-left:18px; border-left:2px solid var(--line); }
@@ -261,6 +265,7 @@
 
   <section class="page on" id="scanPage">
     <div class="status" id="quotaBox">Free plan: 10 IDs / month. Ice+ is 200. Rip Night is 20 extra IDs.</div>
+    <p class="muted" id="resetLine"></p>
     <div class="row2">
       <button class="ghost" id="payBtn">Ice+ · $8/mo · 200 IDs + 30 refreshes</button>
       <button class="ghost" id="ripBtn">Rip Night · $2.99 · 20 IDs</button>
@@ -365,6 +370,9 @@
         <option value="">All teams</option>
       </select>
     </div>
+    <select id="setFilter">
+      <option value="">All sets</option>
+    </select>
     <div id="list"></div>
     <button id="refreshBook">Refresh book</button>
     <p class="muted" id="bookNote"></p>
@@ -417,6 +425,7 @@
         <div class="binder-actions">
           <button class="ghost" id="followBtn">Follow</button>
           <button class="ghost" id="likeBinderBtn">Like binder · 0</button>
+          <button class="ghost" id="reportUserBtn">Report collector</button>
         </div>
       </div>
     </div>
@@ -432,6 +441,9 @@
         <option value="">All teams</option>
       </select>
     </div>
+    <select id="pubSet">
+      <option value="">All sets</option>
+    </select>
     <div id="pubList"></div>
   </section>
   <section class="page" id="pubDetail">
@@ -556,6 +568,9 @@
     <button class="ghost" id="ripMake">Make code</button>
     <p class="muted" id="ripMakeNoteOut"></p>
     <div id="ripCodeList"></div>
+    <h3 style="font-size:15px;margin:16px 0 8px">All accounts</h3>
+    <button class="ghost" id="modUsersLoad">Load accounts</button>
+    <div id="modUsers"></div>
     <h3 style="font-size:15px;margin:16px 0 8px">Look up a user</h3>
     <p class="muted">Email or binder slug.</p>
     <input id="modUser" placeholder="email or slug" />
@@ -1523,8 +1538,10 @@ function cardRowHtml(c){
 function renderBinder(){
   const cards = load();
   const teamF = $("teamFilter") ? $("teamFilter").value : "";
+  const setF = $("setFilter") ? $("setFilter").value : "";
   const sort = $("sortBy") ? $("sortBy").value : "new";
   const teams = [...new Set(cards.map(teamName))].sort((a,b)=>a.localeCompare(b));
+  const sets = [...new Set(cards.map(c => (c.set||"").trim() || "No set"))].sort((a,b)=>a.localeCompare(b));
   if ($("teamFilter")) {
     const next = ["All teams"].concat(teams).join("|");
     if ($("teamFilter").dataset.keys !== next) {
@@ -1534,9 +1551,19 @@ function renderBinder(){
       if (teams.indexOf(cur)>=0 || cur==="") $("teamFilter").value = cur;
     }
   }
+  if ($("setFilter")) {
+    const next = sets.join("|");
+    if ($("setFilter").dataset.keys !== next) {
+      const cur = $("setFilter").value;
+      $("setFilter").innerHTML = "<option value=\"\">All sets</option>"+sets.map(t=>"<option>"+t+"</option>").join("");
+      $("setFilter").dataset.keys = next;
+      if (sets.indexOf(cur)>=0 || cur==="") $("setFilter").value = cur;
+    }
+  }
   let rows = cards.filter(c => {
     const hay = [c.player,c.team,c.set,c.year,c.number,c.insert,c.parallel,c.cert].join(" ").toLowerCase();
     if (teamF && teamName(c) !== teamF) return false;
+    if (setF && ((c.set||"").trim() || "No set") !== setF) return false;
     return true;
   });
   if (sort==="team") rows.sort((a,b)=> teamName(a).localeCompare(teamName(b)) || (a.player||"").localeCompare(b.player||""));
@@ -1580,6 +1607,7 @@ $("searchList") && ($("searchList").onclick = e => {
 });
 if ($("sortBy")) $("sortBy").onchange = renderBinder;
 if ($("teamFilter")) $("teamFilter").onchange = renderBinder;
+if ($("setFilter")) $("setFilter").onchange = renderBinder;
 $("list").onclick = e => {
   const ed = e.target.closest("[data-edit]");
   if (ed) {
@@ -1715,6 +1743,36 @@ function noteKind(n){
   if (b.indexOf("comment")>=0 || b.indexOf("replied")>=0) return "comment";
   return "card";
 }
+function resetLabel(month){
+  let t;
+  const p = String(month||"").split("-");
+  if (p.length>=2) t = new Date(Date.UTC(+p[0], +p[1], 1));
+  else { const n = new Date(); t = new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth()+1, 1)); }
+  const ms = t - Date.now();
+  if (ms <= 0) return "Monthly IDs reset soon.";
+  const hours = Math.floor(ms/3600000);
+  const days = Math.floor(hours/24);
+  const when = t.toLocaleDateString(undefined, { month:"short", day:"numeric" });
+  if (days >= 2) return "Monthly IDs and book refreshes reset in "+days+" days ("+when+"). Extra Rip IDs stay.";
+  if (hours >= 2) return "Monthly IDs and book refreshes reset in "+hours+" hours.";
+  return "Monthly IDs reset in "+Math.max(1, Math.floor(ms/60000))+" min.";
+}
+function timeAgo(iso){
+  if (!iso) return "";
+  let s = String(iso);
+  if (!/[zZ]|[+\-]\d\d:\d\d$/.test(s)) s += "Z";
+  const then = new Date(s);
+  if (isNaN(+then)) return String(iso).slice(0,16);
+  const sec = Math.max(0, Math.floor((Date.now()-then.getTime())/1000));
+  if (sec < 45) return "just now";
+  if (sec < 3600) return Math.max(1, Math.floor(sec/60))+"m";
+  if (sec < 86400) return Math.floor(sec/3600)+"h";
+  const days = Math.floor(sec/86400);
+  if (days === 1) return "yesterday";
+  if (days < 7) return days+"d";
+  const sameYear = then.getFullYear() === new Date().getFullYear();
+  return then.toLocaleDateString(undefined, sameYear ? { month:"short", day:"numeric" } : { month:"short", day:"numeric", year:"numeric" });
+}
 async function refreshUsage(){
   if (!token()) return;
   const r = await fetch("/usage", { headers:{ "x-token": token() } });
@@ -1726,6 +1784,7 @@ async function refreshUsage(){
     $("quotaBox").textContent = line;
     $("quotaBox").className = "status " + (u.left<=0 ? "err" : (u.left<=3 ? "warn" : "ok"));
   }
+  if ($("resetLine")) $("resetLine").textContent = resetLabel(u.month);
 }
 function showPaywall(msg){
   if ($("quotaBox")) {
@@ -1753,7 +1812,7 @@ $("modLoad") && ($("modLoad").onclick = async () => {
   }
   const reports = (d.reports||[]).map(x => {
     const kind = x.kind || "photo";
-    const label = kind==="comment" ? "Comment" : "Photo";
+    const label = kind==="comment" ? "Comment" : kind==="user" ? "Collector" : "Photo";
     const hidden = x.hidden ? " · hidden now" : "";
     const why = String(x.why||x.reason||"").replace(/[<>]/g,"");
     const prev = String(x.preview||"").replace(/[<>]/g,"");
@@ -1888,6 +1947,24 @@ async function modAccount(path, extra){
   if (!r.ok) throw new Error(t.slice(0,160));
   return JSON.parse(t||"{}");
 }
+$("modUsersLoad") && ($("modUsersLoad").onclick = async () => {
+  const box = $("modUsers");
+  if (!box) return;
+  box.innerHTML = "<p class=\"muted\">Loading…</p>";
+  const r = await fetch("/admin/users", { headers:{ "x-token": token() } });
+  const t = await r.text();
+  if (!r.ok) { box.textContent = t.slice(0,160); return; }
+  const d = JSON.parse(t);
+  box.innerHTML = (d.users||[]).map(u =>
+    "<div class=\"item\" data-load-user=\""+(u.slug||u.email)+"\"><b>"+String(u.display||u.slug||"—").replace(/[<>]/g,"")+"</b>"+(u.suspended?" · suspended":"")+"<div class=\"muted\">"+String(u.email||"")+" · /"+(u.slug||"—")+" · "+(u.plan||"free")+" · "+(u.cards||0)+" cards · "+String(u.created||"").slice(0,10)+"</div></div>"
+  ).join("") || "<p class=\"muted\">No accounts.</p>";
+});
+$("modUsers") && ($("modUsers").onclick = ev => {
+  const row = ev.target.closest("[data-load-user]");
+  if (!row || !$("modUser")) return;
+  $("modUser").value = row.getAttribute("data-load-user");
+  if ($("modLookup")) $("modLookup").click();
+});
 $("modLookup") && ($("modLookup").onclick = async () => {
   const q = (($("modUser")&&$("modUser").value)||"").trim();
   try {
@@ -2031,10 +2108,18 @@ function renderPubList(){
   const box = $("pubList");
   if (!box) return;
   const teamF = $("pubTeam") ? $("pubTeam").value : "";
+  const setF = $("pubSet") ? $("pubSet").value : "";
   const sort = $("pubSort") ? $("pubSort").value : "new";
   const teams = [];
-  pubCards.forEach(c => { const t = teamName(c); if (t && teams.indexOf(t)<0) teams.push(t); });
+  const sets = [];
+  pubCards.forEach(c => {
+    const t = teamName(c);
+    if (t && teams.indexOf(t)<0) teams.push(t);
+    const s = (c.set||"").trim() || "No set";
+    if (sets.indexOf(s)<0) sets.push(s);
+  });
   teams.sort((a,b)=>a.localeCompare(b));
+  sets.sort((a,b)=>a.localeCompare(b));
   if ($("pubTeam")) {
     const next = teams.join("|");
     if ($("pubTeam").dataset.keys !== next) {
@@ -2044,7 +2129,20 @@ function renderPubList(){
       if (teams.indexOf(cur)>=0 || cur==="") $("pubTeam").value = cur;
     }
   }
-  let rows = pubCards.filter(c => !teamF || teamName(c)===teamF);
+  if ($("pubSet")) {
+    const next = sets.join("|");
+    if ($("pubSet").dataset.keys !== next) {
+      const cur = $("pubSet").value;
+      $("pubSet").innerHTML = "<option value=\"\">All sets</option>"+sets.map(t=>"<option>"+t+"</option>").join("");
+      $("pubSet").dataset.keys = next;
+      if (sets.indexOf(cur)>=0 || cur==="") $("pubSet").value = cur;
+    }
+  }
+  let rows = pubCards.filter(c => {
+    if (teamF && teamName(c)!==teamF) return false;
+    if (setF && ((c.set||"").trim() || "No set")!==setF) return false;
+    return true;
+  });
   if (sort==="team") rows.sort((a,b)=> teamName(a).localeCompare(teamName(b)) || lastName(a.player).localeCompare(lastName(b.player)));
   else if (sort==="player") rows.sort((a,b)=> lastName(a.player).localeCompare(lastName(b.player)));
   else if (sort==="value") rows.sort((a,b)=> (+b.comp||0)-(+a.comp||0));
@@ -2065,6 +2163,7 @@ function renderPubList(){
 }
 if ($("pubSort")) $("pubSort").onchange = renderPubList;
 if ($("pubTeam")) $("pubTeam").onchange = renderPubList;
+if ($("pubSet")) $("pubSet").onchange = renderPubList;
 async function loadMe(){
   if (!token()) return;
   try {
@@ -2218,11 +2317,19 @@ $("viewPublicBtn") && ($("viewPublicBtn").onclick = async () => {
 function commentBlock(c, nested){
   const dead = reportedHas("comment:"+c.id);
   const n = +c.replies || 0;
+  const slug = c.author_slug || "";
+  const ini = String(c.name||"C").slice(0,2).toUpperCase();
+  const av = slug && c.has_avatar
+    ? "<span class=\"cava\">"+ini+"<img alt=\"\" src=\"/u/"+slug+"/avatar\" onerror=\"this.remove()\" /></span>"
+    : "<span class=\"cava\">"+ini+"</span>";
+  const who = slug
+    ? av+"<span class=\"cname\" data-open-user=\""+slug+"\">"+String(c.name||"Collector").replace(/[<>]/g,"")+"</span>"
+    : av+"<b>"+String(c.name||"Collector").replace(/[<>]/g,"")+"</b>";
   const threadBtn = nested ? "" : "<button class=\"ghost\" data-thread=\""+c.id+"\">"+(n ? ("View "+n+" "+(n===1?"reply":"replies")) : "Reply")+"</button>";
   const reportBtn = dead
     ? "<button class=\"ghost dead\" disabled>Reported</button>"
-    : "<button class=\"ghost\" data-rep=\""+c.id+"\">Report</button>";
-  return "<div class=\"item"+(nested?" reply":"")+"\" style=\"cursor:default\" data-cid=\""+c.id+"\"><b>"+c.name+"</b> <span class=\"muted\">"+(c.created||"").slice(0,16)+"</span><p style=\"margin:6px 0 0\">"+String(c.body||"").replace(/[<>]/g,"")+"</p><div class=\"c-actions\">"+threadBtn+reportBtn+"</div><div class=\"thread hidden\" data-replies=\""+c.id+"\"></div></div>";
+    : "<button class=\"ghost\" data-rep=\""+c.id+"\">Report comment</button>";
+  return "<div class=\"item"+(nested?" reply":"")+"\" style=\"cursor:default\" data-cid=\""+c.id+"\">"+who+" <span class=\"muted\">"+timeAgo(c.created)+"</span><p style=\"margin:6px 0 0\">"+String(c.body||"").replace(/[<>]/g,"")+"</p><div class=\"c-actions\">"+threadBtn+reportBtn+"</div><div class=\"thread hidden\" data-replies=\""+c.id+"\"></div></div>";
 }
 async function loadComments(slug, cid, box){
   if (!box) return;
@@ -2233,6 +2340,8 @@ async function loadComments(slug, cid, box){
   const list = d.comments || [];
   box.innerHTML = list.length ? list.map(c => commentBlock(c, false)).join("") : "<p class=\"muted\">No comments yet.</p>";
   box.onclick = async ev => {
+    const go = ev.target.closest("[data-open-user]");
+    if (go) { openPublic(go.getAttribute("data-open-user")); return; }
     const rep = ev.target.closest("[data-rep]");
     const th = ev.target.closest("[data-thread]");
     const send = ev.target.closest("[data-send-reply]");
@@ -2485,7 +2594,7 @@ function paintFollow(){
 }
 function paintBinderLike(n, liked){
   if (!$("likeBinderBtn")) return;
-  $("likeBinderBtn").innerHTML = "<span class=\"heart big\">♥ "+(n||0)+"</span> " + (liked ? "Liked" : "Like binder");
+  $("likeBinderBtn").textContent = (liked ? "Liked · " : "Like · ") + (n||0);
 }
 $("followBtn") && ($("followBtn").onclick = async () => {
   if (!token()) { $("pubHead").textContent = "Sign in to follow."; return; }
@@ -2593,7 +2702,7 @@ async function openPublic(slug, cardId){
   $("authPage").classList.add("hidden");
   $("authPage").classList.remove("on");
   $("appShell").classList.remove("hidden");
-  const r = await fetch("/u/"+encodeURIComponent(slug));
+  const r = await fetch("/u/"+encodeURIComponent(slug), { headers: token() ? { "x-token": token() } : {} });
   if (!r.ok) { $("pubHead").textContent = "Binder not found."; show("pub"); return; }
   const d = await r.json();
   const hue = d.hue || "#8fd4ee";
@@ -2618,8 +2727,9 @@ async function openPublic(slug, cardId){
     $("pubAva").innerHTML = ini+"<img alt=\"\" src=\"/u/"+encodeURIComponent(viewSlug)+"/avatar\" onerror=\"this.remove()\" />";
   }
   if ($("pubBanner")) $("pubBanner").innerHTML = bannerHtml((d.banners||[])[0]);
+  following[viewSlug] = !!d.following;
   paintFollow();
-  paintBinderLike(d.likes||0, false);
+  paintBinderLike(d.likes||0, !!d.liked);
   $("likeBinderBtn") && ($("likeBinderBtn").onclick = async () => {
     if (!token()) return;
     const r = await fetch("/u/"+encodeURIComponent(viewSlug)+"/like", { method:"POST", headers:{ "x-token": token() } });
@@ -2628,7 +2738,20 @@ async function openPublic(slug, cardId){
   });
   pubCards = d.cards || [];
   if ($("pubTeam")) $("pubTeam").dataset.keys = "";
+  if ($("pubSet")) $("pubSet").dataset.keys = "";
   if ($("pubSort")) $("pubSort").value = "new";
+  $("reportUserBtn") && ($("reportUserBtn").onclick = async () => {
+    if (!token() || !viewSlug) return;
+    if (viewSlug === mySlug) { alert("That's your binder."); return; }
+    const reason = window.prompt("Why are you reporting this collector?", "Harassment");
+    if (!reason || reason.trim().length < 3) return;
+    const rr = await fetch("/u/"+encodeURIComponent(viewSlug)+"/report", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json", "x-token": token() },
+      body: JSON.stringify({ reason: reason.trim() })
+    });
+    if (rr.ok) $("reportUserBtn").textContent = "Reported";
+  });
   renderPubList();
   show("pub");
   if (cardId) {
