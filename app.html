@@ -119,6 +119,10 @@
     .pwid { display:flex; align-items:center; gap:12px; margin-bottom:10px; }
     .pava { width:56px; height:56px; border-radius:16px; background:var(--ice); color:#071016; font-weight:800; display:flex; align-items:center; justify-content:center; font-size:16px; overflow:hidden; border:3px solid var(--ice); flex:0 0 auto; position:relative; }
     .pava img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; background:#0e171e; }
+    .item.reply { margin-left:18px; border-left:2px solid var(--line); }
+    .thread { margin-top:8px; }
+    .c-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+    .c-actions button { width:auto; margin:0; padding:6px 10px; font-size:12px; }
     .crop-lab { font-size:11px; color:var(--muted); margin-top:8px; }
     .crop-lab input { margin-top:4px; }
     .ava-full { display:none; position:fixed; inset:0; z-index:50; background:rgba(0,0,0,.88); align-items:center; justify-content:center; padding:24px; flex-direction:column; gap:12px; }
@@ -402,6 +406,7 @@
       <label>Short bio</label>
       <input id="pBio" maxlength="140" placeholder="Team, era, what you collect" />
       <button id="pSave">Save profile</button>
+      <button class="ghost" id="pClearPhoto">Remove photo</button>
       <p class="muted" id="pNote"></p>
     </div>
     <button class="ghost" id="tabHelp">Support / feedback</button>
@@ -428,7 +433,9 @@
     </div>
     <h3 style="font-size:15px;margin:16px 0 8px">Follow alerts</h3>
     <p class="muted">Ping when a binder you follow adds a card. Works with the app open or on the Home Screen.</p>
-    <label><input id="followAlertOn" type="checkbox" style="width:auto;margin-right:8px" /> Notify me on followed binders</label>
+    <label><input id="followAlertOn" type="checkbox" style="width:auto;margin-right:8px" /> New cards on binders I follow</label>
+    <label><input id="likeAlertOn" type="checkbox" style="width:auto;margin-right:8px" /> Likes on my binder and cards</label>
+    <label><input id="commentAlertOn" type="checkbox" style="width:auto;margin-right:8px" /> Comments and replies</label>
     <button class="ghost" id="followAlertSave">Save alerts</button>
     <p class="muted" id="followAlertNote"></p>
     <button class="ghost" id="logoutBtn">Get out</button>
@@ -1520,22 +1527,29 @@ $("modList") && ($("modList").onclick = async ev => {
   if ($("modLoad")) $("modLoad").click();
   if (!r.ok) alert("Could not restore");
 });
-if ($("followAlertOn")) $("followAlertOn").checked = localStorage.getItem("ice-follow-alerts") === "1";
+function alertOn(key){ return localStorage.getItem(key) === "1"; }
+if ($("followAlertOn")) $("followAlertOn").checked = alertOn("ice-follow-alerts");
+if ($("likeAlertOn")) $("likeAlertOn").checked = alertOn("ice-like-alerts");
+if ($("commentAlertOn")) $("commentAlertOn").checked = alertOn("ice-comment-alerts");
 $("followAlertSave") && ($("followAlertSave").onclick = async () => {
-  if ($("followAlertOn")) $("followAlertOn").checked = true;
-  localStorage.setItem("ice-follow-alerts", "1");
-  let msg = "Alerts on for followed binders.";
-  if ("Notification" in window) {
+  localStorage.setItem("ice-follow-alerts", $("followAlertOn") && $("followAlertOn").checked ? "1" : "0");
+  localStorage.setItem("ice-like-alerts", $("likeAlertOn") && $("likeAlertOn").checked ? "1" : "0");
+  localStorage.setItem("ice-comment-alerts", $("commentAlertOn") && $("commentAlertOn").checked ? "1" : "0");
+  let msg = "Alert choices saved.";
+  if (("followAlertOn" in window) && (($("followAlertOn")&&$("followAlertOn").checked) || ($("likeAlertOn")&&$("likeAlertOn").checked) || ($("commentAlertOn")&&$("commentAlertOn").checked)) && "Notification" in window) {
     const perm = await Notification.requestPermission();
-    if (perm !== "granted") msg = "Alerts on in the app. Allow notifications in Settings if you want a banner.";
+    if (perm !== "granted") msg = "Saved in the app. Allow notifications in Settings if you want a banner.";
   }
   $("followAlertNote").textContent = msg;
 });
 $("followAlertOn") && ($("followAlertOn").onchange = () => {
-  if (!$("followAlertOn").checked) {
-    localStorage.setItem("ice-follow-alerts", "0");
-    $("followAlertNote").textContent = "Follow alerts off.";
-  }
+  if (!$("followAlertOn").checked) localStorage.setItem("ice-follow-alerts", "0");
+});
+$("likeAlertOn") && ($("likeAlertOn").onchange = () => {
+  if (!$("likeAlertOn").checked) localStorage.setItem("ice-like-alerts", "0");
+});
+$("commentAlertOn") && ($("commentAlertOn").onchange = () => {
+  if (!$("commentAlertOn").checked) localStorage.setItem("ice-comment-alerts", "0");
 });
 $("plusBtn") && ($("plusBtn").onclick = async () => {
   try { await unlockPlus(); } catch(e) { if ($("plusNote")) $("plusNote").textContent = e.message; }
@@ -1730,6 +1744,21 @@ $("pSave") && ($("pSave").onclick = async () => {
     loadMe();
   } catch(e) { $("pNote").textContent = e.message; }
 });
+$("pClearPhoto") && ($("pClearPhoto").onclick = async () => {
+  myAvatar = "";
+  paintProfile($("pDisplay").value||"Collector", $("pHue").value, "");
+  try {
+    const r = await fetch("/profile", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json", "x-token": token() },
+      body: JSON.stringify({ display:$("pDisplay").value, hue:$("pHue").value, bio:$("pBio").value, clear_avatar:true })
+    });
+    const t = await r.text();
+    if (!r.ok) throw new Error(t.slice(0,160));
+    $("pNote").textContent = "Photo removed.";
+    loadMe();
+  } catch(e) { $("pNote").textContent = e.message; }
+});
 $("shareCard") && ($("shareCard").onclick = async () => {
   await loadMe();
   if (!mySlug || !openId) { $("shareCardNote").textContent = "Need a synced account."; return; }
@@ -1748,43 +1777,75 @@ $("viewPublicBtn") && ($("viewPublicBtn").onclick = async () => {
   if (!mySlug) { $("shareNote").textContent = "Save a card first so the public binder exists."; return; }
   openPublic(mySlug);
 });
+function commentBlock(c, nested){
+  const dead = reportedHas("comment:"+c.id);
+  const n = +c.replies || 0;
+  const threadBtn = nested ? "" : "<button class=\"ghost\" data-thread=\""+c.id+"\">"+(n ? ("View "+n+" "+(n===1?"reply":"replies")) : "Reply")+"</button>";
+  const reportBtn = dead
+    ? "<button class=\"ghost dead\" disabled>Reported</button>"
+    : "<button class=\"ghost\" data-rep=\""+c.id+"\">Report</button>";
+  return "<div class=\"item"+(nested?" reply":"")+"\" style=\"cursor:default\" data-cid=\""+c.id+"\"><b>"+c.name+"</b> <span class=\"muted\">"+(c.created||"").slice(0,16)+"</span><p style=\"margin:6px 0 0\">"+String(c.body||"").replace(/[<>]/g,"")+"</p><div class=\"c-actions\">"+threadBtn+reportBtn+"</div><div class=\"thread hidden\" data-replies=\""+c.id+"\"></div></div>";
+}
 async function loadComments(slug, cid, box){
   if (!box) return;
+  box.dataset.slug = slug;
+  box.dataset.cid = cid;
   const r = await fetch("/u/"+encodeURIComponent(slug)+"/cards/"+encodeURIComponent(cid)+"/comments");
   const d = await r.json();
   const list = d.comments || [];
-  box.innerHTML = list.length ? list.map(c => {
-    const dead = reportedHas("comment:"+c.id);
-    const btn = dead
-      ? "<button class=\"ghost dead\" disabled style=\"width:auto;margin-top:8px;padding:6px 10px\">Reported</button>"
-      : "<button class=\"ghost\" data-rep=\""+c.id+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Report</button>";
-    return "<div class=\"item\" style=\"cursor:default\" data-cid=\""+c.id+"\"><b>"+c.name+"</b> <span class=\"muted\">"+(c.created||"").slice(0,16)+"</span><p style=\"margin:6px 0 0\">"+String(c.body||"").replace(/[<>]/g,"")+"</p>"+btn+"</div>";
-  }).join("") : "<p class=\"muted\">No comments yet.</p>";
+  box.innerHTML = list.length ? list.map(c => commentBlock(c, false)).join("") : "<p class=\"muted\">No comments yet.</p>";
   box.onclick = async ev => {
-    const b = ev.target.closest("[data-rep]");
-    if (!b || !token() || b.classList.contains("dead")) return;
-    const reason = window.prompt("Why are you reporting this comment?", "Inappropriate");
-    if (!reason || reason.trim().length < 3) return;
-    const r = await fetch("/comments/"+b.getAttribute("data-rep")+"/report", {
-      method:"POST",
-      headers:{ "Content-Type":"application/json", "x-token": token() },
-      body: JSON.stringify({ reason: reason.trim() })
-    });
-    if (r.ok) {
-      reportedAdd("comment:"+b.getAttribute("data-rep"));
-      b.textContent = "Reported";
-      b.classList.add("dead");
-      b.disabled = true;
+    const rep = ev.target.closest("[data-rep]");
+    const th = ev.target.closest("[data-thread]");
+    const send = ev.target.closest("[data-send-reply]");
+    if (rep) {
+      if (!token() || rep.classList.contains("dead")) return;
+      const reason = window.prompt("Why are you reporting this comment?", "Inappropriate");
+      if (!reason || reason.trim().length < 3) return;
+      const rr = await fetch("/comments/"+rep.getAttribute("data-rep")+"/report", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json", "x-token": token() },
+        body: JSON.stringify({ reason: reason.trim() })
+      });
+      if (rr.ok) {
+        reportedAdd("comment:"+rep.getAttribute("data-rep"));
+        rep.textContent = "Reported";
+        rep.classList.add("dead");
+        rep.disabled = true;
+      }
+      return;
+    }
+    if (th) {
+      const id = th.getAttribute("data-thread");
+      const pane = box.querySelector("[data-replies=\""+id+"\"]");
+      if (!pane) return;
+      if (!pane.classList.contains("hidden") && pane.dataset.loaded === "1") {
+        pane.classList.add("hidden");
+        return;
+      }
+      const rs = await fetch("/comments/"+id+"/replies");
+      const rd = await rs.json();
+      const replies = (rd.comments||[]).map(c => commentBlock(c, true)).join("");
+      pane.innerHTML = replies + "<textarea data-reply-ta=\""+id+"\" rows=\"2\" placeholder=\"Write a reply\"></textarea><button data-send-reply=\""+id+"\">Reply</button>";
+      pane.classList.remove("hidden");
+      pane.dataset.loaded = "1";
+      return;
+    }
+    if (send) {
+      const id = send.getAttribute("data-send-reply");
+      const ta = box.querySelector("[data-reply-ta=\""+id+"\"]");
+      postComment(box.dataset.slug, box.dataset.cid, ta, box, null, id);
     }
   };
 }
-async function postComment(slug, cid, ta, box, note){
+async function postComment(slug, cid, ta, box, note, parentId){
   if (!token()) { if (note) note.textContent = "Sign in to comment."; return; }
+  if (!ta) return;
   const body = (ta.value||"").trim();
   if (body.length < 2) return;
   const r = await fetch("/u/"+encodeURIComponent(slug)+"/cards/"+encodeURIComponent(cid)+"/comments", {
     method:"POST", headers:{ "Content-Type":"application/json", "x-token": token() },
-    body: JSON.stringify({ body })
+    body: JSON.stringify({ body, parent_id: parentId || 0 })
   });
   const t = await r.text();
   if (!r.ok) { if (note) note.textContent = t.slice(0,160); return; }
@@ -2005,14 +2066,19 @@ async function refreshNotesBadge(){
       $("openNotes").textContent = "Alerts";
       $("openNotes").classList.toggle("ping", n > 0);
     }
-    const want = localStorage.getItem("ice-follow-alerts") === "1";
     const last = +(localStorage.getItem("ice-note-unread")||0);
-    if (want && n > last && "Notification" in window && Notification.permission === "granted") {
-      try { new Notification("Ice Ledger", { body: "A binder you follow added a card." }); } catch(e){}
+    const fresh = (d.notes||[]).filter(x => !x.read);
+    const msg = (fresh[0] && fresh[0].body) || "";
+    const allow = (msg.indexOf("liked")>=0 && alertOn("ice-like-alerts"))
+      || (((msg.indexOf("commented")>=0)||(msg.indexOf("replied")>=0)) && alertOn("ice-comment-alerts"))
+      || (msg.indexOf("added")>=0 && alertOn("ice-follow-alerts"));
+    if (allow && n > last && "Notification" in window && Notification.permission === "granted") {
+      try { new Notification("Ice Ledger", { body: msg || "New activity in Community" }); } catch(e){}
     }
     localStorage.setItem("ice-note-unread", String(n));
   } catch(e){}
 }
+setInterval(() => { if (token()) refreshNotesBadge(); }, 40000);
 async function loadNotes(){
   const box = $("notesList");
   if (!box) return;

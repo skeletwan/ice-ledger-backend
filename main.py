@@ -638,6 +638,10 @@ def init_db():
         con.execute("ALTER TABLE comments ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0")
     except sqlite3.OperationalError:
         pass
+    try:
+        con.execute("ALTER TABLE comments ADD COLUMN parent_id INTEGER NOT NULL DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
     con.execute("""
     CREATE TABLE IF NOT EXISTS likes (
       slug TEXT NOT NULL,
@@ -798,6 +802,18 @@ def require_operator(request: Request = None, x_token: str | None = None):
     if not is_operator(uid):
         raise HTTPException(403, "operator only")
     return uid
+
+def add_note(con, user_id, slug, body, card_id=""):
+    if not user_id:
+        return
+    con.execute(
+        "INSERT INTO notes(user_id,slug,body,created,read,card_id) VALUES(?,?,?,?,0,?)",
+        (user_id, slug or "", body[:180], time.strftime("%Y-%m-%dT%H:%M:%SZ"), card_id or ""),
+    )
+
+def display_of(con, uid: int) -> str:
+    row = con.execute("SELECT display FROM users WHERE id=?", (uid,)).fetchone()
+    return ((row["display"] if row else None) or "Collector")[:24]
 
 def month_key():
     return time.strftime("%Y-%m")
@@ -1234,6 +1250,9 @@ async def like_binder(slug: str, request: Request, x_token: str | None = Header(
             (slug, uid, time.strftime("%Y-%m-%dT%H:%M:%SZ")),
         )
         liked = True
+        owner = con.execute("SELECT id FROM users WHERE slug=?", (slug,)).fetchone()
+        if owner and owner["id"] != uid:
+            add_note(con, owner["id"], slug, display_of(con, uid)+" liked your binder")
     con.commit()
     n = con.execute("SELECT COUNT(*) AS n FROM binder_likes WHERE slug=?", (slug,)).fetchone()["n"]
     con.close()
@@ -1398,6 +1417,8 @@ async def toggle_like(slug: str, cid: str, request: Request, x_token: str | None
             (slug, cid, uid, time.strftime("%Y-%m-%dT%H:%M:%SZ")),
         )
         liked = True
+        if owner and owner["id"] != uid:
+            add_note(con, owner["id"], slug, display_of(con, uid)+" liked your card", cid)
     con.commit()
     n = con.execute("SELECT COUNT(*) AS n FROM likes WHERE slug=? AND card_id=?", (slug, cid)).fetchone()["n"]
     con.close()
@@ -1445,6 +1466,8 @@ async def save_profile(payload: dict, request: Request, x_token: str | None = He
     hue = (payload.get("hue") or "").strip()[:16] or "#8fd4ee"
     bio = (payload.get("bio") or "").strip()[:140]
     avatar = payload.get("avatar") or ""
+    if payload.get("clear_avatar"):
+        avatar = ""
     if isinstance(avatar, str) and len(avatar) > 600000:
         avatar = ""
     cropx = str(payload.get("cropx") or "50")[:4]
@@ -1499,8 +1522,26 @@ async def public_binder(slug: str):
 async def list_comments(slug: str, cid: str):
     con = db()
     rows = con.execute(
-        "SELECT id,name,body,created FROM comments WHERE slug=? AND card_id=? AND IFNULL(hidden,0)=0 ORDER BY id DESC LIMIT 80",
+        "SELECT id,name,body,created,user_id,IFNULL(parent_id,0) AS parent_id FROM comments WHERE slug=? AND card_id=? AND IFNULL(hidden,0)=0 AND IFNULL(parent_id,0)=0 ORDER BY id DESC LIMIT 80",
         (slug, cid),
+    ).fetchall()
+    out = []
+    for r in rows:
+        item = dict(r)
+        item["replies"] = con.execute(
+            "SELECT COUNT(*) AS n FROM comments WHERE parent_id=? AND IFNULL(hidden,0)=0",
+            (r["id"],),
+        ).fetchone()["n"]
+        out.append(item)
+    con.close()
+    return {"comments": out}
+
+@app.get("/comments/{cid}/replies")
+async def list_replies(cid: int):
+    con = db()
+    rows = con.execute(
+        "SELECT id,name,body,created,user_id,parent_id FROM comments WHERE parent_id=? AND IFNULL(hidden,0)=0 ORDER BY id ASC LIMIT 80",
+        (cid,),
     ).fetchall()
     con.close()
     return {"comments": [dict(r) for r in rows]}
@@ -1509,6 +1550,7 @@ async def list_comments(slug: str, cid: str):
 async def add_comment(slug: str, cid: str, payload: dict, request: Request, x_token: str | None = Header(default=None)):
     uid = require_user(request, x_token)
     body = (payload.get("body") or "").strip()
+    parent_id = int(payload.get("parent_id") or 0)
     if len(body) < 2 or len(body) > 280:
         raise HTTPException(400, "comment 2–280 characters")
     con = db()
@@ -1520,6 +1562,15 @@ async def add_comment(slug: str, cid: str, payload: dict, request: Request, x_to
     if not card:
         con.close()
         raise HTTPException(404, "card not found")
+    parent = None
+    if parent_id:
+        parent = con.execute(
+            "SELECT id,user_id FROM comments WHERE id=? AND slug=? AND card_id=?",
+            (parent_id, slug, cid),
+        ).fetchone()
+        if not parent:
+            con.close()
+            raise HTTPException(404, "comment not found")
     hour = time.strftime("%Y-%m-%dT%H")
     n = con.execute(
         "SELECT COUNT(*) AS n FROM comments WHERE user_id=? AND created LIKE ?",
@@ -1528,17 +1579,20 @@ async def add_comment(slug: str, cid: str, payload: dict, request: Request, x_to
     if n >= 12:
         con.close()
         raise HTTPException(429, "slow down — 12 comments an hour")
-    who = con.execute("SELECT display FROM users WHERE id=?", (uid,)).fetchone()
-    name = ((who["display"] if who else None) or "Collector")[:24]
+    name = display_of(con, uid)
     created = time.strftime("%Y-%m-%dT%H:%M:%SZ")
     con.execute(
-        "INSERT INTO comments(slug,card_id,user_id,name,body,created) VALUES(?,?,?,?,?,?)",
-        (slug, cid, uid, name, body, created),
+        "INSERT INTO comments(slug,card_id,user_id,name,body,created,parent_id) VALUES(?,?,?,?,?,?,?)",
+        (slug, cid, uid, name, body, created, parent_id),
     )
-    con.commit()
     rid = con.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
+    if owner["id"] != uid:
+        add_note(con, owner["id"], slug, name+(" replied on your card" if parent_id else " commented on your card"), cid)
+    if parent and parent["user_id"] != uid and parent["user_id"] != owner["id"]:
+        add_note(con, parent["user_id"], slug, name+" replied to you", cid)
+    con.commit()
     con.close()
-    return {"ok": True, "id": rid, "name": name, "body": body, "created": created}
+    return {"ok": True, "id": rid, "name": name, "body": body, "created": created, "parent_id": parent_id}
 
 @app.post("/comments/{cid}/report")
 async def report_comment(cid: int, payload: dict, request: Request, x_token: str | None = Header(default=None)):
