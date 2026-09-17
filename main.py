@@ -503,7 +503,7 @@ def init_db():
         con.execute("ALTER TABLE users ADD COLUMN slug TEXT")
     except sqlite3.OperationalError:
         pass
-    for col, spec in (("display", "TEXT"), ("hue", "TEXT"), ("bio", "TEXT"), ("avatar", "TEXT")):
+    for col, spec in (("display", "TEXT"), ("hue", "TEXT"), ("bio", "TEXT"), ("avatar", "TEXT"), ("cropx", "TEXT"), ("cropy", "TEXT"), ("cropz", "TEXT")):
         try:
             con.execute(f"ALTER TABLE users ADD COLUMN {col} {spec}")
         except sqlite3.OperationalError:
@@ -529,11 +529,28 @@ def init_db():
     )
     """)
     con.execute("""
+    CREATE TABLE IF NOT EXISTS binder_likes (
+      slug TEXT NOT NULL,
+      user_id INTEGER NOT NULL,
+      created TEXT NOT NULL,
+      PRIMARY KEY (slug, user_id)
+    )
+    """)
+    con.execute("""
     CREATE TABLE IF NOT EXISTS follows (
       follower INTEGER NOT NULL,
       slug TEXT NOT NULL,
       created TEXT NOT NULL,
       PRIMARY KEY (follower, slug)
+    )
+    """)
+    con.execute("""
+    CREATE TABLE IF NOT EXISTS reports (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      slug TEXT NOT NULL,
+      reporter INTEGER,
+      reason TEXT,
+      created TEXT NOT NULL
     )
     """)
     con.execute("""
@@ -828,7 +845,7 @@ async def delete_card(cid: str, request: Request, x_token: str | None = Header(d
 async def list_binders():
     con = db()
     users = con.execute(
-        "SELECT id, slug, display, hue, bio, avatar FROM users WHERE slug IS NOT NULL AND slug != ''"
+        "SELECT id, slug, display, hue, bio, avatar, cropx, cropy, cropz FROM users WHERE slug IS NOT NULL AND slug != ''"
     ).fetchall()
     out = []
     for u in users:
@@ -857,13 +874,41 @@ async def list_binders():
             "hue": u["hue"] or "#8fd4ee",
             "bio": u["bio"] or "",
             "avatar": u["avatar"] or "",
+            "cropx": u["cropx"] or "50",
+            "cropy": u["cropy"] or "50",
+            "cropz": u["cropz"] or "100",
             "count": len(cards),
             "book": round(book, 2),
             "team": top,
             "players": " ".join(players).lower(),
         })
+        likes = con.execute("SELECT COUNT(*) AS n FROM binder_likes WHERE slug=?", (u["slug"],)).fetchone()["n"]
+        out[-1]["likes"] = likes
     con.close()
     return {"binders": out}
+
+@app.post("/u/{slug}/like")
+async def like_binder(slug: str, request: Request, x_token: str | None = Header(default=None)):
+    uid = require_user(request, x_token)
+    slug = re.sub(r"[^a-z0-9]", "", (slug or "").lower())
+    con = db()
+    if not con.execute("SELECT id FROM users WHERE slug=?", (slug,)).fetchone():
+        con.close()
+        raise HTTPException(404, "binder not found")
+    row = con.execute("SELECT user_id FROM binder_likes WHERE slug=? AND user_id=?", (slug, uid)).fetchone()
+    if row:
+        con.execute("DELETE FROM binder_likes WHERE slug=? AND user_id=?", (slug, uid))
+        liked = False
+    else:
+        con.execute(
+            "INSERT INTO binder_likes(slug,user_id,created) VALUES(?,?,?)",
+            (slug, uid, time.strftime("%Y-%m-%dT%H:%M:%SZ")),
+        )
+        liked = True
+    con.commit()
+    n = con.execute("SELECT COUNT(*) AS n FROM binder_likes WHERE slug=?", (slug,)).fetchone()["n"]
+    con.close()
+    return {"liked": liked, "likes": n}
 
 @app.post("/follow/{slug}")
 async def follow_binder(slug: str, request: Request, x_token: str | None = Header(default=None)):
@@ -890,6 +935,34 @@ async def follow_binder(slug: str, request: Request, x_token: str | None = Heade
     con.commit()
     con.close()
     return {"following": True}
+
+@app.post("/report/{slug}")
+async def report_binder(slug: str, payload: dict, request: Request, x_token: str | None = Header(default=None)):
+    uid = require_user(request, x_token)
+    slug = re.sub(r"[^a-z0-9]", "", (slug or "").lower())
+    reason = (payload.get("reason") or "photo")[:80]
+    con = db()
+    con.execute(
+        "INSERT INTO reports(slug,reporter,reason,created) VALUES(?,?,?,?)",
+        (slug, uid, reason, time.strftime("%Y-%m-%dT%H:%M:%SZ")),
+    )
+    n = con.execute("SELECT COUNT(*) AS n FROM reports WHERE slug=?", (slug,)).fetchone()["n"]
+    if n >= 3:
+        con.execute("UPDATE users SET avatar='' WHERE slug=?", (slug,))
+    con.commit()
+    con.close()
+    return {"ok": True, "reports": n}
+
+@app.post("/admin/clear-avatar")
+async def admin_clear(payload: dict):
+    if APP_SECRET and payload.get("secret") != APP_SECRET:
+        raise HTTPException(401, "app secret does not match")
+    slug = re.sub(r"[^a-z0-9]", "", (payload.get("slug") or "").lower())
+    con = db()
+    con.execute("UPDATE users SET avatar='' WHERE slug=?", (slug,))
+    con.commit()
+    con.close()
+    return {"ok": True}
 
 @app.get("/following")
 async def my_follows(request: Request, x_token: str | None = Header(default=None)):
@@ -966,7 +1039,7 @@ async def me(request: Request, x_token: str | None = Header(default=None)):
     uid = require_user(request, x_token)
     slug = ensure_slug(uid)
     con = db()
-    row = con.execute("SELECT display,hue,bio,avatar FROM users WHERE id=?", (uid,)).fetchone()
+    row = con.execute("SELECT display,hue,bio,avatar,cropx,cropy,cropz FROM users WHERE id=?", (uid,)).fetchone()
     con.close()
     return {
         "slug": slug,
@@ -975,6 +1048,9 @@ async def me(request: Request, x_token: str | None = Header(default=None)):
         "hue": (row["hue"] if row else None) or "#8fd4ee",
         "bio": (row["bio"] if row else None) or "",
         "avatar": (row["avatar"] if row else None) or "",
+        "cropx": (row["cropx"] if row else None) or "50",
+        "cropy": (row["cropy"] if row else None) or "50",
+        "cropz": (row["cropz"] if row else None) or "100",
     }
 
 @app.post("/profile")
@@ -986,10 +1062,16 @@ async def save_profile(payload: dict, request: Request, x_token: str | None = He
     avatar = payload.get("avatar") or ""
     if isinstance(avatar, str) and len(avatar) > 180000:
         avatar = ""
+    cropx = str(payload.get("cropx") or "50")[:4]
+    cropy = str(payload.get("cropy") or "50")[:4]
+    cropz = str(payload.get("cropz") or "100")[:4]
     if not display:
         raise HTTPException(400, "pick a screen name")
     con = db()
-    con.execute("UPDATE users SET display=?, hue=?, bio=?, avatar=? WHERE id=?", (display, hue, bio, avatar, uid))
+    con.execute(
+        "UPDATE users SET display=?, hue=?, bio=?, avatar=?, cropx=?, cropy=?, cropz=? WHERE id=?",
+        (display, hue, bio, avatar, cropx, cropy, cropz, uid),
+    )
     con.commit()
     con.close()
     return {"ok": True, "display": display, "hue": hue, "bio": bio, "avatar": avatar}
@@ -998,13 +1080,20 @@ async def save_profile(payload: dict, request: Request, x_token: str | None = He
 async def public_binder(slug: str):
     slug = re.sub(r"[^a-z0-9]", "", (slug or "").lower())
     con = db()
-    u = con.execute("SELECT id,display,hue,bio,avatar FROM users WHERE slug=?", (slug,)).fetchone()
+    u = con.execute("SELECT id,display,hue,bio,avatar,cropx,cropy,cropz FROM users WHERE slug=?", (slug,)).fetchone()
     if not u:
         con.close()
         raise HTTPException(404, "binder not found")
     rows = con.execute("SELECT data FROM cards WHERE user_id=?", (u["id"],)).fetchall()
-    con.close()
     cards = [public_card(json.loads(r["data"])) for r in rows]
+    for c in cards:
+        n = con.execute(
+            "SELECT COUNT(*) AS n FROM likes WHERE slug=? AND card_id=?",
+            (slug, c.get("id")),
+        ).fetchone()["n"]
+        c["likes"] = n
+    blink = con.execute("SELECT COUNT(*) AS n FROM binder_likes WHERE slug=?", (slug,)).fetchone()["n"]
+    con.close()
     book = sum((c.get("comp") or 0) for c in cards if isinstance(c.get("comp"), (int, float)))
     return {
         "slug": slug,
@@ -1012,8 +1101,12 @@ async def public_binder(slug: str):
         "hue": u["hue"] or "#8fd4ee",
         "bio": u["bio"] or "",
         "avatar": u["avatar"] or "",
+        "cropx": u["cropx"] or "50",
+        "cropy": u["cropy"] or "50",
+        "cropz": u["cropz"] or "100",
         "count": len(cards),
         "book": book,
+        "likes": blink,
         "cards": cards,
     }
 

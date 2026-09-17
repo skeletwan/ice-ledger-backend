@@ -106,6 +106,11 @@
     .pwid { display:flex; align-items:center; gap:12px; margin-bottom:10px; }
     .pava { width:52px; height:52px; border-radius:16px; background:var(--ice); color:#071016; font-weight:800; display:flex; align-items:center; justify-content:center; font-size:16px; overflow:hidden; border:3px solid var(--ice); flex:0 0 auto; }
     .pava img { width:100%; height:100%; object-fit:cover; display:block; }
+    .crop-lab { font-size:11px; color:var(--muted); margin-top:8px; }
+    .crop-lab input { margin-top:4px; }
+    .ava-full { display:none; position:fixed; inset:0; z-index:40; background:rgba(0,0,0,.88); align-items:center; justify-content:center; padding:24px; }
+    .ava-full.on { display:flex; }
+    .ava-full img { max-width:92vw; max-height:80vh; border-radius:16px; border:4px solid var(--ice); }
     .hue-swatch { width:48px; height:48px; padding:0; border:0; border-radius:12px; background:transparent; overflow:hidden; }
     .hue-swatch::-webkit-color-swatch-wrapper { padding:0; }
     .hue-swatch::-webkit-color-swatch { border:0; border-radius:12px; }
@@ -140,7 +145,7 @@
         <button class="ghost" id="signupBtn">Create account</button>
         <button class="ghost" id="showReset">Forgot password</button>
         <div id="resetBox" class="hidden">
-          <p class="muted">Set a new password with the app secret from Railway / the scan page.</p>
+          <p class="muted">Needs the Railway app secret.</p>
           <label>App secret</label>
           <input id="resetSecret" type="password" autocomplete="off" />
           <label>New password</label>
@@ -176,18 +181,18 @@
   </div>
 
   <section class="page on" id="scanPage">
-    <p class="muted">Front and back photos. Identify files the card.</p>
+    <p class="muted">Front and back, then Identify.</p>
     <div class="status" id="quotaBox">Free plan: 10 IDs / month. Ice+ is 200.</div>
     <button class="ghost" id="payBtn">Upgrade Ice+</button>
     <input id="secret" type="hidden" value="" />
     <div class="row2" style="margin-top:14px">
       <div class="shot-wrap" id="shotFront">
         <input class="shot-file" id="file" type="file" accept="image/*" />
-        <div class="shot-ui">Front photo<span>Camera or library</span></div>
+        <div class="shot-ui">Front</div>
       </div>
       <div class="shot-wrap" id="shotBack">
         <input class="shot-file" id="fileBack" type="file" accept="image/*" />
-        <div class="shot-ui">Back photo<span>Helps on raws</span></div>
+        <div class="shot-ui">Back</div>
       </div>
     </div>
     <div class="row2">
@@ -199,11 +204,11 @@
   </section>
   <section class="page" id="resultPage">
     <button class="ghost" id="backScan">New scan</button>
-    <div class="banner" id="compBanner">Searching sold comps… this can take 15–40 seconds.</div>
+    <div class="banner" id="compBanner">Looking up solds…</div>
     <p class="status" id="resultStatus"></p>
     <div class="card" id="result">
       <div class="badge" id="badge"></div>
-      <p class="muted">Fix anything wrong, especially parallel, then save.</p>
+      <p class="muted">Fix the name if it’s wrong, then save.</p>
       <div class="grid">
         <div class="field" style="grid-column:1/-1"><label>Player</label><input id="f_player" /></div>
         <div class="field"><label>Year</label><input id="f_year" /></div>
@@ -266,7 +271,7 @@
     <div id="list"></div>
     <button id="refreshBook">Refresh book</button>
     <p class="muted" id="bookNote"></p>
-    <button class="ghost" id="shareBtn">Copy public binder link</button>
+    <button class="ghost" id="shareBtn">Share binder</button>
     <p class="muted" id="shareNote"></p>
     <button class="ghost" id="exportBtn">Export JSON</button>
   </section>
@@ -276,7 +281,7 @@
     <div id="searchList"></div>
   </section>
   <section class="page" id="findPage">
-    <p class="muted">Community binders. Follow one to get a ping when they add a card.</p>
+    <p class="muted">Follow a binder to hear when they add cards.</p>
     <button class="ghost" id="openNotes">Notifications <span id="noteBadge"></span></button>
     <input id="findQ" placeholder="Screen name or player…" />
     <select id="findSort">
@@ -284,18 +289,22 @@
       <option value="value">Highest book</option>
       <option value="team">Team A–Z</option>
       <option value="name">Name A–Z</option>
+      <option value="following">Following</option>
+      <option value="likes">Most liked</option>
     </select>
     <div id="findList"></div>
   </section>
   <section class="page" id="notesPage">
     <button class="ghost" id="backFindNotes">Community</button>
     <h2 style="font-size:18px;margin:12px 0 8px">Notifications</h2>
-    <p class="muted">When someone you follow adds a card. Phone push needs the app open or a later push setup — this list always works.</p>
+    <p class="muted">New cards from binders you follow.</p>
     <div id="notesList"></div>
   </section>
   <section class="page" id="pubPage">
     <button class="ghost" id="backFind">Community</button>
-    <button class="ghost" id="followBtn">Follow binder</button>
+    <button class="ghost" id="followBtn">Follow</button>
+    <button class="ghost" id="likeBinderBtn">Like binder · 0</button>
+    <button class="ghost" id="reportBtn">Report photo</button>
     <p class="muted" id="pubHead"></p>
     <div id="pubList"></div>
   </section>
@@ -314,7 +323,7 @@
   </section>
   <section class="page" id="setPage">
     <h2 style="font-size:18px;margin:0 0 8px">You</h2>
-    <p class="muted">Plan, profile, alerts, sign out.</p>
+    <p class="muted">Profile and account.</p>
     <div class="card" style="margin-top:12px">
       <div class="pwid" id="pWid"><div class="pava" id="pAva">IL</div><div><b id="pName">Collector</b><div class="muted" id="pSlug"></div></div></div>
       <label>Display name</label>
@@ -324,7 +333,7 @@
           <label>Widget photo</label>
           <div class="shot-wrap" id="shotProfile" style="min-height:88px;margin-top:4px">
             <input class="shot-file" id="pPhoto" type="file" accept="image/*" />
-            <div class="shot-ui">Add photo<span>Camera or library</span></div>
+            <div class="shot-ui">Photo</div>
           </div>
         </div>
         <div>
@@ -332,18 +341,27 @@
           <input id="pHue" class="hue-swatch" type="color" value="#8fd4ee" />
         </div>
       </div>
+      <p class="crop-lab">Move photo
+        <input id="pCropX" type="range" min="0" max="100" value="50" />
+      </p>
+      <p class="crop-lab">Up / down
+        <input id="pCropY" type="range" min="0" max="100" value="50" />
+      </p>
+      <p class="crop-lab">Zoom
+        <input id="pCropZ" type="range" min="100" max="180" value="100" />
+      </p>
       <label>Short bio</label>
       <input id="pBio" maxlength="140" placeholder="Team, era, what you collect" />
       <button id="pSave">Save profile</button>
       <p class="muted" id="pNote"></p>
     </div>
     <button class="ghost" id="tabHelp">Support / feedback</button>
-    <label>App secret (Railway APP_SECRET)</label>
+    <label>App secret</label>
     <input id="plusSecret" type="password" autocomplete="off" />
     <button id="plusBtn">Unlock Ice+ on this account</button>
     <p class="muted" id="plusNote"></p>
     <h3 style="font-size:15px;margin:16px 0 8px">Alerts</h3>
-    <p class="muted">Daily push pings are off for now. They only repeat yesterday’s book unless Refresh book runs, so a 6pm ping would be noise. We’ll turn them on when book can update itself.</p>
+    <p class="muted">Pushes stay off until book can update itself.</p>
     <button class="ghost" id="logoutBtn">Get out</button>
   </section>
   <section class="page" id="helpPage">
@@ -352,7 +370,7 @@
     <p class="muted">I’m just one dude running this app. If you need a hand with anything, I’ll do my best to get back to you as soon as I can. Any feedback on improvements is definitely welcome!</p>
     <div class="card">
       <h3 style="margin:0 0 8px;font-size:15px">Contact</h3>
-      <p class="muted">Email <a href="mailto:iceledger@outlook.com" style="color:var(--ice)">iceledger@outlook.com</a>. Say if it’s a bug, a card that IDed wrong, or an idea.</p>
+      <p class="muted"><a href="mailto:iceledger@outlook.com" style="color:var(--ice)">iceledger@outlook.com</a></p>
       <a class="btn" href="mailto:iceledger@outlook.com?subject=Ice%20Ledger%20feedback">Email support / feedback</a>
     </div>
   </section>
@@ -400,7 +418,7 @@
   </section>
   <section class="page" id="editPage">
     <button class="ghost" id="backDetail">Back to card</button>
-    <p class="muted">Change version / parallel here. Save writes the binder.</p>
+    <p class="muted">Edit, then save.</p>
     <label>Player</label><input id="e_player" />
     <div class="row2">
       <div><label>Year</label><input id="e_year" /></div>
@@ -1163,9 +1181,7 @@ function renderBinder(){
   else if (sort==="player") rows.sort((a,b)=> (a.player||"").localeCompare(b.player||""));
   else if (sort==="value") rows.sort((a,b)=> (+b.comp||0)-(+a.comp||0));
   const t = totals();
-  $("valueNote").textContent = t.mktN < t.cards
-    ? "Tap a card for the full photo. Sort by team or pick one team."
-    : "Tap a card for details. Sort by team A–Z or filter one club.";
+  $("valueNote").textContent = "";
   if (!rows.length) { $("list").innerHTML = "<p class=\"muted\">No cards match.</p>"; return; }
   if (sort==="team" && !teamF) {
     let html = "", last = "";
@@ -1412,26 +1428,36 @@ async function loadMe(){
     const d = await r.json();
     mySlug = d.slug || "";
     myAvatar = d.avatar || myAvatar || "";
-    if ($("shareNote")) $("shareNote").textContent = "Share link copies without showing your login name.";
+    if ($("shareNote")) $("shareNote").textContent = "";
     if ($("pDisplay")) $("pDisplay").value = d.display || "";
     if ($("pHue") && d.hue) $("pHue").value = d.hue;
     if ($("pBio")) $("pBio").value = d.bio || "";
+    if ($("pCropX")) $("pCropX").value = d.cropx || "50";
+    if ($("pCropY")) $("pCropY").value = d.cropy || "50";
+    if ($("pCropZ")) $("pCropZ").value = d.cropz || "100";
     paintProfile(d.display || "Collector", d.hue || "#8fd4ee", myAvatar);
   } catch(e){}
+}
+function cropStyle(){
+  const x = ($("pCropX") && $("pCropX").value) || "50";
+  const y = ($("pCropY") && $("pCropY").value) || "50";
+  const z = ($("pCropZ") && $("pCropZ").value) || "100";
+  return "object-fit:cover;object-position:"+x+"% "+y+"%;transform:scale("+(z/100)+");transform-origin:"+x+"% "+y+"%";
 }
 function paintProfile(name, hue, avatar){
   const ini = (name||"C").slice(0,2).toUpperCase();
   if ($("pAva")) {
     $("pAva").style.borderColor = hue || "#8fd4ee";
     $("pAva").style.background = hue || "#8fd4ee";
-    if (avatar) $("pAva").innerHTML = "<img alt=\"\" src=\""+avatar+"\" />";
+    if (avatar) $("pAva").innerHTML = "<img alt=\"\" src=\""+avatar+"\" style=\""+cropStyle()+"\" />";
     else $("pAva").textContent = ini;
   }
   if ($("pName")) $("pName").textContent = name || "Collector";
-  if ($("pSlug")) $("pSlug").textContent = "Screen name only — login stays private";
+  if ($("pSlug")) $("pSlug").textContent = "";
 }
 $("pHue") && ($("pHue").oninput = () => paintProfile(($("pDisplay").value||"Collector"), $("pHue").value, myAvatar));
 $("pDisplay") && ($("pDisplay").oninput = () => paintProfile($("pDisplay").value, $("pHue").value, myAvatar));
+["pCropX","pCropY","pCropZ"].forEach(id => { $(id) && ($(id).oninput = () => paintProfile($("pDisplay").value||"Collector", $("pHue").value, myAvatar)); });
 $("pPhoto") && ($("pPhoto").onchange = async () => {
   const f = $("pPhoto").files[0];
   if (!f) return;
@@ -1444,7 +1470,7 @@ $("pSave") && ($("pSave").onclick = async () => {
     const r = await fetch("/profile", {
       method:"POST",
       headers:{ "Content-Type":"application/json", "x-token": token() },
-      body: JSON.stringify({ display:$("pDisplay").value, hue:$("pHue").value, bio:$("pBio").value, avatar: myAvatar })
+      body: JSON.stringify({ display:$("pDisplay").value, hue:$("pHue").value, bio:$("pBio").value, avatar: myAvatar, cropx:$("pCropX")&&$("pCropX").value, cropy:$("pCropY")&&$("pCropY").value, cropz:$("pCropZ")&&$("pCropZ").value })
     });
     const t = await r.text();
     if (!r.ok) throw new Error(t.slice(0,160));
@@ -1540,30 +1566,54 @@ function renderFind(){
     const team = (b.team||"").toLowerCase();
     return name.includes(q) || players.includes(q) || team.includes(q);
   });
+  if (sort==="following") rows = rows.filter(b => following[b.slug]);
   if (sort==="value") rows.sort((a,b)=>(+b.book||0)-(+a.book||0));
   else if (sort==="team") rows.sort((a,b)=>(a.team||"zzz").localeCompare(b.team||"zzz"));
   else if (sort==="name") rows.sort((a,b)=>(a.display||"").localeCompare(b.display||""));
-  else rows.sort((a,b)=>(+b.count||0)-(+a.count||0));
+  else if (sort==="likes") rows.sort((a,b)=>(+b.likes||0)-(+a.likes||0));
+  else if (sort!=="following") rows.sort((a,b)=>(+b.count||0)-(+a.count||0));
   $("findList").innerHTML = rows.length ? rows.map(b => {
     const name = b.display || "Collector";
     const hue = b.hue || "#8fd4ee";
-    const av = b.avatar ? "<img alt=\"\" src=\""+b.avatar+"\" />" : name.slice(0,2).toUpperCase();
-    const extra = [b.count+" cards", b.book?money(b.book):"", b.team||"", following[b.slug]?"Following":""].filter(Boolean).join(" · ");
-    return "<article class=\"item\" data-slug=\""+b.slug+"\"><div class=\"pwid\"><div class=\"pava\" style=\"border-color:"+hue+";background:"+hue+"\">"+av+"</div><div><h3>"+name+"</h3><div class=\"muted\">"+extra+"</div></div></div></article>";
+    const st = "object-fit:cover;object-position:"+(b.cropx||50)+"% "+(b.cropy||50)+"%;transform:scale("+((b.cropz||100)/100)+");transform-origin:"+(b.cropx||50)+"% "+(b.cropy||50)+"%";
+    const av = b.avatar ? "<img alt=\"\" src=\""+b.avatar+"\" style=\""+st+"\" />" : name.slice(0,2).toUpperCase();
+    const extra = [b.count+" cards", (b.likes||0)+" likes", b.book?money(b.book):"", b.team||"", following[b.slug]?"Following":""].filter(Boolean).join(" · ");
+    return "<article class=\"item\" data-slug=\""+b.slug+"\"><div class=\"pwid\"><div class=\"pava\" data-full=\""+(b.avatar||"")+"\" style=\"border-color:"+hue+";background:"+hue+"\">"+av+"</div><div><h3>"+name+"</h3><div class=\"muted\">"+extra+"</div></div></div></article>";
   }).join("") : "<p class=\"muted\">No public binders yet. Save a card while signed in, then this list fills in.</p>";
 }
 $("findQ") && ($("findQ").oninput = renderFind);
 $("findSort") && ($("findSort").onchange = renderFind);
+function showFull(src){
+  if (!src) return;
+  $("avaFullImg").src = src;
+  $("avaFull").classList.add("on");
+}
+$("avaFull") && ($("avaFull").onclick = () => $("avaFull").classList.remove("on"));
+$("pAva") && ($("pAva").onclick = () => { if (myAvatar) showFull(myAvatar); });
 $("findList") && ($("findList").onclick = e => {
+  const av = e.target.closest("[data-full]");
+  if (av && av.getAttribute("data-full")) { showFull(av.getAttribute("data-full")); return; }
   const art = e.target.closest("[data-slug]");
   if (art) openPublic(art.getAttribute("data-slug"));
+});
+$("reportBtn") && ($("reportBtn").onclick = async () => {
+  if (!token() || !viewSlug) return;
+  const r = await fetch("/report/"+encodeURIComponent(viewSlug), {
+    method:"POST", headers:{ "Content-Type":"application/json", "x-token": token() },
+    body: JSON.stringify({ reason:"photo" })
+  });
+  $("pubHead").textContent = r.ok ? "Reported. Three reports hide the photo." : "Could not report.";
 });
 $("backFind") && ($("backFind").onclick = () => show("find"));
 $("backFindNotes") && ($("backFindNotes").onclick = () => show("find"));
 $("openNotes") && ($("openNotes").onclick = () => { show("notes"); loadNotes(); });
 function paintFollow(){
   if (!$("followBtn") || !viewSlug) return;
-  $("followBtn").textContent = following[viewSlug] ? "Following" : "Follow binder";
+  $("followBtn").textContent = following[viewSlug] ? "Following" : "Follow";
+}
+function paintBinderLike(n, liked){
+  if (!$("likeBinderBtn")) return;
+  $("likeBinderBtn").textContent = (liked ? "Liked · " : "Like binder · ") + (n||0);
 }
 $("followBtn") && ($("followBtn").onclick = async () => {
   if (!token()) { $("pubHead").textContent = "Sign in to follow."; return; }
@@ -1628,9 +1678,16 @@ async function openPublic(slug){
   const d = await r.json();
   $("pubHead").textContent = (d.display||"Collector")+" · "+d.count+" cards · book "+(d.book?money(d.book):"—")+(d.bio?" · "+d.bio:"");
   paintFollow();
+  paintBinderLike(d.likes||0, false);
+  $("likeBinderBtn") && ($("likeBinderBtn").onclick = async () => {
+    if (!token()) return;
+    const r = await fetch("/u/"+encodeURIComponent(viewSlug)+"/like", { method:"POST", headers:{ "x-token": token() } });
+    const j = await r.json().catch(()=>({}));
+    if (r.ok) paintBinderLike(j.likes, j.liked);
+  });
   pubCards = d.cards || [];
   $("pubList").innerHTML = pubCards.map(c =>
-    "<article class=\"item\" data-pub=\""+c.id+"\"><div class=\"item-top\"><img src=\""+(c.photo||"")+"\" alt=\"\" /><div><h3>"+(c.player||"—")+"</h3><div class=\"muted\">"+[c.team,c.year,c.set,c.number?"#"+c.number:""].filter(Boolean).join(" · ")+"</div></div></div></article>"
+    "<article class=\"item\" data-pub=\""+c.id+"\"><div class=\"item-top\"><img src=\""+(c.photo||"")+"\" alt=\"\" /><div><h3>"+(c.player||"—")+"</h3><div class=\"muted\">"+[c.team,c.year,c.set,c.number?"#"+c.number:"", (c.likes||0)+" likes"].filter(Boolean).join(" · ")+"</div></div></div></article>"
   ).join("") || "<p class=\"muted\">Empty binder.</p>";
   show("pub");
 }
@@ -1660,5 +1717,6 @@ if (guestB) {
 paintTicker();
 renderBinder();
 </script>
+<div class="ava-full" id="avaFull"><img id="avaFullImg" alt="" /></div>
 </body>
 </html>
