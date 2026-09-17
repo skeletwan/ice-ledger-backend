@@ -117,8 +117,8 @@
     .dock button.ping, button.ghost.ping { color:#7ef0d2; font-weight:800; box-shadow:inset 0 0 0 2px #7ef0d2; border-radius:10px; }
     .page { padding-bottom:88px; }
     .pwid { display:flex; align-items:center; gap:12px; margin-bottom:10px; }
-    .pava { width:52px; height:52px; border-radius:16px; background:var(--ice); color:#071016; font-weight:800; display:flex; align-items:center; justify-content:center; font-size:16px; overflow:hidden; border:3px solid var(--ice); flex:0 0 auto; }
-    .pava img { width:100%; height:100%; object-fit:cover; display:block; }
+    .pava { width:56px; height:56px; border-radius:16px; background:var(--ice); color:#071016; font-weight:800; display:flex; align-items:center; justify-content:center; font-size:16px; overflow:hidden; border:3px solid var(--ice); flex:0 0 auto; position:relative; }
+    .pava img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; background:#0e171e; }
     .crop-lab { font-size:11px; color:var(--muted); margin-top:8px; }
     .crop-lab input { margin-top:4px; }
     .ava-full { display:none; position:fixed; inset:0; z-index:50; background:rgba(0,0,0,.88); align-items:center; justify-content:center; padding:24px; flex-direction:column; gap:12px; }
@@ -403,7 +403,7 @@
     <button id="plusBtn">Unlock Ice+ on this account</button>
     <p class="muted" id="plusNote"></p>
     <h3 style="font-size:15px;margin:16px 0 8px">Moderation</h3>
-    <p class="muted">Reports land here. Three unique reports hide a photo or comment.</p>
+    <p class="muted">Every new report emails you. Three unique reports hide the photo or comment. Restore below if people are messing around.</p>
     <button class="ghost" id="modLoad">Load reports</button>
     <div id="modList"></div>
     </div>
@@ -1458,9 +1458,30 @@ $("modLoad") && ($("modLoad").onclick = async () => {
   const t = await r.text();
   if (!r.ok) { box.textContent = t.slice(0,160); return; }
   const d = JSON.parse(t);
-  box.innerHTML = (d.reports||[]).length ? d.reports.map(x =>
+  const reports = (d.reports||[]).map(x =>
     "<div class=\"item\" style=\"cursor:default\"><b>"+x.slug+"</b> <span class=\"muted\">"+(x.created||"").slice(0,16)+"</span><p style=\"margin:6px 0 0\">"+String(x.reason||"").replace(/[<>]/g,"")+"</p></div>"
-  ).join("") : "<p class=\"muted\">No reports.</p>";
+  ).join("") || "<p class=\"muted\">No reports yet.</p>";
+  const photos = (d.hidden_photos||[]).map(x =>
+    "<div class=\"item\" style=\"cursor:default\"><b>Photo · "+(x.display||x.slug)+"</b><button class=\"ghost\" data-restore-photo=\""+x.slug+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Restore photo</button></div>"
+  ).join("") || "<p class=\"muted\">No hidden photos.</p>";
+  const comments = (d.hidden_comments||[]).map(x =>
+    "<div class=\"item\" style=\"cursor:default\"><b>Comment · "+x.slug+" #"+x.id+"</b><p style=\"margin:6px 0 0\">"+String(x.body||"").replace(/[<>]/g,"")+"</p><button class=\"ghost\" data-restore-comment=\""+x.id+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Restore comment</button></div>"
+  ).join("") || "<p class=\"muted\">No hidden comments.</p>";
+  box.innerHTML = "<h3 style=\"font-size:14px\">Inbox</h3>"+reports+"<h3 style=\"font-size:14px;margin-top:14px\">Removed</h3>"+photos+comments;
+});
+$("modList") && ($("modList").onclick = async ev => {
+  const p = ev.target.closest("[data-restore-photo]");
+  const c = ev.target.closest("[data-restore-comment]");
+  if (!p && !c) return;
+  const path = p ? "/admin/restore-photo" : "/admin/restore-comment";
+  const body = p ? { slug: p.getAttribute("data-restore-photo") } : { id: +c.getAttribute("data-restore-comment") };
+  const r = await fetch(path, {
+    method:"POST",
+    headers:{ "Content-Type":"application/json", "x-token": token() },
+    body: JSON.stringify(body)
+  });
+  if ($("modLoad")) $("modLoad").click();
+  if (!r.ok) alert("Could not restore");
 });
 if ($("followAlertOn")) $("followAlertOn").checked = localStorage.getItem("ice-follow-alerts") === "1";
 $("followAlertSave") && ($("followAlertSave").onclick = async () => {
@@ -1758,9 +1779,8 @@ function renderFind(){
   $("findList").innerHTML = rows.length ? rows.map(b => {
     const name = b.display || "Collector";
     const hue = b.hue || "#8fd4ee";
-    const av = (b.has_avatar || b.avatar)
-      ? "<img alt=\"\" src=\"/u/"+b.slug+"/avatar\" />"
-      : name.slice(0,2).toUpperCase();
+    const ini = name.slice(0,2).toUpperCase();
+    const av = ini+"<img alt=\"\" src=\"/u/"+b.slug+"/avatar\" onerror=\"this.remove()\" />";
     const extra = [b.count+" cards", b.book?money(b.book):""].filter(Boolean).join(" · ");
     const heart = "<span class=\"heart\">♥ "+(b.likes||0)+"</span>";
     const fol = following[b.slug] ? " · Following" : "";
@@ -1861,6 +1881,7 @@ $("cropDone") && ($("cropDone").onclick = ev => {
   paintProfile($("pDisplay").value||"Collector", $("pHue").value, myAvatar);
   if ($("shotProfile")) $("shotProfile").classList.add("on");
   $("cropFull").classList.remove("on");
+  if ($("pSave")) $("pSave").click();
 });
 $("cropFull") && ($("cropFull").onclick = e => { if (e.target.id === "cropFull") $("cropFull").classList.remove("on"); });
 $("pAva") && ($("pAva").onclick = () => { if (myAvatar) showFull(myAvatar); });

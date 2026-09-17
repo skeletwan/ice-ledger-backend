@@ -597,7 +597,7 @@ def init_db():
         con.execute("ALTER TABLE users ADD COLUMN slug TEXT")
     except sqlite3.OperationalError:
         pass
-    for col, spec in (("display", "TEXT"), ("hue", "TEXT"), ("bio", "TEXT"), ("avatar", "TEXT"), ("cropx", "TEXT"), ("cropy", "TEXT"), ("cropz", "TEXT")):
+    for col, spec in (("display", "TEXT"), ("hue", "TEXT"), ("bio", "TEXT"), ("avatar", "TEXT"), ("cropx", "TEXT"), ("cropy", "TEXT"), ("cropz", "TEXT"), ("avatar_hidden", "INTEGER NOT NULL DEFAULT 0")):
         try:
             con.execute(f"ALTER TABLE users ADD COLUMN {col} {spec}")
         except sqlite3.OperationalError:
@@ -1024,7 +1024,7 @@ async def delete_card(cid: str, request: Request, x_token: str | None = Header(d
 async def list_binders():
     con = db()
     users = con.execute(
-        "SELECT id, slug, display, hue, bio, avatar, cropx, cropy, cropz FROM users WHERE slug IS NOT NULL AND slug != ''"
+        "SELECT id, slug, display, hue, bio, avatar, avatar_hidden, cropx, cropy, cropz FROM users WHERE slug IS NOT NULL AND slug != ''"
     ).fetchall()
     out = []
     for u in users:
@@ -1052,7 +1052,7 @@ async def list_binders():
             "display": u["display"] or "Collector",
             "hue": u["hue"] or "#8fd4ee",
             "bio": u["bio"] or "",
-            "has_avatar": bool(u["avatar"]),
+            "has_avatar": bool(u["avatar"]) and not int(u["avatar_hidden"] or 0),
             "cropx": u["cropx"] or "50",
             "cropy": u["cropy"] or "50",
             "cropz": u["cropz"] or "100",
@@ -1116,18 +1116,27 @@ async def follow_binder(slug: str, request: Request, x_token: str | None = Heade
 async def binder_avatar(slug: str):
     slug = re.sub(r"[^a-z0-9]", "", (slug or "").lower())
     con = db()
-    u = con.execute("SELECT avatar FROM users WHERE slug=?", (slug,)).fetchone()
+    u = con.execute("SELECT avatar, avatar_hidden FROM users WHERE slug=?", (slug,)).fetchone()
     con.close()
     raw = (u["avatar"] if u else "") or ""
-    if raw.startswith("data:image"):
-        try:
-            b64 = raw.split(",", 1)[1]
-            data = base64.b64decode(b64)
-            kind = "image/png" if "png" in raw[:30] else "image/jpeg"
-            return Response(data, media_type=kind, headers={"Cache-Control": "no-store"})
-        except Exception:
-            pass
-    raise HTTPException(404, "no photo")
+    if not raw or int((u["avatar_hidden"] if u else 0) or 0):
+        raise HTTPException(404, "no photo")
+    kind = "image/jpeg"
+    b64 = raw
+    if raw.startswith("data:"):
+        head, b64 = raw.split(",", 1) if "," in raw else (raw, "")
+        if "png" in head:
+            kind = "image/png"
+        elif "webp" in head:
+            kind = "image/webp"
+    b64 = re.sub(r"\s+", "", b64)
+    try:
+        data = base64.b64decode(b64)
+    except Exception:
+        raise HTTPException(404, "no photo")
+    if len(data) < 32:
+        raise HTTPException(404, "no photo")
+    return Response(data, media_type=kind, headers={"Cache-Control": "public, max-age=60"})
 
 
 @app.post("/report/{slug}")
@@ -1160,15 +1169,23 @@ async def report_binder(slug: str, payload: dict, request: Request, x_token: str
         "SELECT COUNT(DISTINCT reporter) AS n FROM reports WHERE slug=? AND IFNULL(reason,'') NOT LIKE 'comment:%'",
         (slug,),
     ).fetchone()["n"]
+    hidden = False
     if n >= 3:
-        con.execute("UPDATE users SET avatar='' WHERE slug=?", (slug,))
+        con.execute("UPDATE users SET avatar_hidden=1 WHERE slug=?", (slug,))
+        hidden = True
+    who = email_of(uid)
     con.commit()
     con.close()
     send_mail(
         "Ice Ledger photo report",
-        f"Profile photo report\nBinder: {slug}\nReporter id: {uid}\nReason: {reason}\nUnique reports: {n}\n(3 unique reports hide the photo.)",
+        f"Profile photo report\nBinder: {slug}\nReporter: {who} (id {uid})\nReason: {reason}\nUnique reports: {n}\n(3 unique reports hide the photo.)",
     )
-    return {"ok": True, "reports": n, "already": False}
+    if hidden:
+        send_mail(
+            "Ice Ledger photo removed",
+            f"Profile photo HIDDEN after 3 unique reports.\nBinder: {slug}\nLast reason: {reason}\nRestore it from Owner tools → Removed if this was junk reporting.",
+        )
+    return {"ok": True, "reports": n, "already": False, "removed": hidden}
 
 @app.post("/admin/clear-avatar")
 async def admin_clear(payload: dict):
@@ -1278,7 +1295,7 @@ async def save_profile(payload: dict, request: Request, x_token: str | None = He
     hue = (payload.get("hue") or "").strip()[:16] or "#8fd4ee"
     bio = (payload.get("bio") or "").strip()[:140]
     avatar = payload.get("avatar") or ""
-    if isinstance(avatar, str) and len(avatar) > 180000:
+    if isinstance(avatar, str) and len(avatar) > 600000:
         avatar = ""
     cropx = str(payload.get("cropx") or "50")[:4]
     cropy = str(payload.get("cropy") or "50")[:4]
@@ -1298,7 +1315,7 @@ async def save_profile(payload: dict, request: Request, x_token: str | None = He
 async def public_binder(slug: str):
     slug = re.sub(r"[^a-z0-9]", "", (slug or "").lower())
     con = db()
-    u = con.execute("SELECT id,display,hue,bio,avatar,cropx,cropy,cropz FROM users WHERE slug=?", (slug,)).fetchone()
+    u = con.execute("SELECT id,display,hue,bio,avatar,avatar_hidden,cropx,cropy,cropz FROM users WHERE slug=?", (slug,)).fetchone()
     if not u:
         con.close()
         raise HTTPException(404, "binder not found")
@@ -1318,7 +1335,7 @@ async def public_binder(slug: str):
         "display": u["display"] or "Collector",
         "hue": u["hue"] or "#8fd4ee",
         "bio": u["bio"] or "",
-        "avatar": u["avatar"] or "",
+        "avatar": "" if int(u["avatar_hidden"] or 0) else (u["avatar"] or ""),
         "cropx": u["cropx"] or "50",
         "cropy": u["cropy"] or "50",
         "cropz": u["cropz"] or "100",
@@ -1403,15 +1420,23 @@ async def report_comment(cid: int, payload: dict, request: Request, x_token: str
         "SELECT COUNT(DISTINCT reporter) AS n FROM reports WHERE reason LIKE ?",
         (f"comment:{cid}|%",),
     ).fetchone()["n"]
+    hidden = False
     if n >= 3:
         con.execute("UPDATE comments SET hidden=1 WHERE id=?", (cid,))
+        hidden = True
+    who = email_of(uid)
     con.commit()
     con.close()
     send_mail(
         "Ice Ledger comment report",
-        f"Comment report\nComment id: {cid}\nBinder: {row['slug']}\nReporter id: {uid}\nReason: {reason}\nText: {(row['body'] or '')[:200]}\nUnique reports: {n}\n(3 unique reports hide the comment.)",
+        f"Comment report\nComment id: {cid}\nBinder: {row['slug']}\nReporter: {who} (id {uid})\nReason: {reason}\nText: {(row['body'] or '')[:200]}\nUnique reports: {n}\n(3 unique reports hide the comment.)",
     )
-    return {"ok": True, "reports": n, "already": False}
+    if hidden:
+        send_mail(
+            "Ice Ledger comment removed",
+            f"Comment HIDDEN after 3 unique reports.\nComment id: {cid}\nBinder: {row['slug']}\nText: {(row['body'] or '')[:200]}\nLast reason: {reason}\nRestore it from Owner tools → Removed if this was junk reporting.",
+        )
+    return {"ok": True, "reports": n, "already": False, "removed": hidden}
 
 @app.get("/admin/inbox")
 async def admin_inbox(request: Request, secret: str = "", x_token: str | None = Header(default=None)):
@@ -1420,14 +1445,45 @@ async def admin_inbox(request: Request, secret: str = "", x_token: str | None = 
     else:
         require_operator(request, x_token)
     con = db()
-    rows = con.execute("SELECT id,slug,reason,created FROM reports ORDER BY id DESC LIMIT 80").fetchall()
+    rows = con.execute("SELECT id,slug,reporter,reason,created FROM reports ORDER BY id DESC LIMIT 80").fetchall()
+    photos = con.execute(
+        "SELECT slug, display FROM users WHERE IFNULL(avatar_hidden,0)=1 AND slug IS NOT NULL AND slug != ''"
+    ).fetchall()
+    comments = con.execute(
+        "SELECT id, slug, body FROM comments WHERE IFNULL(hidden,0)=1 ORDER BY id DESC LIMIT 80"
+    ).fetchall()
     con.close()
-    return {"reports": [dict(r) for r in rows]}
+    return {
+        "reports": [dict(r) for r in rows],
+        "hidden_photos": [dict(r) for r in photos],
+        "hidden_comments": [dict(r) for r in comments],
+    }
+
+@app.post("/admin/restore-photo")
+async def admin_restore_photo(payload: dict, request: Request, x_token: str | None = Header(default=None)):
+    require_operator(request, x_token)
+    slug = re.sub(r"[^a-z0-9]", "", (payload.get("slug") or "").lower())
+    con = db()
+    con.execute("UPDATE users SET avatar_hidden=0 WHERE slug=?", (slug,))
+    con.commit()
+    con.close()
+    send_mail("Ice Ledger photo restored", f"Profile photo restored for binder: {slug}")
+    return {"ok": True}
+
+@app.post("/admin/restore-comment")
+async def admin_restore_comment(payload: dict, request: Request, x_token: str | None = Header(default=None)):
+    require_operator(request, x_token)
+    cid = int(payload.get("id") or 0)
+    con = db()
+    con.execute("UPDATE comments SET hidden=0 WHERE id=?", (cid,))
+    con.commit()
+    con.close()
+    send_mail("Ice Ledger comment restored", f"Comment {cid} restored")
+    return {"ok": True}
 
 @app.post("/admin/hide-comment")
-async def admin_hide(payload: dict):
-    if APP_SECRET and payload.get("secret") != APP_SECRET:
-        raise HTTPException(401, "app secret does not match")
+async def admin_hide(payload: dict, request: Request, x_token: str | None = Header(default=None)):
+    require_operator(request, x_token)
     cid = int(payload.get("id") or 0)
     con = db()
     con.execute("UPDATE comments SET hidden=1 WHERE id=?", (cid,))
