@@ -724,7 +724,7 @@ async def plus(payload: dict, request: Request, x_token: str | None = Header(def
     """Flip plan to plus using APP_SECRET until Stripe webhook exists."""
     if APP_SECRET and payload.get("secret") != APP_SECRET:
         raise HTTPException(401, "app secret does not match")
-    uid = require_user(request, x_token)
+    uid = require_user(request, x_token or payload.get("token"))
     con = db()
     con.execute("UPDATE users SET plan='plus' WHERE id=?", (uid,))
     con.commit()

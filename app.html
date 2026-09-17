@@ -453,7 +453,9 @@ function flash(el, kind, text){
   n.className = "status on " + kind;
 }
 async function authPost(path, body){
-  const r = await fetch(path, { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(body) });
+  const headers = { "Content-Type":"application/json" };
+  if (token()) headers["x-token"] = token();
+  const r = await fetch(path, { method:"POST", headers, body: JSON.stringify(body) });
   const t = await r.text();
   if (!r.ok) throw new Error(niceErr(t));
   return JSON.parse(t);
@@ -1281,7 +1283,7 @@ function showPaywall(msg){
 async function unlockPlus(){
   const secret = ($("plusSecret") && $("plusSecret").value) || "";
   if (!secret) { if ($("plusNote")) $("plusNote").textContent = "Paste APP_SECRET from Railway first."; show("set"); return; }
-  const p = await authPost("/plus", { secret });
+  const p = await authPost("/plus", { secret, token: token() });
   await refreshUsage();
   if ($("plusNote")) $("plusNote").textContent = "Ice+ on. "+p.left+" IDs this month.";
   if ($("quotaBox")) { $("quotaBox").textContent = "Ice+ on. "+p.left+" IDs left this month."; $("quotaBox").className = "status ok"; }
