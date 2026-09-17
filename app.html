@@ -93,10 +93,6 @@
     .quote-wrap { display:none; }
     body.chart-on .quote-wrap { display:block; }
     header { position:sticky; top:0; z-index:8; background:#071016; }
-    body.bind-on { overflow:hidden; }
-    body.bind-on #bindPage.on { display:flex; flex-direction:column; height:calc(100dvh - 118px); overflow:hidden; padding-bottom:8px; }
-    body.bind-on .bookbar, body.bind-on .stick { flex:0 0 auto; position:static; }
-    body.bind-on #list { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; min-height:0; }
     #q { font-size:16px; }
     .bookbar { display:none; padding:10px 0 4px; }
     body.bind-on .bookbar { display:block; }
@@ -252,8 +248,7 @@
   <section class="page" id="bindPage">
     <div class="bookbar" id="bookBar"></div>
     <p class="muted" id="valueNote"></p>
-    <div class="stick" id="searchStick">
-    <input id="q" placeholder="Search binder…" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search" />
+    <button class="ghost" id="openSearch">Search binder</button>
     <div class="row2">
       <select id="sortBy">
         <option value="new">Newest</option>
@@ -265,13 +260,17 @@
         <option value="">All teams</option>
       </select>
     </div>
-    </div>
     <div id="list"></div>
     <button id="refreshBook">Refresh book</button>
     <p class="muted" id="bookNote"></p>
     <button class="ghost" id="shareBtn">Copy public binder link</button>
     <p class="muted" id="shareNote"></p>
     <button class="ghost" id="exportBtn">Export JSON</button>
+  </section>
+  <section class="page" id="searchPage">
+    <button class="ghost" id="backBindFromSearch">Back to binder</button>
+    <input id="q" placeholder="Player, team, set, number…" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search" />
+    <div id="searchList"></div>
   </section>
   <section class="page" id="findPage">
     <p class="muted">Open someone else’s public binder. Comment and like cards there.</p>
@@ -580,13 +579,15 @@ function show(id){
   if ($("pubDetail")) $("pubDetail").classList.toggle("on", id==="pubDetail");
   if ($("findPage")) $("findPage").classList.toggle("on", id==="find");
   if ($("helpPage")) $("helpPage").classList.toggle("on", id==="help");
+  if ($("searchPage")) $("searchPage").classList.toggle("on", id==="search");
   if (id==="bind") renderBinder();
+  if (id==="search") renderSearch();
   if (id==="find") loadFind();
   document.body.classList.toggle("bind-on", id==="bind");
   document.body.classList.toggle("dock-on", true);
   document.body.classList.toggle("chart-on", id==="bind" && document.body.classList.contains("chart-open"));
   ["tabScan","tabBind","tabFind","tabSet"].forEach(tid => {
-    if ($(tid)) $(tid).classList.toggle("on", (tid==="tabScan"&&id==="scan")||(tid==="tabBind"&&(id==="bind"||id==="detail"||id==="edit"))||(tid==="tabFind"&&(id==="find"||id==="pub"||id==="pubDetail"))||(tid==="tabSet"&&id==="set"));
+    if ($(tid)) $(tid).classList.toggle("on", (tid==="tabScan"&&id==="scan")||(tid==="tabBind"&&(id==="bind"||id==="detail"||id==="edit"||id==="search"))||(tid==="tabFind"&&(id==="find"||id==="pub"||id==="pubDetail"))||(tid==="tabSet"&&id==="set"));
   });
   window.scrollTo(0,0);
 }
@@ -1114,7 +1115,6 @@ function cardRowHtml(c){
 }
 function renderBinder(){
   const cards = load();
-  const q = ($("q").value||"").toLowerCase();
   const teamF = $("teamFilter") ? $("teamFilter").value : "";
   const sort = $("sortBy") ? $("sortBy").value : "new";
   const teams = [...new Set(cards.map(teamName))].sort((a,b)=>a.localeCompare(b));
@@ -1129,7 +1129,6 @@ function renderBinder(){
   }
   let rows = cards.filter(c => {
     const hay = [c.player,c.team,c.set,c.year,c.number,c.insert,c.parallel,c.cert].join(" ").toLowerCase();
-    if (q && !hay.includes(q)) return false;
     if (teamF && teamName(c) !== teamF) return false;
     return true;
   });
@@ -1156,13 +1155,24 @@ function renderBinder(){
     $("list").innerHTML = rows.map(cardRowHtml).join("");
   }
 }
-$("q").oninput = () => {
-  const el = $("q");
-  const start = el.selectionStart;
-  renderBinder();
-  if (document.activeElement !== el) el.focus();
-  try { el.setSelectionRange(start, start); } catch(e){}
-};
+function renderSearch(){
+  const q = (($("q")&&$("q").value)||"").toLowerCase().trim();
+  const box = $("searchList");
+  if (!box) return;
+  if (!q) { box.innerHTML = "<p class=\"muted\">Type a player, team, set, or number.</p>"; return; }
+  const rows = load().filter(c => {
+    const hay = [c.player,c.team,c.set,c.year,c.number,c.insert,c.parallel,c.cert].join(" ").toLowerCase();
+    return hay.includes(q);
+  });
+  box.innerHTML = rows.length ? rows.map(cardRowHtml).join("") : "<p class=\"muted\">No cards match.</p>";
+}
+$("openSearch") && ($("openSearch").onclick = () => { if ($("q")) $("q").value = ""; show("search"); setTimeout(() => $("q") && $("q").focus(), 200); });
+$("backBindFromSearch") && ($("backBindFromSearch").onclick = () => show("bind"));
+$("q") && ($("q").oninput = renderSearch);
+$("searchList") && ($("searchList").onclick = e => {
+  const art = e.target.closest("[data-open]");
+  if (art) openDetail(art.getAttribute("data-open"));
+});
 if ($("sortBy")) $("sortBy").onchange = renderBinder;
 if ($("teamFilter")) $("teamFilter").onchange = renderBinder;
 $("list").onclick = e => {
