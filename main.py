@@ -10,6 +10,7 @@ import httpx
 
 XAI_API_KEY = os.environ.get("XAI_API_KEY", "")
 APP_SECRET = os.environ.get("APP_SECRET", "")
+OPERATOR_EMAIL = (os.environ.get("OPERATOR_EMAIL", "iceledger@outlook.com") or "iceledger@outlook.com").lower()
 MODEL = os.environ.get("XAI_MODEL", "grok-4-1-fast-non-reasoning")
 DAILY_CAP = int(os.environ.get("DAILY_CAP", "80"))
 FREE_SCANS = int(os.environ.get("FREE_SCANS", "10"))
@@ -741,6 +742,24 @@ def require_user(request: Request = None, x_token: str | None = None):
         raise HTTPException(401, "sign in")
     return uid
 
+def operator_emails():
+    return [e.strip().lower() for e in OPERATOR_EMAIL.split(",") if e.strip()]
+
+def email_of(uid: int) -> str:
+    con = db()
+    row = con.execute("SELECT email FROM users WHERE id=?", (uid,)).fetchone()
+    con.close()
+    return ((row["email"] if row else "") or "").lower()
+
+def is_operator(uid: int) -> bool:
+    return email_of(uid) in operator_emails()
+
+def require_operator(request: Request = None, x_token: str | None = None):
+    uid = require_user(request, x_token)
+    if not is_operator(uid):
+        raise HTTPException(403, "operator only")
+    return uid
+
 def month_key():
     return time.strftime("%Y-%m")
 
@@ -864,10 +883,10 @@ async def checkout(request: Request, x_token: str | None = Header(default=None))
 
 @app.post("/plus")
 async def plus(payload: dict, request: Request, x_token: str | None = Header(default=None)):
-    """Flip plan to plus using APP_SECRET until Stripe webhook exists."""
+    """Flip plan to plus. Operator account only until Stripe is live."""
+    uid = require_operator(request, x_token or payload.get("token"))
     if APP_SECRET and payload.get("secret") != APP_SECRET:
         raise HTTPException(401, "app secret does not match")
-    uid = require_user(request, x_token or payload.get("token"))
     con = db()
     con.execute("UPDATE users SET plan='plus' WHERE id=?", (uid,))
     con.commit()
@@ -1033,7 +1052,7 @@ async def list_binders():
             "display": u["display"] or "Collector",
             "hue": u["hue"] or "#8fd4ee",
             "bio": u["bio"] or "",
-            "avatar": u["avatar"] or "",
+            "has_avatar": bool(u["avatar"]),
             "cropx": u["cropx"] or "50",
             "cropy": u["cropy"] or "50",
             "cropz": u["cropz"] or "100",
@@ -1093,23 +1112,63 @@ async def follow_binder(slug: str, request: Request, x_token: str | None = Heade
     con.close()
     return {"following": True}
 
+@app.get("/u/{slug}/avatar")
+async def binder_avatar(slug: str):
+    slug = re.sub(r"[^a-z0-9]", "", (slug or "").lower())
+    con = db()
+    u = con.execute("SELECT avatar FROM users WHERE slug=?", (slug,)).fetchone()
+    con.close()
+    raw = (u["avatar"] if u else "") or ""
+    if raw.startswith("data:image"):
+        try:
+            b64 = raw.split(",", 1)[1]
+            data = base64.b64decode(b64)
+            kind = "image/png" if "png" in raw[:30] else "image/jpeg"
+            return Response(data, media_type=kind, headers={"Cache-Control": "no-store"})
+        except Exception:
+            pass
+    raise HTTPException(404, "no photo")
+
+
 @app.post("/report/{slug}")
 async def report_binder(slug: str, payload: dict, request: Request, x_token: str | None = Header(default=None)):
     uid = require_user(request, x_token)
     slug = re.sub(r"[^a-z0-9]", "", (slug or "").lower())
-    reason = (payload.get("reason") or "photo")[:80]
+    reason = re.sub(r"\s+", " ", (payload.get("reason") or "").strip())[:180]
+    if len(reason) < 3:
+        raise HTTPException(400, "pick a reason")
     con = db()
+    if not con.execute("SELECT id FROM users WHERE slug=?", (slug,)).fetchone():
+        con.close()
+        raise HTTPException(404, "binder not found")
+    already = con.execute(
+        "SELECT id FROM reports WHERE reporter=? AND slug=? AND IFNULL(reason,'') NOT LIKE 'comment:%'",
+        (uid, slug),
+    ).fetchone()
+    if already:
+        n = con.execute(
+            "SELECT COUNT(DISTINCT reporter) AS n FROM reports WHERE slug=? AND IFNULL(reason,'') NOT LIKE 'comment:%'",
+            (slug,),
+        ).fetchone()["n"]
+        con.close()
+        return {"ok": True, "reports": n, "already": True}
     con.execute(
         "INSERT INTO reports(slug,reporter,reason,created) VALUES(?,?,?,?)",
         (slug, uid, reason, time.strftime("%Y-%m-%dT%H:%M:%SZ")),
     )
-    n = con.execute("SELECT COUNT(*) AS n FROM reports WHERE slug=?", (slug,)).fetchone()["n"]
+    n = con.execute(
+        "SELECT COUNT(DISTINCT reporter) AS n FROM reports WHERE slug=? AND IFNULL(reason,'') NOT LIKE 'comment:%'",
+        (slug,),
+    ).fetchone()["n"]
     if n >= 3:
         con.execute("UPDATE users SET avatar='' WHERE slug=?", (slug,))
     con.commit()
     con.close()
-    send_mail("Ice Ledger report", f"Binder photo report\nslug: {slug}\nreason: {reason}\ncount: {n}")
-    return {"ok": True, "reports": n}
+    send_mail(
+        "Ice Ledger photo report",
+        f"Profile photo report\nBinder: {slug}\nReporter id: {uid}\nReason: {reason}\nUnique reports: {n}\n(3 unique reports hide the photo.)",
+    )
+    return {"ok": True, "reports": n, "already": False}
 
 @app.post("/admin/clear-avatar")
 async def admin_clear(payload: dict):
@@ -1197,11 +1256,12 @@ async def me(request: Request, x_token: str | None = Header(default=None)):
     uid = require_user(request, x_token)
     slug = ensure_slug(uid)
     con = db()
-    row = con.execute("SELECT display,hue,bio,avatar,cropx,cropy,cropz FROM users WHERE id=?", (uid,)).fetchone()
+    row = con.execute("SELECT email,display,hue,bio,avatar,cropx,cropy,cropz FROM users WHERE id=?", (uid,)).fetchone()
     con.close()
     return {
         "slug": slug,
         "url": f"/?b={slug}",
+        "operator": is_operator(uid),
         "display": (row["display"] if row else None) or "",
         "hue": (row["hue"] if row else None) or "#8fd4ee",
         "bio": (row["bio"] if row else None) or "",
@@ -1314,32 +1374,51 @@ async def add_comment(slug: str, cid: str, payload: dict, request: Request, x_to
     return {"ok": True, "id": rid, "name": name, "body": body, "created": created}
 
 @app.post("/comments/{cid}/report")
-async def report_comment(cid: int, request: Request, x_token: str | None = Header(default=None)):
+async def report_comment(cid: int, payload: dict, request: Request, x_token: str | None = Header(default=None)):
     uid = require_user(request, x_token)
+    reason = re.sub(r"\s+", " ", (payload.get("reason") or "").strip())[:180]
+    if len(reason) < 3:
+        raise HTTPException(400, "pick a reason")
     con = db()
     row = con.execute("SELECT id,slug,body FROM comments WHERE id=?", (cid,)).fetchone()
     if not row:
         con.close()
         raise HTTPException(404, "gone")
+    already = con.execute(
+        "SELECT id FROM reports WHERE reporter=? AND reason LIKE ?",
+        (uid, f"comment:{cid}|%"),
+    ).fetchone()
+    if already:
+        n = con.execute(
+            "SELECT COUNT(DISTINCT reporter) AS n FROM reports WHERE reason LIKE ?",
+            (f"comment:{cid}|%",),
+        ).fetchone()["n"]
+        con.close()
+        return {"ok": True, "reports": n, "already": True}
     con.execute(
         "INSERT INTO reports(slug,reporter,reason,created) VALUES(?,?,?,?)",
-        (row["slug"], uid, f"comment:{cid}:{(row['body'] or '')[:60]}", time.strftime("%Y-%m-%dT%H:%M:%SZ")),
+        (row["slug"], uid, f"comment:{cid}|{reason}", time.strftime("%Y-%m-%dT%H:%M:%SZ")),
     )
     n = con.execute(
-        "SELECT COUNT(*) AS n FROM reports WHERE reason LIKE ?",
-        (f"comment:{cid}:%",),
+        "SELECT COUNT(DISTINCT reporter) AS n FROM reports WHERE reason LIKE ?",
+        (f"comment:{cid}|%",),
     ).fetchone()["n"]
     if n >= 3:
         con.execute("UPDATE comments SET hidden=1 WHERE id=?", (cid,))
     con.commit()
     con.close()
-    send_mail("Ice Ledger comment report", f"Comment report\nid: {cid}\nslug: {row['slug']}\ntext: {(row['body'] or '')[:200]}\ncount: {n}")
-    return {"ok": True, "reports": n}
+    send_mail(
+        "Ice Ledger comment report",
+        f"Comment report\nComment id: {cid}\nBinder: {row['slug']}\nReporter id: {uid}\nReason: {reason}\nText: {(row['body'] or '')[:200]}\nUnique reports: {n}\n(3 unique reports hide the comment.)",
+    )
+    return {"ok": True, "reports": n, "already": False}
 
 @app.get("/admin/inbox")
-async def admin_inbox(secret: str = ""):
-    if APP_SECRET and secret != APP_SECRET:
-        raise HTTPException(401, "app secret does not match")
+async def admin_inbox(request: Request, secret: str = "", x_token: str | None = Header(default=None)):
+    if secret and APP_SECRET and secret == APP_SECRET:
+        pass
+    else:
+        require_operator(request, x_token)
     con = db()
     rows = con.execute("SELECT id,slug,reason,created FROM reports ORDER BY id DESC LIMIT 80").fetchall()
     con.close()

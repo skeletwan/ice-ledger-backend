@@ -125,6 +125,9 @@
     .ava-full.on { display:flex; }
     .ava-full img { max-width:80vw; max-height:70vh; border-radius:16px; border:4px solid var(--ice); pointer-events:none; }
     .ava-full .close { width:auto; margin:0; padding:10px 18px; }
+    .ava-full .report-box { width:min(360px,90vw); background:#121c26; border:1px solid var(--line); border-radius:12px; padding:12px; }
+    .ava-full .report-box label { margin-top:0; }
+    button.dead { background:#2a3d4d; color:#8aa3b5; pointer-events:none; border-color:#2a3d4d; }
     .crop-frame { width:220px; height:220px; border-radius:16px; overflow:hidden; border:3px solid var(--ice); background:#000; touch-action:none; position:relative; }
     .crop-frame img { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%) scale(1); max-width:none; height:220px; width:auto; pointer-events:none; border:0; }
     .heart { display:inline-block; margin-left:6px; background:#102830; color:#7ef0d2; border:1px solid #2a6a62; border-radius:999px; padding:2px 8px; font-size:12px; font-weight:800; letter-spacing:.02em; }
@@ -351,7 +354,6 @@
     <button class="ghost" id="backFind">Community</button>
     <button class="ghost" id="followBtn">Follow</button>
     <button class="ghost" id="likeBinderBtn">Like binder · 0</button>
-    <button class="ghost" id="reportBtn">Report photo</button>
     <p class="muted" id="pubHead"></p>
     <div id="pubList"></div>
   </section>
@@ -394,19 +396,22 @@
       <p class="muted" id="pNote"></p>
     </div>
     <button class="ghost" id="tabHelp">Support / feedback</button>
+    <div id="opsBox" class="hidden">
+    <h3 style="font-size:15px;margin:16px 0 8px">Owner tools</h3>
     <label>App secret</label>
     <input id="plusSecret" type="password" autocomplete="off" />
     <button id="plusBtn">Unlock Ice+ on this account</button>
     <p class="muted" id="plusNote"></p>
+    <h3 style="font-size:15px;margin:16px 0 8px">Moderation</h3>
+    <p class="muted">Reports land here. Three unique reports hide a photo or comment.</p>
+    <button class="ghost" id="modLoad">Load reports</button>
+    <div id="modList"></div>
+    </div>
     <h3 style="font-size:15px;margin:16px 0 8px">Follow alerts</h3>
     <p class="muted">Ping when a binder you follow adds a card. Works with the app open or on the Home Screen.</p>
     <label><input id="followAlertOn" type="checkbox" style="width:auto;margin-right:8px" /> Notify me on followed binders</label>
     <button class="ghost" id="followAlertSave">Save alerts</button>
     <p class="muted" id="followAlertNote"></p>
-    <h3 style="font-size:15px;margin:16px 0 8px">Moderation</h3>
-    <p class="muted">Reports land here. Three photo or comment reports auto-hide that item.</p>
-    <button class="ghost" id="modLoad">Load reports</button>
-    <div id="modList"></div>
     <button class="ghost" id="logoutBtn">Get out</button>
   </section>
   <section class="page" id="helpPage">
@@ -509,7 +514,23 @@
     <button id="tabSet">You</button>
   </nav>
   </div>
-<div class="ava-full" id="avaFull"><img id="avaFullImg" alt="" /><button type="button" class="close" id="avaFullX">Close</button></div>
+<div class="ava-full" id="avaFull">
+  <img id="avaFullImg" alt="" />
+  <div class="report-box" id="avaReportBox">
+    <label>Why are you reporting this photo?</label>
+    <select id="avaReason">
+      <option value="">Choose a reason</option>
+      <option>Inappropriate photo</option>
+      <option>Spam</option>
+      <option>Harassment</option>
+      <option>Impersonation</option>
+      <option>Other</option>
+    </select>
+    <button id="avaReportBtn">Report photo</button>
+    <p class="muted" id="avaReportNote"></p>
+  </div>
+  <button type="button" class="close" id="avaFullX">Close</button>
+</div>
 <div class="ava-full" id="cropFull">
   <div class="crop-frame" id="cropFrame"><img id="cropImg" alt="" /></div>
   <input id="cropZoom" type="range" min="100" max="220" value="100" style="width:220px" />
@@ -1432,10 +1453,8 @@ async function unlockPlus(){
   if ($("quotaBox")) { $("quotaBox").textContent = "Ice+ on. "+p.left+" IDs left this month."; $("quotaBox").className = "status ok"; }
 }
 $("modLoad") && ($("modLoad").onclick = async () => {
-  const secret = ($("plusSecret") && $("plusSecret").value) || "";
   const box = $("modList");
-  if (!secret) { box.textContent = "Paste app secret first."; return; }
-  const r = await fetch("/admin/inbox?secret="+encodeURIComponent(secret));
+  const r = await fetch("/admin/inbox", { headers:{ "x-token": token() } });
   const t = await r.text();
   if (!r.ok) { box.textContent = t.slice(0,160); return; }
   const d = JSON.parse(t);
@@ -1469,7 +1488,7 @@ $("payBtn").onclick = async () => {
     const d = await r.json();
     if (d.url) { location.href = d.url; return; }
     show("set");
-    if ($("plusNote")) $("plusNote").textContent = "Stripe isn’t live. Paste APP_SECRET below and tap Unlock Ice+.";
+    if ($("plusNote")) $("plusNote").textContent = "Stripe isn’t live yet.";
   } catch(e) { $("quotaBox").textContent = e.message; $("quotaBox").className = "status err"; }
 };
 document.querySelectorAll(".eye").forEach(btn => {
@@ -1574,6 +1593,7 @@ async function loadMe(){
     if ($("pCropY")) $("pCropY").value = d.cropy || "50";
     if ($("pCropZ")) $("pCropZ").value = d.cropz || "100";
     paintProfile(d.display || "Collector", d.hue || "#8fd4ee", myAvatar);
+    if ($("opsBox")) $("opsBox").classList.toggle("hidden", !d.operator);
   } catch(e){}
 }
 function cropStyle(){
@@ -1637,14 +1657,29 @@ async function loadComments(slug, cid, box){
   const r = await fetch("/u/"+encodeURIComponent(slug)+"/cards/"+encodeURIComponent(cid)+"/comments");
   const d = await r.json();
   const list = d.comments || [];
-  box.innerHTML = list.length ? list.map(c =>
-    "<div class=\"item\" style=\"cursor:default\" data-cid=\""+c.id+"\"><b>"+c.name+"</b> <span class=\"muted\">"+(c.created||"").slice(0,16)+"</span><p style=\"margin:6px 0 0\">"+String(c.body||"").replace(/[<>]/g,"")+"</p><button class=\"ghost\" data-rep=\""+c.id+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Report</button></div>"
-  ).join("") : "<p class=\"muted\">No comments yet.</p>";
+  box.innerHTML = list.length ? list.map(c => {
+    const dead = reportedHas("comment:"+c.id);
+    const btn = dead
+      ? "<button class=\"ghost dead\" disabled style=\"width:auto;margin-top:8px;padding:6px 10px\">Reported</button>"
+      : "<button class=\"ghost\" data-rep=\""+c.id+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Report</button>";
+    return "<div class=\"item\" style=\"cursor:default\" data-cid=\""+c.id+"\"><b>"+c.name+"</b> <span class=\"muted\">"+(c.created||"").slice(0,16)+"</span><p style=\"margin:6px 0 0\">"+String(c.body||"").replace(/[<>]/g,"")+"</p>"+btn+"</div>";
+  }).join("") : "<p class=\"muted\">No comments yet.</p>";
   box.onclick = async ev => {
     const b = ev.target.closest("[data-rep]");
-    if (!b || !token()) return;
-    const r = await fetch("/comments/"+b.getAttribute("data-rep")+"/report", { method:"POST", headers:{ "x-token": token() } });
-    if (r.ok) loadComments(slug, cid, box);
+    if (!b || !token() || b.classList.contains("dead")) return;
+    const reason = window.prompt("Why are you reporting this comment?", "Inappropriate");
+    if (!reason || reason.trim().length < 3) return;
+    const r = await fetch("/comments/"+b.getAttribute("data-rep")+"/report", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json", "x-token": token() },
+      body: JSON.stringify({ reason: reason.trim() })
+    });
+    if (r.ok) {
+      reportedAdd("comment:"+b.getAttribute("data-rep"));
+      b.textContent = "Reported";
+      b.classList.add("dead");
+      b.disabled = true;
+    }
   };
 }
 async function postComment(slug, cid, ta, box, note){
@@ -1723,12 +1758,13 @@ function renderFind(){
   $("findList").innerHTML = rows.length ? rows.map(b => {
     const name = b.display || "Collector";
     const hue = b.hue || "#8fd4ee";
-    const st = "object-fit:cover;object-position:"+(b.cropx||50)+"% "+(b.cropy||50)+"%;transform:scale("+((b.cropz||100)/100)+");transform-origin:"+(b.cropx||50)+"% "+(b.cropy||50)+"%";
-    const av = b.avatar ? "<img alt=\"\" src=\""+b.avatar+"\" style=\""+st+"\" />" : name.slice(0,2).toUpperCase();
+    const av = (b.has_avatar || b.avatar)
+      ? "<img alt=\"\" src=\"/u/"+b.slug+"/avatar\" />"
+      : name.slice(0,2).toUpperCase();
     const extra = [b.count+" cards", b.book?money(b.book):""].filter(Boolean).join(" · ");
     const heart = "<span class=\"heart\">♥ "+(b.likes||0)+"</span>";
     const fol = following[b.slug] ? " · Following" : "";
-    return "<article class=\"item\" data-slug=\""+b.slug+"\"><div class=\"pwid\"><div class=\"pava\" data-full=\""+(b.avatar||"")+"\" style=\"border-color:"+hue+";background:"+hue+"\">"+av+"</div><div><h3>"+name+" "+heart+"</h3><div class=\"muted\">"+extra+fol+"</div></div></div></article>";
+    return "<article class=\"item\" data-slug=\""+b.slug+"\"><div class=\"pwid\"><div class=\"pava\" data-ava=\""+b.slug+"\" style=\"border-color:"+hue+";background:"+hue+"\">"+av+"</div><div><h3>"+name+" "+heart+"</h3><div class=\"muted\">"+extra+fol+"</div></div></div></article>";
   }).join("") : "<p class=\"muted\">"+(onlyFollow?"You’re not following anyone yet. Open a binder and tap Follow.":"No public binders yet.")+"</p>";
 }
 $("findQ") && ($("findQ").oninput = renderFind);
@@ -1738,14 +1774,52 @@ $("openFollowing") && ($("openFollowing").onclick = () => {
   $("openFollowing").textContent = onlyFollow ? "Following · on" : "Following";
   renderFind();
 });
-function showFull(src){
+function reportedList(){
+  try { return JSON.parse(localStorage.getItem("ice-reported")||"[]"); } catch(e){ return []; }
+}
+function reportedHas(k){ return reportedList().indexOf(k) >= 0; }
+function reportedAdd(k){
+  const a = reportedList();
+  if (a.indexOf(k) < 0) { a.push(k); localStorage.setItem("ice-reported", JSON.stringify(a)); }
+}
+let reportSlug = "";
+function showFull(src, slug){
   if (!src) return;
+  reportSlug = slug || "";
   $("avaFullImg").src = src;
+  if ($("avaReportBox")) $("avaReportBox").style.display = reportSlug ? "block" : "none";
+  if ($("avaReason")) $("avaReason").value = "";
+  if ($("avaReportNote")) $("avaReportNote").textContent = "";
+  if ($("avaReportBtn")) {
+    const dead = reportSlug && reportedHas("photo:"+reportSlug);
+    $("avaReportBtn").textContent = dead ? "Reported" : "Report photo";
+    $("avaReportBtn").className = dead ? "dead" : "";
+    $("avaReportBtn").disabled = !!dead;
+  }
   $("avaFull").classList.add("on");
 }
-function hideFull(){ if ($("avaFull")) $("avaFull").classList.remove("on"); }
-$("avaFull") && ($("avaFull").onclick = hideFull);
+function hideFull(){ if ($("avaFull")) $("avaFull").classList.remove("on"); reportSlug = ""; }
+$("avaFull") && ($("avaFull").onclick = e => { if (e.target.id === "avaFull") hideFull(); });
 $("avaFullX") && ($("avaFullX").onclick = ev => { ev.stopPropagation(); hideFull(); });
+$("avaReportBtn") && ($("avaReportBtn").onclick = async ev => {
+  ev.stopPropagation();
+  if (!token()) { $("avaReportNote").textContent = "Sign in to report."; return; }
+  if (!reportSlug || $("avaReportBtn").disabled) return;
+  const reason = ($("avaReason") && $("avaReason").value) || "";
+  if (reason.length < 3) { $("avaReportNote").textContent = "Pick a reason first."; return; }
+  const r = await fetch("/report/"+encodeURIComponent(reportSlug), {
+    method:"POST",
+    headers:{ "Content-Type":"application/json", "x-token": token() },
+    body: JSON.stringify({ reason })
+  });
+  const d = await r.json().catch(()=>({}));
+  if (!r.ok) { $("avaReportNote").textContent = d.detail || "Could not report."; return; }
+  reportedAdd("photo:"+reportSlug);
+  $("avaReportBtn").textContent = "Reported";
+  $("avaReportBtn").className = "dead";
+  $("avaReportBtn").disabled = true;
+  $("avaReportNote").textContent = d.already ? "You already reported this photo." : "Reported. Thanks.";
+});
 let crop = { x:0, y:0, z:1, drag:false, sx:0, sy:0 };
 function applyCrop(){
   const img = $("cropImg");
@@ -1791,18 +1865,14 @@ $("cropDone") && ($("cropDone").onclick = ev => {
 $("cropFull") && ($("cropFull").onclick = e => { if (e.target.id === "cropFull") $("cropFull").classList.remove("on"); });
 $("pAva") && ($("pAva").onclick = () => { if (myAvatar) showFull(myAvatar); });
 $("findList") && ($("findList").onclick = e => {
-  const av = e.target.closest("[data-full]");
-  if (av && av.getAttribute("data-full")) { showFull(av.getAttribute("data-full")); return; }
+  const av = e.target.closest("[data-ava]");
+  if (av && av.getAttribute("data-ava")) {
+    const slug = av.getAttribute("data-ava");
+    showFull("/u/"+slug+"/avatar", slug);
+    return;
+  }
   const art = e.target.closest("[data-slug]");
   if (art) openPublic(art.getAttribute("data-slug"));
-});
-$("reportBtn") && ($("reportBtn").onclick = async () => {
-  if (!token() || !viewSlug) return;
-  const r = await fetch("/report/"+encodeURIComponent(viewSlug), {
-    method:"POST", headers:{ "Content-Type":"application/json", "x-token": token() },
-    body: JSON.stringify({ reason:"photo" })
-  });
-  $("pubHead").textContent = r.ok ? "Reported. Three reports hide the photo." : "Could not report.";
 });
 $("backFind") && ($("backFind").onclick = () => show("find"));
 $("backFindNotes") && ($("backFindNotes").onclick = () => show("find"));
