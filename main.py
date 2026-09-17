@@ -503,6 +503,11 @@ def init_db():
         con.execute("ALTER TABLE users ADD COLUMN slug TEXT")
     except sqlite3.OperationalError:
         pass
+    for col, spec in (("display", "TEXT"), ("hue", "TEXT"), ("bio", "TEXT")):
+        try:
+            con.execute(f"ALTER TABLE users ADD COLUMN {col} {spec}")
+        except sqlite3.OperationalError:
+            pass
     con.execute("""
     CREATE TABLE IF NOT EXISTS comments (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -793,7 +798,7 @@ async def list_binders():
     con = db()
     rows = con.execute(
         """
-        SELECT u.slug, COUNT(c.id) AS n
+        SELECT u.slug, u.display, u.hue, u.bio, COUNT(c.id) AS n
         FROM users u
         JOIN cards c ON c.user_id = u.id
         WHERE u.slug IS NOT NULL AND u.slug != ''
@@ -804,7 +809,7 @@ async def list_binders():
         """
     ).fetchall()
     con.close()
-    return {"binders": [{"slug": r["slug"], "count": r["n"]} for r in rows]}
+    return {"binders": [{"slug": r["slug"], "display": r["display"] or r["slug"], "hue": r["hue"] or "#8fd4ee", "bio": r["bio"] or "", "count": r["n"]} for r in rows]}
 
 @app.post("/u/{slug}/cards/{cid}/like")
 async def toggle_like(slug: str, cid: str, request: Request, x_token: str | None = Header(default=None)):
@@ -851,13 +856,36 @@ async def card_likes(slug: str, cid: str, request: Request, x_token: str | None 
 async def me(request: Request, x_token: str | None = Header(default=None)):
     uid = require_user(request, x_token)
     slug = ensure_slug(uid)
-    return {"slug": slug, "url": f"/?b={slug}"}
+    con = db()
+    row = con.execute("SELECT display,hue,bio FROM users WHERE id=?", (uid,)).fetchone()
+    con.close()
+    return {
+        "slug": slug,
+        "url": f"/?b={slug}",
+        "display": (row["display"] if row else None) or slug,
+        "hue": (row["hue"] if row else None) or "#8fd4ee",
+        "bio": (row["bio"] if row else None) or "",
+    }
+
+@app.post("/profile")
+async def save_profile(payload: dict, request: Request, x_token: str | None = Header(default=None)):
+    uid = require_user(request, x_token)
+    display = (payload.get("display") or "").strip()[:24]
+    hue = (payload.get("hue") or "").strip()[:16] or "#8fd4ee"
+    bio = (payload.get("bio") or "").strip()[:140]
+    if not display:
+        raise HTTPException(400, "pick a display name")
+    con = db()
+    con.execute("UPDATE users SET display=?, hue=?, bio=? WHERE id=?", (display, hue, bio, uid))
+    con.commit()
+    con.close()
+    return {"ok": True, "display": display, "hue": hue, "bio": bio}
 
 @app.get("/u/{slug}")
 async def public_binder(slug: str):
     slug = re.sub(r"[^a-z0-9]", "", (slug or "").lower())
     con = db()
-    u = con.execute("SELECT id FROM users WHERE slug=?", (slug,)).fetchone()
+    u = con.execute("SELECT id,display,hue,bio FROM users WHERE slug=?", (slug,)).fetchone()
     if not u:
         con.close()
         raise HTTPException(404, "binder not found")
@@ -865,7 +893,15 @@ async def public_binder(slug: str):
     con.close()
     cards = [public_card(json.loads(r["data"])) for r in rows]
     book = sum((c.get("comp") or 0) for c in cards if isinstance(c.get("comp"), (int, float)))
-    return {"slug": slug, "count": len(cards), "book": book, "cards": cards}
+    return {
+        "slug": slug,
+        "display": u["display"] or slug,
+        "hue": u["hue"] or "#8fd4ee",
+        "bio": u["bio"] or "",
+        "count": len(cards),
+        "book": book,
+        "cards": cards,
+    }
 
 @app.get("/u/{slug}/cards/{cid}/comments")
 async def list_comments(slug: str, cid: str):

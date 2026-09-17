@@ -103,6 +103,8 @@
     .dock button { width:auto; margin:0; padding:10px 4px; font-size:12px; background:transparent; color:var(--muted); border:0; border-radius:0; }
     .dock button.on { color:var(--ice); }
     .page { padding-bottom:88px; }
+    .pwid { display:flex; align-items:center; gap:12px; margin-bottom:10px; }
+    .pava { width:48px; height:48px; border-radius:14px; background:var(--ice); color:#071016; font-weight:800; display:flex; align-items:center; justify-content:center; font-size:16px; }
     .backrow { display:flex; gap:8px; }
     .backrow button { width:auto; flex:1; }
     .shot-wrap { position:relative; min-height:108px; border-radius:14px; overflow:hidden; background:linear-gradient(180deg,#182833,#101820); border:1px dashed #3d5a6a; }
@@ -291,7 +293,19 @@
   </section>
   <section class="page" id="setPage">
     <h2 style="font-size:18px;margin:0 0 8px">You</h2>
-    <p class="muted">Plan, alerts, sign out.</p>
+    <p class="muted">Plan, profile, alerts, sign out.</p>
+    <div class="card" style="margin-top:12px">
+      <div class="pwid" id="pWid"><div class="pava" id="pAva">IL</div><div><b id="pName">Collector</b><div class="muted" id="pSlug"></div></div></div>
+      <label>Display name</label>
+      <input id="pDisplay" maxlength="24" placeholder="Name on your public binder" />
+      <label>Widget colour</label>
+      <input id="pHue" type="color" value="#8fd4ee" style="height:42px;padding:4px" />
+      <label>Short bio</label>
+      <input id="pBio" maxlength="140" placeholder="Team, era, what you collect" />
+      <button id="pSave">Save profile</button>
+      <p class="muted" id="pNote"></p>
+    </div>
+    <button class="ghost" id="tabHelp">Support / feedback</button>
     <label>App secret (Railway APP_SECRET)</label>
     <input id="plusSecret" type="password" autocomplete="off" />
     <button id="plusBtn">Unlock Ice+ on this account</button>
@@ -305,6 +319,20 @@
     <button id="nSave">Save & allow notifications</button>
     <p class="status" id="nStatus"></p>
     <button class="ghost" id="logoutBtn">Get out</button>
+  </section>
+  <section class="page" id="helpPage">
+    <button class="ghost" id="backYou">Back to You</button>
+    <h2 style="font-size:18px;margin:12px 0 8px">Support / feedback</h2>
+    <p class="muted">Ice Ledger is one person, not a help desk. Replies can take a bit — especially evenings and shift work. Feedback on what to build next is welcome.</p>
+    <div class="card">
+      <h3 style="margin:0 0 8px;font-size:15px">Tips</h3>
+      <p class="muted">Scan front and back on raws. Young Guns is an insert, not a parallel. Check the name before you save. Refresh book once a day — extra taps won’t run again until tomorrow. Find is other people’s public binders; comment and like a card, not a chat room.</p>
+    </div>
+    <div class="card">
+      <h3 style="margin:0 0 8px;font-size:15px">Contact</h3>
+      <p class="muted">Email <a href="mailto:iceledger@outlook.com" style="color:var(--ice)">iceledger@outlook.com</a>. Say if it’s a bug, a card that IDed wrong, or an idea. No sales pitches.</p>
+      <a class="btn" href="mailto:iceledger@outlook.com?subject=Ice%20Ledger%20feedback">Email support / feedback</a>
+    </div>
   </section>
   <section class="page" id="detailPage">
     <div class="backrow">
@@ -552,6 +580,7 @@ function show(id){
   if ($("pubPage")) $("pubPage").classList.toggle("on", id==="pub");
   if ($("pubDetail")) $("pubDetail").classList.toggle("on", id==="pubDetail");
   if ($("findPage")) $("findPage").classList.toggle("on", id==="find");
+  if ($("helpPage")) $("helpPage").classList.toggle("on", id==="help");
   if (id==="bind") renderBinder();
   if (id==="find") loadFind();
   document.body.classList.toggle("bind-on", id==="bind");
@@ -566,7 +595,9 @@ $("tabScan").onclick = () => show("scan");
 $("backScan").onclick = () => show("scan");
 $("tabBind").onclick = () => show("bind");
 $("tabFind").onclick = () => show("find");
-$("tabSet").onclick = () => { loadNotePrefs(); show("set"); };
+$("tabSet").onclick = () => { loadNotePrefs(); loadMe(); show("set"); };
+$("tabHelp") && ($("tabHelp").onclick = () => show("help"));
+$("backYou") && ($("backYou").onclick = () => show("set"));
 $("fxCAD").onclick = () => setFx("CAD");
 $("fxUSD").onclick = () => setFx("USD");
 $("ranges").onclick = e => {
@@ -1321,8 +1352,33 @@ async function loadMe(){
     const d = await r.json();
     mySlug = d.slug || "";
     if ($("shareNote")) $("shareNote").textContent = mySlug ? ("Public link: "+location.origin+"/?b="+mySlug) : "";
+    if ($("pDisplay") && d.display) $("pDisplay").value = d.display;
+    if ($("pHue") && d.hue) $("pHue").value = d.hue;
+    if ($("pBio")) $("pBio").value = d.bio || "";
+    paintProfile(d.display || mySlug, d.hue || "#8fd4ee", mySlug);
   } catch(e){}
 }
+function paintProfile(name, hue, slug){
+  const ini = (name||"IL").slice(0,2).toUpperCase();
+  if ($("pAva")) { $("pAva").textContent = ini; $("pAva").style.background = hue || "#8fd4ee"; }
+  if ($("pName")) $("pName").textContent = name || "Collector";
+  if ($("pSlug")) $("pSlug").textContent = slug ? ("/"+slug) : "";
+}
+$("pHue") && ($("pHue").oninput = () => paintProfile(($("pDisplay").value||"Collector"), $("pHue").value, mySlug));
+$("pDisplay") && ($("pDisplay").oninput = () => paintProfile($("pDisplay").value, $("pHue").value, mySlug));
+$("pSave") && ($("pSave").onclick = async () => {
+  try {
+    const r = await fetch("/profile", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json", "x-token": token() },
+      body: JSON.stringify({ display:$("pDisplay").value, hue:$("pHue").value, bio:$("pBio").value })
+    });
+    const t = await r.text();
+    if (!r.ok) throw new Error(t.slice(0,160));
+    $("pNote").textContent = "Profile saved. Find and public binders use this.";
+    loadMe();
+  } catch(e) { $("pNote").textContent = e.message; }
+});
 $("shareCard") && ($("shareCard").onclick = async () => {
   await loadMe();
   if (!mySlug || !openId) { $("shareCardNote").textContent = "Need a synced account."; return; }
@@ -1395,7 +1451,7 @@ function renderFind(){
   const q = (($("findQ")&&$("findQ").value)||"").toLowerCase();
   const rows = findCache.filter(b => !q || (b.slug||"").toLowerCase().includes(q));
   $("findList").innerHTML = rows.length ? rows.map(b =>
-    "<article class=\"item\" data-slug=\""+b.slug+"\"><h3>"+b.slug+"</h3><div class=\"muted\">"+b.count+" cards</div></article>"
+    "<article class=\"item\" data-slug=\""+b.slug+"\"><div class=\"pwid\"><div class=\"pava\" style=\"background:"+(b.hue||"#8fd4ee")+"\">"+((b.display||b.slug||"IL").slice(0,2).toUpperCase())+"</div><div><h3>"+(b.display||b.slug)+"</h3><div class=\"muted\">/"+b.slug+" · "+b.count+" cards</div></div></div></article>"
   ).join("") : "<p class=\"muted\">No public binders yet. Save a card while signed in, then this list fills in.</p>";
 }
 $("findQ") && ($("findQ").oninput = renderFind);
@@ -1429,7 +1485,8 @@ async function openPublic(slug){
   const r = await fetch("/u/"+encodeURIComponent(slug));
   if (!r.ok) { $("pubHead").textContent = "Binder not found."; show("pub"); return; }
   const d = await r.json();
-  $("pubHead").textContent = slug+" · "+d.count+" cards · book "+(d.book?money(d.book):"—");
+  $("pubHead").textContent = (d.display||slug)+" · "+d.count+" cards · book "+(d.book?money(d.book):"—");
+  if (d.bio) $("pubHead").textContent += " · "+d.bio;
   pubCards = d.cards || [];
   $("pubList").innerHTML = pubCards.map(c =>
     "<article class=\"item\" data-pub=\""+c.id+"\"><div class=\"item-top\"><img src=\""+(c.photo||"")+"\" alt=\"\" /><div><h3>"+(c.player||"—")+"</h3><div class=\"muted\">"+[c.team,c.year,c.set,c.number?"#"+c.number:""].filter(Boolean).join(" · ")+"</div></div></div></article>"
