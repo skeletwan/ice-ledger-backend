@@ -618,7 +618,7 @@ def init_db():
         con.execute("ALTER TABLE users ADD COLUMN slug TEXT")
     except sqlite3.OperationalError:
         pass
-    for col, spec in (("display", "TEXT"), ("hue", "TEXT"), ("bio", "TEXT"), ("avatar", "TEXT"), ("cropx", "TEXT"), ("cropy", "TEXT"), ("cropz", "TEXT"), ("avatar_hidden", "INTEGER NOT NULL DEFAULT 0"), ("credits", "INTEGER NOT NULL DEFAULT 0")):
+    for col, spec in (("display", "TEXT"), ("hue", "TEXT"), ("bio", "TEXT"), ("avatar", "TEXT"), ("cropx", "TEXT"), ("cropy", "TEXT"), ("cropz", "TEXT"), ("avatar_hidden", "INTEGER NOT NULL DEFAULT 0"), ("credits", "INTEGER NOT NULL DEFAULT 0"), ("suspended", "INTEGER NOT NULL DEFAULT 0")):
         try:
             con.execute(f"ALTER TABLE users ADD COLUMN {col} {spec}")
         except sqlite3.OperationalError:
@@ -765,6 +765,7 @@ def public_card(raw: dict) -> dict:
         "photo": c.get("photo"),
         "comp": c.get("comp"),
         "book": c.get("book") or {},
+        "hist": (c.get("hist") or [])[-60:],
     }
 
 init_db()
@@ -795,6 +796,11 @@ def require_user(request: Request = None, x_token: str | None = None):
     uid = user_from_token(token)
     if not uid:
         raise HTTPException(401, "sign in")
+    con = db()
+    row = con.execute("SELECT suspended FROM users WHERE id=?", (uid,)).fetchone()
+    con.close()
+    if row and int(row["suspended"] or 0):
+        raise HTTPException(403, "account suspended")
     return uid
 
 def operator_emails():
@@ -950,13 +956,16 @@ async def login(payload: dict):
     email = (payload.get("email") or "").strip().lower()
     pw = (payload.get("password") or "").strip()
     con = db()
-    row = con.execute("SELECT id,pw FROM users WHERE email=?", (email,)).fetchone()
+    row = con.execute("SELECT id,pw,suspended FROM users WHERE email=?", (email,)).fetchone()
     if not row:
         con.close()
         raise HTTPException(401, "no account with that email")
     if not check_pw(pw, row["pw"]):
         con.close()
         raise HTTPException(401, "wrong password")
+    if int(row["suspended"] or 0):
+        con.close()
+        raise HTTPException(403, "account suspended")
     token = secrets.token_urlsafe(24)
     con.execute("INSERT INTO sessions(token,user_id,created) VALUES(?,?,?)",
                 (token, row["id"], time.strftime("%Y-%m-%dT%H:%M:%SZ")))
@@ -1214,10 +1223,12 @@ async def delete_card(cid: str, request: Request, x_token: str | None = Header(d
 async def list_binders():
     con = db()
     users = con.execute(
-        "SELECT id, slug, display, hue, bio, avatar, avatar_hidden, cropx, cropy, cropz FROM users WHERE slug IS NOT NULL AND slug != ''"
+        "SELECT id, slug, display, hue, bio, avatar, avatar_hidden, cropx, cropy, cropz, IFNULL(suspended,0) AS suspended FROM users WHERE slug IS NOT NULL AND slug != ''"
     ).fetchall()
     out = []
     for u in users:
+        if int(u["suspended"] or 0):
+            continue
         rows = con.execute("SELECT data FROM cards WHERE user_id=?", (u["id"],)).fetchall()
         if not rows:
             continue
@@ -1412,10 +1423,15 @@ async def list_notes(request: Request, x_token: str | None = Header(default=None
     return {"notes": [dict(r) for r in rows], "unread": unread}
 
 @app.post("/notes/read")
-async def read_notes(request: Request, x_token: str | None = Header(default=None)):
+async def read_notes(payload: dict | None = None, request: Request = None, x_token: str | None = Header(default=None)):
     uid = require_user(request, x_token)
+    ids = [int(i) for i in ((payload or {}).get("ids") or []) if str(i).isdigit() or isinstance(i, int)]
     con = db()
-    con.execute("UPDATE notes SET read=1 WHERE user_id=?", (uid,))
+    if ids:
+        q = ",".join("?" * len(ids))
+        con.execute(f"UPDATE notes SET read=1 WHERE user_id=? AND id IN ({q})", [uid, *ids])
+    else:
+        con.execute("UPDATE notes SET read=1 WHERE user_id=?", (uid,))
     con.commit()
     con.close()
     return {"ok": True}
@@ -1511,8 +1527,8 @@ async def save_profile(payload: dict, request: Request, x_token: str | None = He
 async def public_binder(slug: str):
     slug = re.sub(r"[^a-z0-9]", "", (slug or "").lower())
     con = db()
-    u = con.execute("SELECT id,display,hue,bio,avatar,avatar_hidden,cropx,cropy,cropz FROM users WHERE slug=?", (slug,)).fetchone()
-    if not u:
+    u = con.execute("SELECT id,display,hue,bio,avatar,avatar_hidden,cropx,cropy,cropz,IFNULL(suspended,0) AS suspended FROM users WHERE slug=?", (slug,)).fetchone()
+    if not u or int(u["suspended"] or 0):
         con.close()
         raise HTTPException(404, "binder not found")
     rows = con.execute("SELECT data FROM cards WHERE user_id=?", (u["id"],)).fetchall()
@@ -1582,6 +1598,8 @@ async def add_banner(payload: dict, request: Request, x_token: str | None = Head
     color = (payload.get("color") or "#8fd4ee").strip()[:16]
     if not re.match(r"^#[0-9a-fA-F]{3,8}$", color):
         color = "#8fd4ee"
+    if len(title) < 2:
+        title = (body or "")[:80]
     if len(title) < 2:
         raise HTTPException(400, "give the post a title")
     con = db()
@@ -1806,6 +1824,79 @@ async def admin_hide(payload: dict, request: Request, x_token: str | None = Head
     con.execute("UPDATE comments SET hidden=1 WHERE id=?", (cid,))
     con.commit()
     con.close()
+    send_mail("Ice Ledger comment hidden", f"Comment {cid} hidden by operator")
+    return {"ok": True}
+
+@app.post("/admin/hide-photo")
+async def admin_hide_photo(payload: dict, request: Request, x_token: str | None = Header(default=None)):
+    require_operator(request, x_token)
+    slug = re.sub(r"[^a-z0-9]", "", (payload.get("slug") or "").lower())
+    con = db()
+    con.execute("UPDATE users SET avatar_hidden=1 WHERE slug=?", (slug,))
+    con.commit()
+    con.close()
+    send_mail("Ice Ledger photo hidden", f"Profile photo hidden for {slug}")
+    return {"ok": True}
+
+def _find_user(con, payload: dict):
+    email = (payload.get("email") or "").strip().lower()
+    slug = re.sub(r"[^a-z0-9]", "", (payload.get("slug") or "").lower())
+    row = None
+    if email:
+        row = con.execute("SELECT id,email,slug FROM users WHERE email=?", (email,)).fetchone()
+    if not row and slug:
+        row = con.execute("SELECT id,email,slug FROM users WHERE slug=?", (slug,)).fetchone()
+    return row
+
+@app.post("/admin/suspend")
+async def admin_suspend(payload: dict, request: Request, x_token: str | None = Header(default=None)):
+    oid = require_operator(request, x_token)
+    on = 1 if payload.get("on", True) else 0
+    con = db()
+    row = _find_user(con, payload)
+    if not row:
+        con.close()
+        raise HTTPException(404, "no user with that email or slug")
+    if row["id"] == oid:
+        con.close()
+        raise HTTPException(400, "don't suspend your own account")
+    con.execute("UPDATE users SET suspended=? WHERE id=?", (on, row["id"]))
+    if on:
+        con.execute("DELETE FROM sessions WHERE user_id=?", (row["id"],))
+    con.commit()
+    con.close()
+    send_mail("Ice Ledger account "+("suspended" if on else "restored"), f"{row['email']} / {row['slug']}")
+    return {"ok": True, "email": row["email"], "slug": row["slug"], "suspended": bool(on)}
+
+@app.post("/admin/delete-user")
+async def admin_delete_user(payload: dict, request: Request, x_token: str | None = Header(default=None)):
+    oid = require_operator(request, x_token)
+    con = db()
+    row = _find_user(con, payload)
+    if not row:
+        con.close()
+        raise HTTPException(404, "no user with that email or slug")
+    if row["id"] == oid:
+        con.close()
+        raise HTTPException(400, "don't delete your own account")
+    uid = row["id"]
+    slug = row["slug"] or ""
+    con.execute("DELETE FROM sessions WHERE user_id=?", (uid,))
+    con.execute("DELETE FROM cards WHERE user_id=?", (uid,))
+    con.execute("DELETE FROM comments WHERE user_id=?", (uid,))
+    con.execute("DELETE FROM likes WHERE user_id=?", (uid,))
+    con.execute("DELETE FROM binder_likes WHERE user_id=?", (uid,))
+    con.execute("DELETE FROM follows WHERE follower=?", (uid,))
+    con.execute("DELETE FROM notes WHERE user_id=?", (uid,))
+    con.execute("DELETE FROM banner_posts WHERE user_id=?", (uid,))
+    if slug:
+        con.execute("DELETE FROM follows WHERE slug=?", (slug,))
+        con.execute("DELETE FROM binder_likes WHERE slug=?", (slug,))
+        con.execute("DELETE FROM reports WHERE slug=?", (slug,))
+    con.execute("DELETE FROM users WHERE id=?", (uid,))
+    con.commit()
+    con.close()
+    send_mail("Ice Ledger account deleted", f"{row['email']} / {slug} removed")
     return {"ok": True}
 
 @app.delete("/comments/{cid}")
