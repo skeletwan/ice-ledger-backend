@@ -230,8 +230,17 @@
 
   <section class="page on" id="scanPage">
     <p class="muted">Front and back, then Identify.</p>
-    <div class="status" id="quotaBox">Free plan: 10 IDs / month. Ice+ is 200.</div>
-    <button class="ghost" id="payBtn">Upgrade Ice+</button>
+    <div class="status" id="quotaBox">Free plan: 10 IDs / month. Ice+ is 200. Rip Night is 20 extra IDs.</div>
+    <div class="row2">
+      <button class="ghost" id="payBtn">Ice+ · $8/mo</button>
+      <button class="ghost" id="ripBtn">Rip Night · $2.99</button>
+    </div>
+    <label>Have a code?</label>
+    <div class="row2" style="align-items:end">
+      <input id="ripCode" placeholder="RIP-XXXXXX" autocomplete="off" />
+      <button class="ghost" id="ripRedeem" style="margin-top:4px">Redeem</button>
+    </div>
+    <p class="muted" id="ripNote">Rip Night is 20 IDs — the hits and Young Guns from a hobby box, not every base card. Codes if a scan fails or you shout out the app.</p>
     <input id="secret" type="hidden" value="" />
     <div class="row2" style="margin-top:14px">
       <label class="shot-wrap" id="shotFront" for="file">
@@ -406,6 +415,16 @@
     <p class="muted">Every new report emails you. Three unique reports hide the photo or comment. Restore below if people are messing around.</p>
     <button class="ghost" id="modLoad">Load reports</button>
     <div id="modList"></div>
+    <h3 style="font-size:15px;margin:16px 0 8px">Rip codes</h3>
+    <label>IDs on the code</label>
+    <input id="ripMakeScans" type="number" value="10" min="1" max="500" />
+    <label>How many people can use it</label>
+    <input id="ripMakeUses" type="number" value="1" min="1" max="200" />
+    <label>Note</label>
+    <input id="ripMakeNote" placeholder="failed scan / promo / friend" />
+    <button class="ghost" id="ripMake">Make code</button>
+    <p class="muted" id="ripMakeNoteOut"></p>
+    <div id="ripCodeList"></div>
     </div>
     <h3 style="font-size:15px;margin:16px 0 8px">Follow alerts</h3>
     <p class="muted">Ping when a binder you follow adds a card. Works with the app open or on the Home Screen.</p>
@@ -1448,7 +1467,8 @@ async function refreshUsage(){
   const r = await fetch("/usage", { headers:{ "x-token": token() } });
   if (!r.ok) return;
   const u = await r.json();
-  const line = (u.plan==="plus"?"Ice+":"Free")+" · "+u.left+"/"+u.cap+" IDs · "+(u.book_left??"?")+"/"+(u.book_cap??"?")+" book refreshes";
+  const bonus = u.bonus ? " + "+u.bonus+" extra" : "";
+  const line = (u.plan==="plus"?"Ice+":"Free")+" · "+u.left+" IDs left"+bonus+" · "+(u.book_left??"?")+" book refreshes";
   if ($("quotaBox")) {
     $("quotaBox").textContent = line;
     $("quotaBox").className = "status " + (u.left<=0 ? "err" : (u.left<=3 ? "warn" : "ok"));
@@ -1529,6 +1549,43 @@ $("payBtn").onclick = async () => {
     if ($("plusNote")) $("plusNote").textContent = "Stripe isn’t live yet.";
   } catch(e) { $("quotaBox").textContent = e.message; $("quotaBox").className = "status err"; }
 };
+$("ripBtn") && ($("ripBtn").onclick = async () => {
+  try {
+    const r = await fetch("/checkout?item=rip", { headers:{ "x-token": token() } });
+    const d = await r.json();
+    if (d.url) { location.href = d.url; return; }
+    if ($("ripNote")) $("ripNote").textContent = "Card pay isn’t live yet. Use a code, or ask support for one after you e-transfer.";
+    $("ripCode") && $("ripCode").focus();
+  } catch(e) { if ($("ripNote")) $("ripNote").textContent = e.message; }
+});
+$("ripRedeem") && ($("ripRedeem").onclick = async () => {
+  try {
+    const d = await authPost("/rip/redeem", { code: ($("ripCode")&&$("ripCode").value) || "" });
+    await refreshUsage();
+    if ($("ripNote")) $("ripNote").textContent = "Added "+d.added+" extra IDs. You have "+d.left+" left.";
+  } catch(e) { if ($("ripNote")) $("ripNote").textContent = e.message; }
+});
+async function loadRipCodes(){
+  const box = $("ripCodeList");
+  if (!box) return;
+  const r = await fetch("/admin/rip-codes", { headers:{ "x-token": token() } });
+  if (!r.ok) { box.textContent = ""; return; }
+  const d = await r.json();
+  box.innerHTML = (d.codes||[]).map(c =>
+    "<div class=\"item\" style=\"cursor:default\"><b>"+c.code+"</b> · "+c.scans+" IDs · "+c.used+"/"+c.max_uses+" used"+(c.note?" · "+c.note:"")+"</div>"
+  ).join("") || "<p class=\"muted\">No codes yet.</p>";
+}
+$("ripMake") && ($("ripMake").onclick = async () => {
+  try {
+    const d = await authPost("/admin/rip-code", {
+      scans: +($("ripMakeScans")&&$("ripMakeScans").value) || 10,
+      max_uses: +($("ripMakeUses")&&$("ripMakeUses").value) || 1,
+      note: ($("ripMakeNote")&&$("ripMakeNote").value) || ""
+    });
+    if ($("ripMakeNoteOut")) $("ripMakeNoteOut").textContent = "Code: "+d.code+" · "+d.scans+" IDs";
+    loadRipCodes();
+  } catch(e) { if ($("ripMakeNoteOut")) $("ripMakeNoteOut").textContent = e.message; }
+});
 document.querySelectorAll(".eye").forEach(btn => {
   btn.onclick = ev => {
     ev.preventDefault();
@@ -1632,6 +1689,7 @@ async function loadMe(){
     if ($("pCropZ")) $("pCropZ").value = d.cropz || "100";
     paintProfile(d.display || "Collector", d.hue || "#8fd4ee", myAvatar);
     if ($("opsBox")) $("opsBox").classList.toggle("hidden", !d.operator);
+    if (d.operator) loadRipCodes();
   } catch(e){}
 }
 function cropStyle(){

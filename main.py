@@ -18,6 +18,9 @@ PLUS_SCANS = int(os.environ.get("PLUS_SCANS", "200"))
 FREE_BOOK = int(os.environ.get("FREE_BOOK", "8"))
 PLUS_BOOK = int(os.environ.get("PLUS_BOOK", "30"))
 STRIPE_PAY_LINK = os.environ.get("STRIPE_PAY_LINK", "")
+STRIPE_RIP_LINK = os.environ.get("STRIPE_RIP_LINK", "")
+RIP_SCANS = int(os.environ.get("RIP_SCANS", "20"))
+RIP_PRICE = os.environ.get("RIP_PRICE", "2.99 CAD")
 def _env(name: str, default: str = "") -> str:
     return (os.environ.get(name, default) or default).strip().strip('"').strip("'")
 
@@ -615,7 +618,7 @@ def init_db():
         con.execute("ALTER TABLE users ADD COLUMN slug TEXT")
     except sqlite3.OperationalError:
         pass
-    for col, spec in (("display", "TEXT"), ("hue", "TEXT"), ("bio", "TEXT"), ("avatar", "TEXT"), ("cropx", "TEXT"), ("cropy", "TEXT"), ("cropz", "TEXT"), ("avatar_hidden", "INTEGER NOT NULL DEFAULT 0")):
+    for col, spec in (("display", "TEXT"), ("hue", "TEXT"), ("bio", "TEXT"), ("avatar", "TEXT"), ("cropx", "TEXT"), ("cropy", "TEXT"), ("cropz", "TEXT"), ("avatar_hidden", "INTEGER NOT NULL DEFAULT 0"), ("credits", "INTEGER NOT NULL DEFAULT 0")):
         try:
             con.execute(f"ALTER TABLE users ADD COLUMN {col} {spec}")
         except sqlite3.OperationalError:
@@ -667,6 +670,24 @@ def init_db():
       reporter INTEGER,
       reason TEXT,
       created TEXT NOT NULL
+    )
+    """)
+    con.execute("""
+    CREATE TABLE IF NOT EXISTS rip_codes (
+      code TEXT PRIMARY KEY,
+      scans INTEGER NOT NULL,
+      max_uses INTEGER NOT NULL,
+      used INTEGER NOT NULL DEFAULT 0,
+      note TEXT,
+      created TEXT NOT NULL
+    )
+    """)
+    con.execute("""
+    CREATE TABLE IF NOT EXISTS rip_redemptions (
+      code TEXT NOT NULL,
+      user_id INTEGER NOT NULL,
+      created TEXT NOT NULL,
+      PRIMARY KEY (code, user_id)
     )
     """)
     con.execute("""
@@ -788,6 +809,21 @@ def plan_of(uid: int) -> str:
     p = (row["plan"] if row else "free") or "free"
     return p
 
+def bonus_of(uid: int) -> int:
+    con = db()
+    row = con.execute("SELECT credits FROM users WHERE id=?", (uid,)).fetchone()
+    con.close()
+    try:
+        return max(0, int((row["credits"] if row else 0) or 0))
+    except Exception:
+        return 0
+
+def add_credits(uid: int, n: int):
+    con = db()
+    con.execute("UPDATE users SET credits=IFNULL(credits,0)+? WHERE id=?", (int(n), uid))
+    con.commit()
+    con.close()
+
 def usage_of(uid: int):
     m = month_key()
     plan = plan_of(uid)
@@ -799,20 +835,30 @@ def usage_of(uid: int):
     con.close()
     used = row["n"] if row else 0
     bused = brow["n"] if brow else 0
+    bonus = bonus_of(uid)
+    monthly_left = max(0, cap - used)
     return {
-        "used": used, "cap": cap, "left": max(0, cap - used),
+        "used": used, "cap": cap, "bonus": bonus,
+        "left": monthly_left + bonus,
         "book_used": bused, "book_cap": bcap, "book_left": max(0, bcap - bused),
-        "plan": plan, "month": m
+        "plan": plan, "month": m,
+        "rip_scans": RIP_SCANS, "rip_price": RIP_PRICE,
     }
 
 def bump_usage(uid: int):
     m = month_key()
     con = db()
     row = con.execute("SELECT n FROM usage WHERE user_id=? AND month=?", (uid, m)).fetchone()
-    if row:
-        con.execute("UPDATE usage SET n=n+1 WHERE user_id=? AND month=?", (uid, m))
+    used = row["n"] if row else 0
+    plan = plan_of(uid)
+    cap = PLUS_SCANS if plan == "plus" else FREE_SCANS
+    if used < cap:
+        if row:
+            con.execute("UPDATE usage SET n=n+1 WHERE user_id=? AND month=?", (uid, m))
+        else:
+            con.execute("INSERT INTO usage(user_id,month,n) VALUES(?,?,1)", (uid, m))
     else:
-        con.execute("INSERT INTO usage(user_id,month,n) VALUES(?,?,1)", (uid, m))
+        con.execute("UPDATE users SET credits=MAX(0, IFNULL(credits,0)-1) WHERE id=?", (uid,))
     con.commit()
     con.close()
 
@@ -831,7 +877,7 @@ def require_scan(request: Request, x_token: str | None = None):
     uid = require_user(request, x_token)
     u = usage_of(uid)
     if u["left"] <= 0:
-        raise HTTPException(402, "scan cap reached — upgrade")
+        raise HTTPException(402, "scan cap reached — buy Rip Night or upgrade")
     bump_usage(uid)
     return uid, usage_of(uid)
 
@@ -895,6 +941,15 @@ async def book_refresh(payload: dict, request: Request, x_token: str | None = He
 @app.get("/checkout")
 async def checkout(request: Request, x_token: str | None = Header(default=None)):
     require_user(request, x_token)
+    item = (request.query_params.get("item") if request else "") or ""
+    if item == "rip":
+        return {
+            "url": STRIPE_RIP_LINK or None,
+            "price": RIP_PRICE,
+            "scans": RIP_SCANS,
+            "name": "Rip Night",
+            "note": None if STRIPE_RIP_LINK else "Set STRIPE_RIP_LINK on Railway, or redeem a code.",
+        }
     if STRIPE_PAY_LINK:
         return {"url": STRIPE_PAY_LINK, "price": "8 CAD / month"}
     return {"url": None, "price": "8 CAD / month", "note": "Set STRIPE_PAY_LINK on Railway when the Stripe Payment Link is live."}
@@ -910,6 +965,83 @@ async def plus(payload: dict, request: Request, x_token: str | None = Header(def
     con.commit()
     con.close()
     return usage_of(uid)
+
+
+@app.post("/rip/redeem")
+async def rip_redeem(payload: dict, request: Request, x_token: str | None = Header(default=None)):
+    uid = require_user(request, x_token)
+    code = re.sub(r"[^A-Za-z0-9\-]", "", (payload.get("code") or "")).upper()
+    if len(code) < 4:
+        raise HTTPException(400, "enter a code")
+    con = db()
+    row = con.execute("SELECT code,scans,max_uses,used FROM rip_codes WHERE code=?", (code,)).fetchone()
+    if not row:
+        con.close()
+        raise HTTPException(404, "code not found")
+    if int(row["used"]) >= int(row["max_uses"]):
+        con.close()
+        raise HTTPException(400, "code already used up")
+    taken = con.execute("SELECT code FROM rip_redemptions WHERE code=? AND user_id=?", (code, uid)).fetchone()
+    if taken:
+        con.close()
+        raise HTTPException(400, "you already used this code")
+    con.execute("UPDATE rip_codes SET used=used+1 WHERE code=?", (code,))
+    con.execute(
+        "INSERT INTO rip_redemptions(code,user_id,created) VALUES(?,?,?)",
+        (code, uid, time.strftime("%Y-%m-%dT%H:%M:%SZ")),
+    )
+    con.execute("UPDATE users SET credits=IFNULL(credits,0)+? WHERE id=?", (int(row["scans"]), uid))
+    con.commit()
+    con.close()
+    return usage_of(uid) | {"added": int(row["scans"]), "code": code}
+
+
+@app.post("/admin/rip-code")
+async def admin_rip_code(payload: dict, request: Request, x_token: str | None = Header(default=None)):
+    require_operator(request, x_token)
+    scans = max(1, min(500, int(payload.get("scans") or 10)))
+    uses = max(1, min(200, int(payload.get("max_uses") or 1)))
+    note = (payload.get("note") or "")[:80]
+    code = (payload.get("code") or "").strip().upper() or ("RIP-" + secrets.token_hex(3).upper())
+    code = re.sub(r"[^A-Z0-9\-]", "", code)
+    con = db()
+    try:
+        con.execute(
+            "INSERT INTO rip_codes(code,scans,max_uses,used,note,created) VALUES(?,?,?,?,?,?)",
+            (code, scans, uses, 0, note, time.strftime("%Y-%m-%dT%H:%M:%SZ")),
+        )
+        con.commit()
+    except sqlite3.IntegrityError:
+        con.close()
+        raise HTTPException(409, "that code already exists")
+    con.close()
+    return {"code": code, "scans": scans, "max_uses": uses, "note": note}
+
+
+@app.get("/admin/rip-codes")
+async def admin_rip_codes(request: Request, x_token: str | None = Header(default=None)):
+    require_operator(request, x_token)
+    con = db()
+    rows = con.execute("SELECT code,scans,max_uses,used,note,created FROM rip_codes ORDER BY created DESC LIMIT 40").fetchall()
+    con.close()
+    return {"codes": [dict(r) for r in rows]}
+
+
+@app.post("/admin/grant-rip")
+async def admin_grant_rip(payload: dict, request: Request, x_token: str | None = Header(default=None)):
+    require_operator(request, x_token)
+    email = (payload.get("email") or "").strip().lower()
+    scans = max(1, min(500, int(payload.get("scans") or RIP_SCANS)))
+    con = db()
+    row = con.execute("SELECT id FROM users WHERE email=?", (email,)).fetchone()
+    if not row:
+        con.close()
+        raise HTTPException(404, "no account with that email")
+    con.execute("UPDATE users SET credits=IFNULL(credits,0)+? WHERE id=?", (scans, row["id"]))
+    con.commit()
+    con.close()
+    send_mail("Ice Ledger Rip Night", f"Granted {scans} extra IDs to {email}")
+    return {"ok": True, "email": email, "scans": scans}
 
 @app.post("/reset")
 async def reset_request(payload: dict):
