@@ -1743,19 +1743,20 @@ function noteKind(n){
   if (b.indexOf("comment")>=0 || b.indexOf("replied")>=0) return "comment";
   return "card";
 }
-function resetLabel(month){
-  let t;
-  const p = String(month||"").split("-");
-  if (p.length>=2) t = new Date(Date.UTC(+p[0], +p[1], 1));
-  else { const n = new Date(); t = new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth()+1, 1)); }
+function resetLabel(resetAt, month){
+  let t = resetAt ? new Date(resetAt) : null;
+  if (!t || isNaN(+t)) {
+    const p = String(month||"").split("-");
+    t = p.length>=3 ? new Date(Date.UTC(+p[0], +p[1]-1, +p[2])) : new Date(Date.now()+30*86400000);
+  }
   const ms = t - Date.now();
-  if (ms <= 0) return "Monthly IDs reset soon.";
+  if (ms <= 0) return "Limits reset soon. Unused IDs don’t roll over.";
   const hours = Math.floor(ms/3600000);
   const days = Math.floor(hours/24);
   const when = t.toLocaleDateString(undefined, { month:"short", day:"numeric" });
-  if (days >= 2) return "Monthly IDs and book refreshes reset in "+days+" days ("+when+"). Extra Rip IDs stay.";
-  if (hours >= 2) return "Monthly IDs and book refreshes reset in "+hours+" hours.";
-  return "Monthly IDs reset in "+Math.max(1, Math.floor(ms/60000))+" min.";
+  if (days >= 2) return "Limits reset in "+days+" days ("+when+"). Unused IDs don’t roll over.";
+  if (hours >= 2) return "Limits reset in "+hours+" hours. Unused IDs don’t roll over.";
+  return "Limits reset in "+Math.max(1, Math.floor(ms/60000))+" min.";
 }
 function timeAgo(iso){
   if (!iso) return "";
@@ -1784,7 +1785,7 @@ async function refreshUsage(){
     $("quotaBox").textContent = line;
     $("quotaBox").className = "status " + (u.left<=0 ? "err" : (u.left<=3 ? "warn" : "ok"));
   }
-  if ($("resetLine")) $("resetLine").textContent = resetLabel(u.month);
+  if ($("resetLine")) $("resetLine").textContent = resetLabel(u.reset_at, u.month);
 }
 function showPaywall(msg){
   if ($("quotaBox")) {
@@ -1932,7 +1933,7 @@ async function loadRipCodes(){
   if (!r.ok) { box.textContent = ""; return; }
   const d = await r.json();
   box.innerHTML = (d.codes||[]).map(c =>
-    "<div class=\"item\" style=\"cursor:default\"><b>"+c.code+"</b> · "+c.scans+" IDs · "+c.used+"/"+c.max_uses+" used"+(c.note?" · "+c.note:"")+"</div>"
+    "<div class=\"item\" style=\"cursor:default\"><b>"+c.code+"</b> · "+c.scans+" IDs · "+c.used+"/"+c.max_uses+" used"+(c.note?" · "+c.note:"")+(c.expires?" · expires "+String(c.expires).slice(0,10):"")+"</div>"
   ).join("") || "<p class=\"muted\">No codes yet.</p>";
 }
 let lastModSlug = "";

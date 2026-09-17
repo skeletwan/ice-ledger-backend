@@ -1,4 +1,5 @@
 import os, json, base64, time, re, sqlite3, hashlib, secrets, hmac
+from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from fastapi import FastAPI, UploadFile, File, Header, Form, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -618,7 +619,7 @@ def init_db():
         con.execute("ALTER TABLE users ADD COLUMN slug TEXT")
     except sqlite3.OperationalError:
         pass
-    for col, spec in (("display", "TEXT"), ("hue", "TEXT"), ("bio", "TEXT"), ("avatar", "TEXT"), ("cropx", "TEXT"), ("cropy", "TEXT"), ("cropz", "TEXT"), ("avatar_hidden", "INTEGER NOT NULL DEFAULT 0"), ("credits", "INTEGER NOT NULL DEFAULT 0"), ("suspended", "INTEGER NOT NULL DEFAULT 0"), ("socials", "TEXT")):
+    for col, spec in (("display", "TEXT"), ("hue", "TEXT"), ("bio", "TEXT"), ("avatar", "TEXT"), ("cropx", "TEXT"), ("cropy", "TEXT"), ("cropz", "TEXT"), ("avatar_hidden", "INTEGER NOT NULL DEFAULT 0"), ("credits", "INTEGER NOT NULL DEFAULT 0"), ("credit_month", "TEXT"), ("credit_until", "TEXT"), ("plus_until", "TEXT"), ("cycle_start", "TEXT"), ("suspended", "INTEGER NOT NULL DEFAULT 0"), ("socials", "TEXT")):
         try:
             con.execute(f"ALTER TABLE users ADD COLUMN {col} {spec}")
         except sqlite3.OperationalError:
@@ -686,6 +687,10 @@ def init_db():
       created TEXT NOT NULL
     )
     """)
+    try:
+        con.execute("ALTER TABLE rip_codes ADD COLUMN expires TEXT")
+    except sqlite3.OperationalError:
+        pass
     con.execute("""
     CREATE TABLE IF NOT EXISTS rip_redemptions (
       code TEXT NOT NULL,
@@ -846,54 +851,135 @@ def display_of(con, uid: int) -> str:
     row = con.execute("SELECT display FROM users WHERE id=?", (uid,)).fetchone()
     return ((row["display"] if row else None) or "Collector")[:24]
 
-def month_key():
-    return time.strftime("%Y-%m")
+def now_utc():
+    return datetime.now(timezone.utc)
+
+def parse_ts(s):
+    if not s:
+        return None
+    raw = str(s).strip().replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(raw)
+    except Exception:
+        try:
+            dt = datetime.strptime(raw[:10], "%Y-%m-%d")
+        except Exception:
+            return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+def month_key(uid: int | None = None):
+    if uid is None:
+        return now_utc().strftime("%Y-%m-%d")
+    start, _ = ensure_cycle(uid)
+    return start.strftime("%Y-%m-%d")
+
+def ensure_cycle(uid: int):
+    con = db()
+    row = con.execute(
+        "SELECT created, cycle_start, plus_until, plan FROM users WHERE id=?",
+        (uid,),
+    ).fetchone()
+    now = now_utc()
+    plus_until = parse_ts(row["plus_until"] if row else None)
+    start = parse_ts(row["cycle_start"] if row else None) or parse_ts(row["created"] if row else None) or now
+    while start + timedelta(days=30) <= now:
+        start = start + timedelta(days=30)
+    end = start + timedelta(days=30)
+    con.execute("UPDATE users SET cycle_start=? WHERE id=?", (start.strftime("%Y-%m-%dT%H:%M:%SZ"), uid))
+    if plus_until and plus_until <= now and ((row["plan"] if row else "") == "plus"):
+        con.execute("UPDATE users SET plan='free' WHERE id=?", (uid,))
+    con.commit()
+    con.close()
+    return start, end
 
 def plan_of(uid: int) -> str:
     con = db()
-    row = con.execute("SELECT plan FROM users WHERE id=?", (uid,)).fetchone()
-    con.close()
+    row = con.execute("SELECT plan, plus_until FROM users WHERE id=?", (uid,)).fetchone()
+    now = now_utc()
+    until = parse_ts(row["plus_until"] if row else None)
+    if until and until > now:
+        con.close()
+        return "plus"
     p = (row["plan"] if row else "free") or "free"
-    return p
+    if p == "plus" and not until:
+        until = now + timedelta(days=30)
+        con.execute(
+            "UPDATE users SET plus_until=?, cycle_start=? WHERE id=?",
+            (until.strftime("%Y-%m-%dT%H:%M:%SZ"), now.strftime("%Y-%m-%dT%H:%M:%SZ"), uid),
+        )
+        con.commit()
+        con.close()
+        return "plus"
+    if p == "plus" and until and until <= now:
+        con.execute("UPDATE users SET plan='free' WHERE id=?", (uid,))
+        con.commit()
+    con.close()
+    return "free"
 
 def bonus_of(uid: int) -> int:
     con = db()
-    row = con.execute("SELECT credits FROM users WHERE id=?", (uid,)).fetchone()
+    row = con.execute("SELECT credits, credit_until, credit_month FROM users WHERE id=?", (uid,)).fetchone()
     con.close()
     try:
-        return max(0, int((row["credits"] if row else 0) or 0))
+        if not row:
+            return 0
+        until = parse_ts(row["credit_until"] if "credit_until" in row.keys() else None)
+        if until:
+            if until <= now_utc():
+                return 0
+            return max(0, int((row["credits"] or 0) or 0))
+        cm = row["credit_month"] or ""
+        if cm and len(cm) == 7 and cm != now_utc().strftime("%Y-%m"):
+            return 0
+        return max(0, int((row["credits"] or 0) or 0))
     except Exception:
         return 0
 
 def add_credits(uid: int, n: int):
+    until = now_utc() + timedelta(days=30)
+    mark = until.strftime("%Y-%m-%dT%H:%M:%SZ")
     con = db()
-    con.execute("UPDATE users SET credits=IFNULL(credits,0)+? WHERE id=?", (int(n), uid))
+    row = con.execute("SELECT credits, credit_until FROM users WHERE id=?", (uid,)).fetchone()
+    cur = 0
+    old = parse_ts(row["credit_until"] if row else None)
+    if row and old and old > now_utc():
+        cur = int(row["credits"] or 0)
+    con.execute(
+        "UPDATE users SET credits=?, credit_until=?, credit_month=? WHERE id=?",
+        (cur + int(n), mark, until.strftime("%Y-%m-%d"), uid),
+    )
     con.commit()
     con.close()
 
 def usage_of(uid: int):
-    m = month_key()
+    start, end = ensure_cycle(uid)
+    m = start.strftime("%Y-%m-%d")
     plan = plan_of(uid)
     cap = PLUS_SCANS if plan == "plus" else FREE_SCANS
     bcap = PLUS_BOOK if plan == "plus" else FREE_BOOK
     con = db()
     row = con.execute("SELECT n FROM usage WHERE user_id=? AND month=?", (uid, m)).fetchone()
     brow = con.execute("SELECT n FROM book_usage WHERE user_id=? AND month=?", (uid, m)).fetchone()
+    prow = con.execute("SELECT plus_until FROM users WHERE id=?", (uid,)).fetchone()
     con.close()
     used = row["n"] if row else 0
     bused = brow["n"] if brow else 0
     bonus = bonus_of(uid)
     monthly_left = max(0, cap - used)
+    reset_at = (parse_ts(prow["plus_until"] if prow else None) if plan == "plus" else end) or end
     return {
         "used": used, "cap": cap, "bonus": bonus,
         "left": monthly_left + bonus,
         "book_used": bused, "book_cap": bcap, "book_left": max(0, bcap - bused),
         "plan": plan, "month": m,
+        "reset_at": reset_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "rip_scans": RIP_SCANS, "rip_price": RIP_PRICE,
     }
 
 def bump_usage(uid: int):
-    m = month_key()
+    m = month_key(uid)
     con = db()
     row = con.execute("SELECT n FROM usage WHERE user_id=? AND month=?", (uid, m)).fetchone()
     used = row["n"] if row else 0
@@ -905,12 +991,13 @@ def bump_usage(uid: int):
         else:
             con.execute("INSERT INTO usage(user_id,month,n) VALUES(?,?,1)", (uid, m))
     else:
-        con.execute("UPDATE users SET credits=MAX(0, IFNULL(credits,0)-1) WHERE id=?", (uid,))
+        if bonus_of(uid) > 0:
+            con.execute("UPDATE users SET credits=MAX(0, IFNULL(credits,0)-1) WHERE id=?", (uid,))
     con.commit()
     con.close()
 
 def bump_book(uid: int):
-    m = month_key()
+    m = month_key(uid)
     con = db()
     row = con.execute("SELECT n FROM book_usage WHERE user_id=? AND month=?", (uid, m)).fetchone()
     if row:
@@ -1010,8 +1097,11 @@ async def plus(payload: dict, request: Request, x_token: str | None = Header(def
     uid = require_operator(request, x_token or payload.get("token"))
     if APP_SECRET and payload.get("secret") != APP_SECRET:
         raise HTTPException(401, "app secret does not match")
+    until = now_utc() + timedelta(days=30)
+    mark = until.strftime("%Y-%m-%dT%H:%M:%SZ")
+    start = now_utc().strftime("%Y-%m-%dT%H:%M:%SZ")
     con = db()
-    con.execute("UPDATE users SET plan='plus' WHERE id=?", (uid,))
+    con.execute("UPDATE users SET plan='plus', plus_until=?, cycle_start=? WHERE id=?", (mark, start, uid))
     con.commit()
     con.close()
     return usage_of(uid)
@@ -1024,10 +1114,16 @@ async def rip_redeem(payload: dict, request: Request, x_token: str | None = Head
     if len(code) < 4:
         raise HTTPException(400, "enter a code")
     con = db()
-    row = con.execute("SELECT code,scans,max_uses,used FROM rip_codes WHERE code=?", (code,)).fetchone()
+    row = con.execute("SELECT code,scans,max_uses,used,created,expires FROM rip_codes WHERE code=?", (code,)).fetchone()
     if not row:
         con.close()
         raise HTTPException(404, "code not found")
+    exp = parse_ts(row["expires"] if "expires" in row.keys() else None) or (
+        parse_ts(row["created"]) + timedelta(days=30) if parse_ts(row["created"]) else None
+    )
+    if exp and exp <= now_utc():
+        con.close()
+        raise HTTPException(400, "Rip Night code expired")
     if int(row["used"]) >= int(row["max_uses"]):
         con.close()
         raise HTTPException(400, "code already used up")
@@ -1040,9 +1136,9 @@ async def rip_redeem(payload: dict, request: Request, x_token: str | None = Head
         "INSERT INTO rip_redemptions(code,user_id,created) VALUES(?,?,?)",
         (code, uid, time.strftime("%Y-%m-%dT%H:%M:%SZ")),
     )
-    con.execute("UPDATE users SET credits=IFNULL(credits,0)+? WHERE id=?", (int(row["scans"]), uid))
     con.commit()
     con.close()
+    add_credits(uid, int(row["scans"]))
     return usage_of(uid) | {"added": int(row["scans"]), "code": code}
 
 
@@ -1056,23 +1152,25 @@ async def admin_rip_code(payload: dict, request: Request, x_token: str | None = 
     code = re.sub(r"[^A-Z0-9\-]", "", code)
     con = db()
     try:
+        created = now_utc().strftime("%Y-%m-%dT%H:%M:%SZ")
+        expires = (now_utc() + timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
         con.execute(
-            "INSERT INTO rip_codes(code,scans,max_uses,used,note,created) VALUES(?,?,?,?,?,?)",
-            (code, scans, uses, 0, note, time.strftime("%Y-%m-%dT%H:%M:%SZ")),
+            "INSERT INTO rip_codes(code,scans,max_uses,used,note,created,expires) VALUES(?,?,?,?,?,?,?)",
+            (code, scans, uses, 0, note, created, expires),
         )
         con.commit()
     except sqlite3.IntegrityError:
         con.close()
         raise HTTPException(409, "that code already exists")
     con.close()
-    return {"code": code, "scans": scans, "max_uses": uses, "note": note}
+    return {"code": code, "scans": scans, "max_uses": uses, "note": note, "expires": expires}
 
 
 @app.get("/admin/rip-codes")
 async def admin_rip_codes(request: Request, x_token: str | None = Header(default=None)):
     require_operator(request, x_token)
     con = db()
-    rows = con.execute("SELECT code,scans,max_uses,used,note,created FROM rip_codes ORDER BY created DESC LIMIT 40").fetchall()
+    rows = con.execute("SELECT code,scans,max_uses,used,note,created,expires FROM rip_codes ORDER BY created DESC LIMIT 40").fetchall()
     con.close()
     return {"codes": [dict(r) for r in rows]}
 
@@ -1087,9 +1185,9 @@ async def admin_grant_rip(payload: dict, request: Request, x_token: str | None =
     if not row:
         con.close()
         raise HTTPException(404, "no account with that email")
-    con.execute("UPDATE users SET credits=IFNULL(credits,0)+? WHERE id=?", (scans, row["id"]))
-    con.commit()
+    uid = row["id"]
     con.close()
+    add_credits(uid, scans)
     send_mail("Ice Ledger Rip Night", f"Granted {scans} extra IDs to {email}")
     return {"ok": True, "email": email, "scans": scans}
 
