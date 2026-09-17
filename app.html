@@ -274,6 +274,7 @@
     <button id="refreshBook">Refresh book</button>
     <p class="muted" id="bookNote"></p>
     <button class="ghost" id="shareBtn">Share binder</button>
+    <button class="ghost" id="viewPublicBtn">Open my public binder</button>
     <p class="muted" id="shareNote"></p>
     <button class="ghost" id="exportBtn">Export JSON</button>
   </section>
@@ -1493,6 +1494,11 @@ $("shareBtn") && ($("shareBtn").onclick = async () => {
   const url = location.origin+"/?b="+mySlug;
   try { await navigator.clipboard.writeText(url); $("shareNote").textContent = "Copied "+url; }
   catch(e){ $("shareNote").textContent = url; }
+});
+$("viewPublicBtn") && ($("viewPublicBtn").onclick = async () => {
+  await loadMe();
+  if (!mySlug) { $("shareNote").textContent = "Save a card first so the public binder exists."; return; }
+  openPublic(mySlug);
 });
 async function loadComments(slug, cid, box){
   if (!box) return;

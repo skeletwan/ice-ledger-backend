@@ -919,9 +919,6 @@ async def follow_binder(slug: str, request: Request, x_token: str | None = Heade
     if not owner:
         con.close()
         raise HTTPException(404, "binder not found")
-    if owner["id"] == uid:
-        con.close()
-        raise HTTPException(400, "that's your binder")
     row = con.execute("SELECT slug FROM follows WHERE follower=? AND slug=?", (uid, slug)).fetchone()
     if row:
         con.execute("DELETE FROM follows WHERE follower=? AND slug=?", (uid, slug))
