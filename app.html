@@ -107,12 +107,12 @@
     .badge { display:inline-block; font-size:12px; padding:3px 8px; border-radius:999px; background:#2a3544; margin-bottom:8px; }
     .badge.review { background:#4a3b16; color:var(--warn); }
     .item { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px; margin-bottom:10px; position:relative; }
-    .item.tier-bronze { box-shadow: inset 0 0 0 2px #b08d57; }
-    .item.tier-silver { box-shadow: inset 0 0 0 2px #c5d0dc; }
-    .item.tier-gold { box-shadow: inset 0 0 0 2px #d4af37; }
-    .item.tier-platinum { box-shadow: inset 0 0 0 2px #9fb7c9; }
-    .item.tier-diamond { box-shadow: inset 0 0 0 2px #7ef0d2; }
-    .tier-tag { position:absolute; right:8px; bottom:8px; font-size:9px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; padding:2px 6px; border-radius:6px; background:#0b1116; }
+    .item.tier-bronze { border-color:#b08d57; border-width:2px; }
+    .item.tier-silver { border-color:#c5d0dc; border-width:2px; }
+    .item.tier-gold { border-color:#d4af37; border-width:2px; }
+    .item.tier-platinum { border-color:#9fb7c9; border-width:2px; }
+    .item.tier-diamond { border-color:#7ef0d2; border-width:2px; }
+    .tier-tag { position:absolute; right:8px; bottom:8px; font-size:10px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; padding:3px 7px; border-radius:6px; background:#0b1116; color:#fff; z-index:2; }
     .item-top { display:grid; grid-template-columns:72px 1fr; gap:10px; }
     .item img { width:72px; height:72px; object-fit:contain; background:#000; border-radius:8px; }
     .item h3 { margin:0 0 2px; font-size:15px; }
@@ -1424,22 +1424,72 @@ function daysAgo(iso){
   if (!iso) return null;
   return Math.floor((Date.now()-new Date(iso).getTime())/86400000);
 }
-function toJpeg(file, max){
-  return new Promise(resolve => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      const s = Math.min(1, max / Math.max(img.width, img.height));
-      const c = document.createElement("canvas");
-      c.width = Math.max(1, Math.round(img.width*s));
-      c.height = Math.max(1, Math.round(img.height*s));
-      c.getContext("2d").drawImage(img,0,0,c.width,c.height);
-      URL.revokeObjectURL(url);
-      resolve(c.toDataURL("image/jpeg", 0.7));
+function frameCardCanvas(img, max){
+  const w = img.width || 1, h = img.height || 1;
+  const src = document.createElement("canvas");
+  src.width = w; src.height = h;
+  const sctx = src.getContext("2d");
+  sctx.drawImage(img, 0, 0);
+  let minx = w, miny = h, maxx = 0, maxy = 0, hits = 0;
+  try {
+    const step = Math.max(1, Math.floor(Math.min(w, h) / 220));
+    const data = sctx.getImageData(0, 0, w, h).data;
+    const at = (x, y) => {
+      const i = (y * w + x) * 4;
+      return [data[i], data[i+1], data[i+2]];
     };
-    img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
-    img.src = url;
+    const corners = [at(2,2), at(w-3,2), at(2,h-3), at(w-3,h-3)];
+    const bg = [0,1,2].map(i => Math.round(corners.reduce((a,p)=>a+p[i],0)/4));
+    for (let y = 0; y < h; y += step) {
+      for (let x = 0; x < w; x += step) {
+        const p = at(x, y);
+        if (Math.abs(p[0]-bg[0])+Math.abs(p[1]-bg[1])+Math.abs(p[2]-bg[2]) > 48) {
+          hits++;
+          if (x < minx) minx = x;
+          if (y < miny) miny = y;
+          if (x > maxx) maxx = x;
+          if (y > maxy) maxy = y;
+        }
+      }
+    }
+  } catch(e) { hits = 0; }
+  let sx = 0, sy = 0, sw = w, sh = h;
+  if (hits > 40 && (maxx-minx) > w*0.28 && (maxy-miny) > h*0.28) {
+    const pad = Math.round(0.04 * Math.max(maxx-minx, maxy-miny));
+    sx = Math.max(0, minx - pad);
+    sy = Math.max(0, miny - pad);
+    sw = Math.min(w, maxx + pad) - sx;
+    sh = Math.min(h, maxy + pad) - sy;
+  }
+  const scale = Math.min(1, max / Math.max(sw, sh));
+  const c = document.createElement("canvas");
+  c.width = Math.max(1, Math.round(sw * scale));
+  c.height = Math.max(1, Math.round(sh * scale));
+  c.getContext("2d").drawImage(src, sx, sy, sw, sh, 0, 0, c.width, c.height);
+  return c;
+}
+function loadOriented(file){
+  return new Promise((resolve, reject) => {
+    const done = bmp => resolve(bmp);
+    if (typeof createImageBitmap === "function") {
+      createImageBitmap(file, { imageOrientation: "from-image" }).then(done).catch(() => {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.onload = () => { URL.revokeObjectURL(url); done(img); };
+        img.onerror = () => { URL.revokeObjectURL(url); reject(); };
+        img.src = url;
+      });
+    } else {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => { URL.revokeObjectURL(url); done(img); };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(); };
+      img.src = url;
+    }
   });
+}
+function toJpeg(file, max){
+  return loadOriented(file).then(img => frameCardCanvas(img, max).toDataURL("image/jpeg", 0.82)).catch(() => null);
 }
 
 function clearIdFields(){
@@ -1496,21 +1546,9 @@ function blobJpegUrl(file, max){
   });
 }
 function blobJpeg(file, max){
-  return new Promise(resolve => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      const s = Math.min(1, max / Math.max(img.width||1, img.height||1));
-      const c = document.createElement("canvas");
-      c.width = Math.max(1, Math.round((img.width||1)*s));
-      c.height = Math.max(1, Math.round((img.height||1)*s));
-      c.getContext("2d").drawImage(img,0,0,c.width,c.height);
-      URL.revokeObjectURL(url);
-      c.toBlob(b => resolve(b || file), "image/jpeg", 0.8);
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
-    img.src = url;
-  });
+  return loadOriented(file).then(img => new Promise(resolve => {
+    frameCardCanvas(img, max).toBlob(b => resolve(b || file), "image/jpeg", 0.82);
+  })).catch(() => file);
 }
 $("go").onclick = async () => {
   frontFile = ($("file") && $("file").files[0]) || frontFile;
@@ -1897,14 +1935,18 @@ function photoSrc(c, slug){
   if (s && c.id) return "/u/"+encodeURIComponent(s)+"/cards/"+encodeURIComponent(c.id)+"/photo";
   return "";
 }
-function binderCad(c){
-  const n = +(c && c.comp);
+function asCad(v){
+  if (v==null || v==="") return null;
+  const n = parseFloat(String(v).replace(/[^0-9.]/g,""));
   return (!isNaN(n) && n >= 1) ? n : null;
 }
+function binderCad(c){
+  if (!c) return null;
+  return asCad(c.comp) || asCad(c.rawComp) || asCad(c.sysComp) || asCad(c.sys_comp);
+}
 function publicCad(c){
-  const n = +(c && (c.sysComp || c.sys_comp || c.rawComp));
-  if (!isNaN(n) && n >= 1) return n;
-  return null;
+  if (!c) return null;
+  return asCad(c.sysComp) || asCad(c.sys_comp) || asCad(c.rawComp);
 }
 function tierFromCad(n){
   if (n==null || isNaN(+n) || +n < 1) return "";

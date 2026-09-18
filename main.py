@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, FileResponse, Response
 from urllib.parse import urlparse, quote_plus
 from pathlib import Path
-from PIL import Image
+from PIL import Image, ImageOps
 import httpx
 
 XAI_API_KEY = os.environ.get("XAI_API_KEY", "")
@@ -202,12 +202,48 @@ def check_cap():
         raise HTTPException(429, f"daily cap {DAILY_CAP} reached")
     _hits[day] = n + 1
 
+def _trim_card(img: Image.Image) -> Image.Image:
+    img = ImageOps.exif_transpose(img)
+    rgb = img.convert("RGB")
+    w, h = rgb.size
+    if w < 40 or h < 40:
+        return rgb
+    pix = rgb.load()
+    corners = [pix[2, 2], pix[w - 3, 2], pix[2, h - 3], pix[w - 3, h - 3]]
+    bg = tuple(sum(c[i] for c in corners) // 4 for i in range(3))
+    def far(p):
+        return abs(p[0] - bg[0]) + abs(p[1] - bg[1]) + abs(p[2] - bg[2]) > 48
+    step = max(1, min(w, h) // 280)
+    minx, miny, maxx, maxy = w, h, 0, 0
+    found = 0
+    for y in range(0, h, step):
+        for x in range(0, w, step):
+            if far(pix[x, y]):
+                found += 1
+                if x < minx: minx = x
+                if y < miny: miny = y
+                if x > maxx: maxx = x
+                if y > maxy: maxy = y
+    if found < 30 or maxx - minx < w * 0.28 or maxy - miny < h * 0.28:
+        return rgb
+    pad = int(0.04 * max(maxx - minx, maxy - miny))
+    box = (
+        max(0, minx - pad),
+        max(0, miny - pad),
+        min(w, maxx + pad),
+        min(h, maxy + pad),
+    )
+    return rgb.crop(box)
+
 def shrink(data: bytes) -> bytes:
     img = Image.open(BytesIO(data))
-    img = img.convert("RGB")
+    try:
+        img = _trim_card(img)
+    except Exception:
+        img = img.convert("RGB")
     img.thumbnail((1280, 1280))
     out = BytesIO()
-    img.save(out, format="JPEG", quality=80)
+    img.save(out, format="JPEG", quality=82)
     return out.getvalue()
 
 @app.get("/health")
