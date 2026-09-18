@@ -18,6 +18,8 @@
     .spark { display:block; width:100%; height:200px; background:#10161d; }
     .mini-trend { background:#0e171e; border:1px solid var(--line); border-radius:14px; padding:10px 12px 8px; margin:10px 0 14px; }
     .mini-trend-top { display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-bottom:4px; }
+    .mini-trend .ranges { background:transparent; border-bottom:0; margin:0 0 6px; }
+    .mini-trend .ranges button { padding:6px 0 4px; font-size:11px; }
     .mini-last { font-size:20px; font-weight:700; letter-spacing:-0.03em; }
     .mini-chg { font-size:13px; font-weight:700; }
     .mini-chg.up { color:#26a69a; }
@@ -170,7 +172,8 @@
     .crop-frame { width:220px; height:220px; border-radius:16px; overflow:hidden; border:3px solid var(--ice); background:#000; touch-action:none; position:relative; }
     .crop-frame img { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%) scale(1); max-width:none; height:220px; width:auto; pointer-events:none; border:0; }
     .heart { display:inline-block; margin-left:6px; background:#102830; color:#7ef0d2; border:1px solid #2a6a62; border-radius:999px; padding:2px 8px; font-size:12px; font-weight:800; letter-spacing:.02em; }
-    .heart.big { font-size:16px; padding:6px 12px; margin:8px 0 0; }
+    .heart.big { font-size:13px; padding:0; margin:0; }
+    #likeBtn { width:auto; padding:6px 10px; font-size:12px; margin:8px 0 0; }
     .hue-swatch { width:48px; height:48px; padding:0; border:0; border-radius:12px; background:transparent; overflow:hidden; }
     .hue-swatch::-webkit-color-swatch-wrapper { padding:0; }
     .hue-swatch::-webkit-color-swatch { border:0; border-radius:12px; }
@@ -272,9 +275,11 @@
     <div class="status" id="quotaBox">Free: 10 IDs / 30 days. Ice+: 200 IDs / 30 days. Rip Night: 20 extra IDs / 30 days.</div>
     <p class="muted" id="resetLine"></p>
     <div class="row2">
-      <button class="ghost" id="payBtn">Ice+ · $8 / 30 days · 200 IDs + 30 refreshes</button>
-      <button class="ghost" id="ripBtn">Rip Night · $2.99 · 20 IDs</button>
+      <button class="ghost" id="payBtn">Ice+ · $8</button>
+      <button class="ghost" id="ripBtn">Rip Night!</button>
     </div>
+    <p class="muted">Ice+ ($8 / 30 days) · 200 IDs + 30 book refreshes</p>
+    <p class="muted">Rip Night! ($2.99) · 20 extra IDs for 30 days</p>
     <label>Have a code?</label>
     <div class="row2" style="align-items:end">
       <input id="ripCode" placeholder="RIP-XXXXXX" autocomplete="off" />
@@ -433,7 +438,6 @@
         <div class="binder-actions">
           <button class="ghost" id="followBtn">Follow</button>
           <button class="ghost" id="likeBinderBtn">Like binder · 0</button>
-          <button class="ghost" id="reportUserBtn">Report collector</button>
         </div>
       </div>
     </div>
@@ -453,14 +457,24 @@
       <option value="">All sets</option>
     </select>
     <div id="pubList"></div>
+    <p class="muted" style="margin-top:24px">Problem with this collector?</p>
+    <button class="ghost" id="reportUserBtn" style="width:auto;padding:6px 10px;font-size:12px">Report</button>
   </section>
   <section class="page" id="pubDetail">
     <button class="ghost" id="backPub">Back to binder</button>
-    <button class="ghost" id="likeBtn">Like · 0</button>
     <div class="hero"><img id="pubHero" alt="" /></div>
+    <button class="ghost" id="likeBtn">Like · 0</button>
     <h2 id="pubTitle"></h2>
     <p class="muted" id="pubLine"></p>
     <div class="mini-trend">
+      <div class="ranges" id="pubRanges">
+        <button data-cr="5D">5D</button>
+        <button data-cr="1M">1M</button>
+        <button data-cr="6M">6M</button>
+        <button data-cr="YTD">YTD</button>
+        <button data-cr="1Y">1Y</button>
+        <button data-cr="ALL">MAX</button>
+      </div>
       <div class="mini-trend-top"><span class="mini-last" id="pubTrendVal">—</span><span class="mini-chg flat" id="pubTrendNote"></span></div>
       <svg class="mini-spark" id="pubSpark" viewBox="0 0 280 56" preserveAspectRatio="none"></svg>
     </div>
@@ -628,6 +642,14 @@
     <div id="dChips"></div>
     <p class="muted" id="dLine"></p>
     <div class="mini-trend">
+      <div class="ranges" id="cardRanges">
+        <button data-cr="5D">5D</button>
+        <button data-cr="1M">1M</button>
+        <button data-cr="6M">6M</button>
+        <button data-cr="YTD">YTD</button>
+        <button data-cr="1Y">1Y</button>
+        <button data-cr="ALL">MAX</button>
+      </div>
       <div class="mini-trend-top"><span class="mini-last" id="cardTrendVal">—</span><span class="mini-chg flat" id="cardTrendNote"></span></div>
       <svg class="mini-spark" id="cardSpark" viewBox="0 0 280 56" preserveAspectRatio="none"></svg>
     </div>
@@ -997,8 +1019,8 @@ function paintTicker(){
   if ($("bookBar")) {
     const pts = slice.map(x=>x.v);
     const flat = pts.length < 2 || Math.max.apply(null,pts) === Math.min.apply(null,pts);
-    $("bookBar").innerHTML = "<button type=\"button\" id=\"openChart\"><b>"+last+"</b> · "+(chTxt==="—"?"no day change yet":chTxt)+
-      "<div class=\"muted\">"+(flat?"Chart is flat until book changes (refresh or another day). Tap for chart.":"Tap for chart")+"</div></button>";
+    $("bookBar").innerHTML = "<button type=\"button\" id=\"openChart\"><b>"+last+"</b> · "+(chTxt==="—"?"—":chTxt)+
+      "<div class=\"muted\">Tap for chart</div></button>";
     const ob = $("openChart");
     if (ob) ob.onclick = () => {
       document.body.classList.toggle("chart-open");
@@ -1054,8 +1076,26 @@ function miniSpark(vals, elId){
     "<polyline fill='none' stroke='"+col+"' stroke-width='2' stroke-linejoin='round' stroke-linecap='round' points='"+pts+"'/>"+
     "<circle cx='"+lastX+"' cy='"+lastY+"' r='3' fill='"+col+"'/>";
 }
+const CRNG = "ice-card-rng";
+function cardRangeKey(){
+  const r = localStorage.getItem(CRNG) || "5D";
+  return ["5D","1M","6M","YTD","1Y","ALL"].indexOf(r)>=0 ? r : "5D";
+}
+function sliceHist(h, r){
+  h = h || [];
+  if (r === "YTD") {
+    const y = new Date().getFullYear()+"-01-01";
+    return h.filter(x => x.d >= y);
+  }
+  const days = { "5D":5, "1M":30, "6M":183, "1Y":365 }[r];
+  if (!days) return h;
+  const cut = new Date();
+  cut.setDate(cut.getDate() - (days-1));
+  const ds = cut.toISOString().slice(0,10);
+  return h.filter(x => x.d >= ds);
+}
 function paintCardSpark(card, elId, noteId){
-  let hist = (card && card.hist) || [];
+  let hist = sliceHist((card && card.hist) || [], cardRangeKey());
   let vals = hist.map(x => +x.v).filter(v => !isNaN(v));
   if (!vals.length && card && card.comp != null && !isNaN(+card.comp)) vals = [+card.comp];
   miniSpark(vals, elId || "cardSpark");
@@ -1071,7 +1111,26 @@ function paintCardSpark(card, elId, noteId){
       note.textContent = (ch>0?"+":ch<0?"−":"")+money(Math.abs(ch));
     }
   }
+  document.querySelectorAll("[data-cr]").forEach(b => b.classList.toggle("on", b.getAttribute("data-cr")===cardRangeKey()));
 }
+function bindCardRanges(){
+  ["cardRanges","pubRanges"].forEach(id => {
+    const el = $(id);
+    if (!el || el.dataset.bound) return;
+    el.dataset.bound = "1";
+    el.onclick = e => {
+      const b = e.target.closest("[data-cr]");
+      if (!b) return;
+      localStorage.setItem(CRNG, b.getAttribute("data-cr"));
+      if (id==="pubRanges" && viewCard) paintCardSpark(viewCard, "pubSpark", "pubTrendNote");
+      else if (openId) {
+        const c = load().find(x => x.id===openId);
+        if (c) paintCardSpark(c, "cardSpark", "cardTrendNote");
+      }
+    };
+  });
+}
+bindCardRanges();
 const NOTE = "ice-note";
 let noteTimer = null;
 function notePrefs(){ try { return JSON.parse(localStorage.getItem(NOTE)||"{}"); } catch(e){ return {}; } }
@@ -2385,9 +2444,12 @@ function commentBlock(c, nested){
     ? av+"<span class=\"cname\" data-open-user=\""+slug+"\">"+String(c.name||"Collector").replace(/[<>]/g,"")+"</span>"
     : av+"<b>"+String(c.name||"Collector").replace(/[<>]/g,"")+"</b>";
   const threadBtn = nested ? "" : "<button class=\"ghost\" data-thread=\""+c.id+"\">"+(n ? ("View "+n+" "+(n===1?"reply":"replies")) : "Reply")+"</button>";
-  const reportBtn = dead
+  const mine = slug && mySlug && slug === mySlug;
+  const reportBtn = mine
+    ? "<button class=\"ghost\" data-del-comment=\""+c.id+"\">Delete</button>"
+    : (dead
     ? "<button class=\"ghost dead\" disabled>Reported</button>"
-    : "<button class=\"ghost\" data-rep=\""+c.id+"\">Report comment</button>";
+    : "<button class=\"ghost\" data-rep=\""+c.id+"\">Report comment</button>");
   return "<div class=\"item"+(nested?" reply":"")+"\" style=\"cursor:default\" data-cid=\""+c.id+"\">"+who+" <span class=\"muted\">"+timeAgo(c.created)+"</span><p style=\"margin:6px 0 0\">"+String(c.body||"").replace(/[<>]/g,"")+"</p><div class=\"c-actions\">"+threadBtn+reportBtn+"</div><div class=\"thread hidden\" data-replies=\""+c.id+"\"></div></div>";
 }
 async function loadComments(slug, cid, box){
@@ -2401,6 +2463,13 @@ async function loadComments(slug, cid, box){
   box.onclick = async ev => {
     const go = ev.target.closest("[data-open-user]");
     if (go) { openPublic(go.getAttribute("data-open-user")); return; }
+    const del = ev.target.closest("[data-del-comment]");
+    if (del) {
+      if (!token()) return;
+      const rr = await fetch("/comments/"+del.getAttribute("data-del-comment"), { method:"DELETE", headers:{ "x-token": token() } });
+      if (rr.ok) loadComments(box.dataset.slug, box.dataset.cid, box);
+      return;
+    }
     const rep = ev.target.closest("[data-rep]");
     const th = ev.target.closest("[data-thread]");
     const send = ev.target.closest("[data-send-reply]");
@@ -2741,7 +2810,7 @@ async function paintLike(){
   try {
     const r = await fetch("/u/"+encodeURIComponent(viewSlug)+"/cards/"+encodeURIComponent(viewCard.id)+"/likes", { headers:{ "x-token": token() } });
     const d = await r.json();
-    $("likeBtn").innerHTML = "<span class=\"heart big\">♥ "+(d.likes||0)+"</span> " + (d.liked ? "Liked" : "Like");
+    $("likeBtn").textContent = (d.liked ? "Liked · " : "Like · ") + (d.likes||0);
   } catch(e) { $("likeBtn").textContent = "Like · 0"; }
 }
 $("likeBtn") && ($("likeBtn").onclick = async () => {
@@ -2752,7 +2821,7 @@ $("likeBtn") && ($("likeBtn").onclick = async () => {
   });
   const d = await r.json().catch(()=>({}));
   if (r.ok) {
-    $("likeBtn").innerHTML = "<span class=\"heart big\">♥ "+(d.likes||0)+"</span> " + (d.liked ? "Liked" : "Like");
+    $("likeBtn").textContent = (d.liked ? "Liked · " : "Like · ") + (d.likes||0);
     refreshNotesBadge();
   }
 });

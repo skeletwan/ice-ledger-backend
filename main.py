@@ -2242,7 +2242,7 @@ async def del_comment(cid: int, request: Request, x_token: str | None = Header(d
     if row["user_id"] != uid and row["slug"] != slug:
         con.close()
         raise HTTPException(403, "not yours")
-    con.execute("DELETE FROM comments WHERE id=?", (cid,))
+    con.execute("UPDATE comments SET hidden=1 WHERE id=?", (cid,))
     con.commit()
     con.close()
     return {"ok": True}
