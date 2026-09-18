@@ -106,7 +106,13 @@
     .field b { font-size:15px; }
     .badge { display:inline-block; font-size:12px; padding:3px 8px; border-radius:999px; background:#2a3544; margin-bottom:8px; }
     .badge.review { background:#4a3b16; color:var(--warn); }
-    .item { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px; margin-bottom:10px; }
+    .item { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px; margin-bottom:10px; position:relative; }
+    .item.tier-bronze { box-shadow: inset 0 0 0 2px #b08d57; }
+    .item.tier-silver { box-shadow: inset 0 0 0 2px #c5d0dc; }
+    .item.tier-gold { box-shadow: inset 0 0 0 2px #d4af37; }
+    .item.tier-platinum { box-shadow: inset 0 0 0 2px #9fb7c9; }
+    .item.tier-diamond { box-shadow: inset 0 0 0 2px #7ef0d2; }
+    .tier-tag { position:absolute; right:8px; bottom:8px; font-size:9px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; padding:2px 6px; border-radius:6px; background:#0b1116; }
     .item-top { display:grid; grid-template-columns:72px 1fr; gap:10px; }
     .item img { width:72px; height:72px; object-fit:contain; background:#000; border-radius:8px; }
     .item h3 { margin:0 0 2px; font-size:15px; }
@@ -410,6 +416,15 @@
     </div>
     <select id="setFilter">
       <option value="">All sets</option>
+    </select>
+    <select id="tierFilter">
+      <option value="">All tiers</option>
+      <option value="bronze">Bronze</option>
+      <option value="silver">Silver</option>
+      <option value="gold">Gold</option>
+      <option value="platinum">Platinum</option>
+      <option value="diamond">Diamond</option>
+      <option value="none">Unpriced</option>
     </select>
     <div id="list"></div>
     <button class="ghost" id="shareBtn">Share binder</button>
@@ -1877,8 +1892,31 @@ function photoSrc(c, slug){
   if (c.photo && String(c.photo).slice(0,5)==="data:") return c.photo;
   if (c.scan && String(c.scan).slice(0,5)==="data:") return c.scan;
   const s = slug || c.slug || mySlug || "";
+  if (token() && c.id && (!s || s === mySlug))
+    return "/me/cards/"+encodeURIComponent(c.id)+"/photo?token="+encodeURIComponent(token());
   if (s && c.id) return "/u/"+encodeURIComponent(s)+"/cards/"+encodeURIComponent(c.id)+"/photo";
   return "";
+}
+function binderCad(c){
+  const n = +(c && c.comp);
+  return (!isNaN(n) && n >= 1) ? n : null;
+}
+function publicCad(c){
+  const n = +(c && (c.sysComp || c.sys_comp || c.rawComp));
+  if (!isNaN(n) && n >= 1) return n;
+  return null;
+}
+function tierFromCad(n){
+  if (n==null || isNaN(+n) || +n < 1) return "";
+  const v = +n;
+  if (v < 25) return "bronze";
+  if (v < 100) return "silver";
+  if (v < 400) return "gold";
+  if (v < 1500) return "platinum";
+  return "diamond";
+}
+function tierLabel(t){
+  return ({bronze:"Bronze",silver:"Silver",gold:"Gold",platinum:"Platinum",diamond:"Diamond"})[t] || "";
 }
 function cardLooksGrail(c){
   if (!c) return false;
@@ -1903,11 +1941,14 @@ function cardRowHtml(c){
   const line = [c.team,c.year,c.set,c.number?"#"+c.number:""].filter(Boolean).join(" · ");
   const grade = (!c.grader||c.grader==="Raw")?"Raw":[c.grader,c.grade].filter(Boolean).join(" ");
   const chips = "<div>"+(c.insert?"<span class=\"chip\">"+c.insert+"</span>":"")+(c.parallel?"<span class=\"chip\">"+c.parallel+"</span>":(!c.insert?"<span class=\"chip dim\">Base</span>":""))+"<span class=\"chip dim\">"+grade+"</span></div>";
-  return "<article class=\"item"+grailCls(c)+"\" data-open=\""+c.id+"\">"+
+  const tier = tierFromCad(binderCad(c));
+  return "<article class=\"item"+grailCls(c)+(tier?" tier-"+tier:"")+"\" data-open=\""+c.id+"\">"+
     "<div class=\"item-top\"><img src=\""+img+"\" alt=\"\" onerror=\"this.style.opacity=0\" /><div><h3>"+dash(c.player)+"</h3>"+
     "<div class=\"muted\">"+dash(line)+"</div>"+chips+
     "<div class=\"muted\" style=\"margin-top:4px\">"+money(c.comp)+" market · "+money(c.cost)+" paid</div>"+
-    "<button class=\"ghost\" data-edit=\""+c.id+"\" style=\"width:auto;margin-top:8px;padding:6px 12px\">Edit</button></div></div></article>";
+    "<button class=\"ghost\" data-edit=\""+c.id+"\" style=\"width:auto;margin-top:8px;padding:6px 12px\">Edit</button></div></div>"+
+    (tier?"<span class=\"tier-tag\">"+tierLabel(tier)+"</span>":"")+
+    "</article>";
   } catch(e) {
     return "<article class=\"item\" data-open=\""+(c&&c.id||"")+"\"><h3>"+dash(c&&c.player)+"</h3></article>";
   }
@@ -1916,6 +1957,7 @@ function renderBinder(){
   const cards = load();
   const teamF = $("teamFilter") ? $("teamFilter").value : "";
   const setF = $("setFilter") ? $("setFilter").value : "";
+  const tierF = $("tierFilter") ? $("tierFilter").value : "";
   const sort = $("sortBy") ? $("sortBy").value : "new";
   const teams = [...new Set(cards.map(teamName))].sort((a,b)=>a.localeCompare(b));
   const sets = [...new Set(cards.map(c => (c.set||"").trim() || "No set"))].sort((a,b)=>a.localeCompare(b));
@@ -1938,9 +1980,14 @@ function renderBinder(){
     }
   }
   let rows = cards.filter(c => {
-    const hay = [c.player,c.team,c.set,c.year,c.number,c.insert,c.parallel,c.cert].join(" ").toLowerCase();
+    const hay = [c.player,c.team,c.set,c.year,c.number,c.insert,c.parallel,c.cert,tierLabel(tierFromCad(binderCad(c)))].join(" ").toLowerCase();
     if (teamF && teamName(c) !== teamF) return false;
     if (setF && ((c.set||"").trim() || "No set") !== setF) return false;
+    if (tierF) {
+      const t = tierFromCad(binderCad(c));
+      if (tierF==="none") { if (t) return false; }
+      else if (t !== tierF) return false;
+    }
     return true;
   });
   if (sort==="team") rows.sort((a,b)=> teamName(a).localeCompare(teamName(b)) || (a.player||"").localeCompare(b.player||""));
@@ -1985,6 +2032,7 @@ $("searchList") && ($("searchList").onclick = e => {
 if ($("sortBy")) $("sortBy").onchange = renderBinder;
 if ($("teamFilter")) $("teamFilter").onchange = renderBinder;
 if ($("setFilter")) $("setFilter").onchange = renderBinder;
+if ($("tierFilter")) $("tierFilter").onchange = renderBinder;
 $("list").onclick = e => {
   const ed = e.target.closest("[data-edit]");
   if (ed) {
@@ -2529,7 +2577,8 @@ let viewSlug = "";
 let viewCard = null;
 let pubCards = [];
 function pubCardHtml(c){
-  return "<article class=\"item"+grailCls(c)+"\" data-pub=\""+c.id+"\"><div class=\"item-top\"><img src=\""+photoSrc(c, viewSlug)+"\" alt=\"\" /><div><h3>"+(c.player||"—")+" <span class=\"heart\">♥ "+(c.likes||0)+"</span></h3><div class=\"muted\">"+[c.team,c.year,c.set,c.number?"#"+c.number:""].filter(Boolean).join(" · ")+"</div></div></div></article>";
+  const pt = tierFromCad(publicCad(c) || (viewSlug===mySlug ? binderCad(c) : null));
+  return "<article class=\"item"+grailCls(c)+(pt?" tier-"+pt:"")+"\" data-pub=\""+c.id+"\"><div class=\"item-top\"><img src=\""+photoSrc(c, viewSlug)+"\" alt=\"\" /><div><h3>"+(c.player||"—")+" <span class=\"heart\">♥ "+(c.likes||0)+"</span></h3><div class=\"muted\">"+[c.team,c.year,c.set,c.number?"#"+c.number:""].filter(Boolean).join(" · ")+"</div></div></div>"+(pt?"<span class=\"tier-tag\">"+tierLabel(pt)+"</span>":"")+"</article>";
 }
 function renderPubList(){
   const box = $("pubList");
@@ -3139,7 +3188,8 @@ function renderFeed(){
   else rows.sort((a,b)=> String(b.added||"").localeCompare(String(a.added||"")));
   box.innerHTML = rows.length ? rows.map(c => {
     const line = [c.team,c.year,c.set,c.number?"#"+c.number:""].filter(Boolean).join(" · ");
-    return "<article class=\"item"+grailCls(c)+"\" data-feed-slug=\""+c.slug+"\" data-feed-card=\""+c.id+"\"><div class=\"item-top\"><img src=\""+photoSrc(c, c.slug)+"\" alt=\"\" /><div><h3>"+(c.player||"—")+"</h3><div class=\"muted\">"+line+"</div><div class=\"muted\">"+(c.display||"Collector")+" · "+timeAgo(c.added)+"</div><div class=\"muted\">"+money(c.comp)+"</div></div></div></article>";
+    const ft = tierFromCad(publicCad(c));
+    return "<article class=\"item"+grailCls(c)+(ft?" tier-"+ft:"")+"\" data-feed-slug=\""+c.slug+"\" data-feed-card=\""+c.id+"\"><div class=\"item-top\"><img src=\""+photoSrc(c, c.slug)+"\" alt=\"\" /><div><h3>"+(c.player||"—")+"</h3><div class=\"muted\">"+line+"</div><div class=\"muted\">"+(c.display||"Collector")+" · "+timeAgo(c.added)+"</div><div class=\"muted\">"+money(publicCad(c) || c.comp)+"</div></div></div>"+(ft?"<span class=\"tier-tag\">"+tierLabel(ft)+"</span>":"")+"</article>";
   }).join("") : "<p class=\"muted\">No new cards yet.</p>";
 }
 $("feedSort") && ($("feedSort").onchange = renderFeed);

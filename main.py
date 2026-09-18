@@ -1352,6 +1352,13 @@ async def list_cards(request: Request, x_token: str | None = Header(default=None
         out.append(pc)
     return {"cards": out}
 
+@app.get("/me/cards/{cid}/photo")
+async def my_card_photo(cid: str, request: Request, x_token: str | None = Header(default=None)):
+    tok = x_token or request.query_params.get("token")
+    uid = require_user(request, tok)
+    slug = ensure_slug(uid)
+    return await card_photo(slug, cid)
+
 @app.post("/cards")
 async def upsert_card(payload: dict, request: Request, x_token: str | None = Header(default=None)):
     uid = require_user(request, x_token)
@@ -1486,6 +1493,8 @@ async def recent_feed():
                 "comp": c.get("comp"),
                 "added": c.get("added") or "",
                 "grail": bool(c.get("grail")),
+                "sysComp": card_market(raw),
+                "rawComp": raw.get("rawComp"),
             })
     con.close()
     items.sort(key=lambda x: str(x.get("added") or ""), reverse=True)
