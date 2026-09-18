@@ -109,7 +109,10 @@
     .stale { font-size:11px; color:var(--warn); margin-top:6px; }
     .chip { display:inline-block; font-size:11px; padding:2px 8px; border-radius:999px; background:#1c3340; color:var(--ice); margin:2px 4px 0 0; }
     .chip.dim { background:#24303a; color:var(--muted); }
-    .hero { background:#000; border-radius:16px; overflow:hidden; border:1px solid var(--line); }
+    .hero { background:#000; border-radius:16px; overflow:hidden; border:1px solid var(--line); margin-top:12px; }
+    #backPub, #backBind, #backFind, #backPub { margin-bottom:4px; }
+    #pubList, #list { margin-top:14px; }
+    #pubSet, #setFilter { margin-bottom:8px; }
     .hero img { width:100%; max-height:420px; object-fit:contain; display:block; background:#000; }
     .vals { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:12px 0; }
     .val { background:#0e171e; border:1px solid var(--line); border-radius:12px; padding:10px; text-align:center; }
@@ -482,6 +485,7 @@
     <button class="ghost" id="backPub">Back to binder</button>
     <div class="hero"><img id="pubHero" alt="" /></div>
     <button class="ghost" id="likeBtn">Like · 0</button>
+    <p class="muted" id="cardLikers"></p>
     <h2 id="pubTitle"></h2>
     <p class="muted" id="pubLine"></p>
     <div class="mini-trend">
@@ -578,6 +582,11 @@
     </div>
     <button class="ghost" id="tabHelp">Support / feedback</button>
     <button class="ghost hidden" id="ownerToolsBtn">Owner tools</button>
+    <h3 style="font-size:15px;margin:16px 0 8px">Your community</h3>
+    <p class="muted" id="commStats"></p>
+    <div id="commFollowers"></div>
+    <div id="commBinder"></div>
+    <div id="commCards"></div>
     <h3 style="font-size:15px;margin:16px 0 8px">Follow alerts</h3>
     <p class="muted">Ping when a binder you follow adds a card. Works with the app open or on the Home Screen.</p>
     <label><input id="followAlertOn" type="checkbox" style="width:auto;margin-right:8px" /> New cards on binders I follow</label>
@@ -2300,6 +2309,39 @@ async function loadMe(){
     if ($("ownerToolsBtn")) $("ownerToolsBtn").classList.toggle("hidden", !d.operator);
     if (d.operator) loadRipCodes();
     loadBanners();
+    loadCommunity();
+  } catch(e){}
+}
+function personChip(p){
+  const name = String(p.display||p.slug||"Collector").replace(/[<>]/g,"");
+  const slug = p.slug || "";
+  const ini = name.slice(0,2).toUpperCase();
+  const av = slug && p.has_avatar
+    ? "<span class=\"cava\">"+ini+"<img alt=\"\" src=\"/u/"+slug+"/avatar\" onerror=\"this.remove()\" /></span>"
+    : "<span class=\"cava\">"+ini+"</span>";
+  return "<div class=\"item\" data-open-user=\""+slug+"\" style=\"cursor:pointer\">"+av+" <b>"+name+"</b></div>";
+}
+async function loadCommunity(){
+  if (!token() || !$("commFollowers")) return;
+  try {
+    const r = await fetch("/me/community", { headers:{ "x-token": token() } });
+    if (!r.ok) return;
+    const d = await r.json();
+    const fol = d.followers || [];
+    const bin = d.binder || [];
+    const cards = d.cards || [];
+    if ($("commStats")) $("commStats").textContent = fol.length+" following you · "+bin.length+" liked your binder";
+    $("commFollowers").innerHTML = "<p class=\"muted\">Following you</p>"+(fol.map(personChip).join("") || "<p class=\"muted\">Nobody yet.</p>");
+    $("commBinder").innerHTML = "<p class=\"muted\">Liked your binder</p>"+(bin.map(personChip).join("") || "<p class=\"muted\">Nobody yet.</p>");
+    $("commCards").innerHTML = "<p class=\"muted\">Liked your cards</p>"+(cards.map(c =>
+      "<div class=\"item\" style=\"cursor:default\"><b>"+String(c.player||"Card").replace(/[<>]/g,"")+"</b><div class=\"muted\">"+(c.people||[]).map(p=>String(p.display||p.slug).replace(/[<>]/g,"")).join(", ")+"</div></div>"
+    ).join("") || "<p class=\"muted\">Nobody yet.</p>");
+    const open = ev => {
+      const row = ev.target.closest("[data-open-user]");
+      if (row && row.getAttribute("data-open-user")) openPublic(row.getAttribute("data-open-user"));
+    };
+    $("commFollowers").onclick = open;
+    $("commBinder").onclick = open;
   } catch(e){}
 }
 function cropStyle(){
@@ -2870,7 +2912,7 @@ async function openNoteCat(kind){
   if (!token()) { box.innerHTML = "<p class=\"muted\">Sign in to see notifications.</p>"; return; }
   const rows = (await fetchNotes()).filter(n => noteKind(n)===kind);
   box.innerHTML = rows.length ? rows.map(n =>
-    "<article class=\"item\" data-slug=\""+(n.slug||"")+"\" data-card=\""+(n.card_id||"")+"\"><b>"+(n.body||"")+"</b><div class=\"muted\">"+(n.created||"").slice(0,16)+(n.read?"":" · new")+"</div></article>"
+    "<article class=\"item\" data-slug=\""+(n.slug||"")+"\" data-card=\""+(n.card_id||"")+"\"><b>"+(n.body||"")+"</b><div class=\"muted\">"+timeAgo(n.created)+(n.read?"":" · new")+"</div></article>"
   ).join("") : "<p class=\"muted\">Nothing in here yet.</p>";
   const ids = rows.filter(n => !n.read).map(n => n.id);
   if (ids.length) {
@@ -2888,6 +2930,10 @@ async function paintLike(){
     const r = await fetch("/u/"+encodeURIComponent(viewSlug)+"/cards/"+encodeURIComponent(viewCard.id)+"/likes", { headers:{ "x-token": token() } });
     const d = await r.json();
     $("likeBtn").innerHTML = "<span class=\"heart\">♥ "+(d.likes||0)+"</span> " + (d.liked ? "Liked" : "Like");
+    if ($("cardLikers")) {
+      const names = (d.people||[]).map(p => p.display || p.slug).filter(Boolean);
+      $("cardLikers").textContent = names.length ? ("Liked by "+names.join(", ")) : "";
+    }
   } catch(e) { $("likeBtn").innerHTML = "<span class=\"heart\">♥ 0</span> Like"; }
 }
 $("likeBtn") && ($("likeBtn").onclick = async () => {
@@ -2898,7 +2944,7 @@ $("likeBtn") && ($("likeBtn").onclick = async () => {
   });
   const d = await r.json().catch(()=>({}));
   if (r.ok) {
-    $("likeBtn").innerHTML = "<span class=\"heart\">♥ "+(d.likes||0)+"</span> " + (d.liked ? "Liked" : "Like");
+    paintLike();
     refreshNotesBadge();
   }
 });

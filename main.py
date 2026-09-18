@@ -851,6 +851,19 @@ def display_of(con, uid: int) -> str:
     row = con.execute("SELECT display FROM users WHERE id=?", (uid,)).fetchone()
     return ((row["display"] if row else None) or "Collector")[:24]
 
+def person_of(con, uid: int) -> dict | None:
+    row = con.execute(
+        "SELECT slug, display, avatar, IFNULL(avatar_hidden,0) AS avatar_hidden FROM users WHERE id=?",
+        (uid,),
+    ).fetchone()
+    if not row or not row["slug"]:
+        return None
+    return {
+        "slug": row["slug"],
+        "display": (row["display"] or "Collector")[:24],
+        "has_avatar": bool(row["avatar"]) and not int(row["avatar_hidden"] or 0),
+    }
+
 def now_utc():
     return datetime.now(timezone.utc)
 
@@ -1614,8 +1627,70 @@ async def card_likes(slug: str, cid: str, request: Request, x_token: str | None 
             "SELECT 1 FROM likes WHERE slug=? AND card_id=? AND user_id=?",
             (slug, cid, uid),
         ).fetchone())
+    people = []
+    rows = con.execute("SELECT user_id FROM likes WHERE slug=? AND card_id=? ORDER BY created DESC LIMIT 40", (slug, cid)).fetchall()
+    for r in rows:
+        p = person_of(con, r["user_id"])
+        if p:
+            people.append(p)
     con.close()
-    return {"likes": n, "liked": mine}
+    return {"likes": n, "liked": mine, "people": people}
+
+@app.get("/u/{slug}/likers")
+async def binder_likers(slug: str):
+    slug = re.sub(r"[^a-z0-9]", "", (slug or "").lower())
+    con = db()
+    rows = con.execute("SELECT user_id FROM binder_likes WHERE slug=? ORDER BY created DESC LIMIT 80", (slug,)).fetchall()
+    people = []
+    for r in rows:
+        p = person_of(con, r["user_id"])
+        if p:
+            people.append(p)
+    con.close()
+    return {"people": people}
+
+@app.get("/me/community")
+async def my_community(request: Request, x_token: str | None = Header(default=None)):
+    uid = require_user(request, x_token)
+    slug = ensure_slug(uid)
+    con = db()
+    fol = con.execute("SELECT follower FROM follows WHERE slug=? ORDER BY created DESC LIMIT 80", (slug,)).fetchall()
+    followers = []
+    for r in fol:
+        p = person_of(con, r["follower"])
+        if p:
+            followers.append(p)
+    blink = con.execute("SELECT user_id FROM binder_likes WHERE slug=? ORDER BY created DESC LIMIT 80", (slug,)).fetchall()
+    binder = []
+    for r in blink:
+        p = person_of(con, r["user_id"])
+        if p:
+            binder.append(p)
+    cards = []
+    liked = con.execute(
+        "SELECT card_id, user_id FROM likes WHERE slug=? ORDER BY created DESC LIMIT 80",
+        (slug,),
+    ).fetchall()
+    by_card = {}
+    for r in liked:
+        by_card.setdefault(r["card_id"], []).append(r["user_id"])
+    for cid, uids in list(by_card.items())[:20]:
+        row = con.execute("SELECT data FROM cards WHERE id=? AND user_id=?", (cid, uid)).fetchone()
+        player = "Card"
+        if row:
+            try:
+                player = json.loads(row["data"]).get("player") or "Card"
+            except Exception:
+                pass
+        people = []
+        for x in uids:
+            p = person_of(con, x)
+            if p:
+                people.append(p)
+        if people:
+            cards.append({"id": cid, "player": player, "people": people})
+    con.close()
+    return {"followers": followers, "binder": binder, "cards": cards}
 
 @app.get("/me")
 async def me(request: Request, x_token: str | None = Header(default=None)):
