@@ -107,7 +107,8 @@ Upper Deck hockey rules (2015–2026 especially):
 - Young Guns = insert "Young Guns" (not a parallel). Canvas Young Guns = insert "Young Guns Canvas".
 - Exclusives, High Gloss, Clear Cut, Outburst, Traxx are parallels or separate inserts — never label a plain YG as those.
 - "C" or Young Guns badge on silver UD Series 1/2 rookies is usually Young Guns, not SP Authentic.
-- Copy set name from the back: Series 1, Series 2, Extended, SP Authentic, SP Game Used, The Cup, Stature, Premier, Allure, Synergy, Metal Universe, Chronology, Trilogy, O-Pee-Chee, Parkhurst, Choice.
+- Copy set name from the back: Series 1, Series 2, Extended, SP Authentic, SP Game Used, The Cup, Stature, Premier, Allure, Synergy, Metal Universe, Chronology, Trilogy, O-Pee-Chee, Parkhurst, Choice, Fleer Ultra, Skybox Impact.
+- Vintage 1990s: never return only "Ultra" or only "Impact". Set must include the brand: Fleer Ultra, Skybox Impact, Score, Pinnacle, Donruss, Leaf, Topps, OPC, Stadium Club, Be A Player. Rookie / RC on those cards is insert "Rookie", not the set.
 - Parallel examples: Silver Foil, Gold /100, Exclusives /100, High Gloss /10, Clear Cut, Outburst Gold, Rainbow, Black /1. If no /n and no foil name, parallel is null or Base.
 - Do not invent a numbered parallel because the photo is shiny.
 - 1990s Pinnacle / Score / Donruss / Leaf: Starquest, Artist's Proofs, Rink Collection, Ice Breakers. Starquest color versions are parallels — Green, Red, Blue, Gold, Purple, Black. If the card face or foil is clearly green, parallel is "Green" (not Base). Same for other named colors.
@@ -304,6 +305,18 @@ async def identify(
     if named and (not par or par.lower() in ("base", "null", "none", "raw")):
         data["parallel"] = named
         par = named
+    set_fix = {
+        "ultra": "Fleer Ultra",
+        "impact": "Skybox Impact",
+    }
+    st_l = st.lower().strip()
+    if st_l in set_fix:
+        data["set"] = set_fix[st_l]
+        st = data["set"]
+    if re.search(r"\brc\b|rookie", " ".join([st, par, ins, str(data.get("player") or "")]).lower()):
+        if not ins or ins.lower() in ("base", "null", "none"):
+            if "rookie" not in st_l:
+                data["insert"] = "Rookie"
     if "choice" in blob and "reserve" in blob:
         if "choice" not in st.lower():
             data["set"] = (st + " Choice").strip() if st else "Choice"

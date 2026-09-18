@@ -25,7 +25,7 @@
     .mini-chg.up { color:#26a69a; }
     .mini-chg.dn { color:#ef5350; }
     .mini-chg.flat { color:var(--muted); }
-    .mini-spark { display:block; width:100%; height:52px; background:transparent; }
+    .mini-spark { display:block; width:100%; height:72px; background:transparent; }
     .tips { background:#0e171e; border:1px solid var(--line); border-radius:14px; margin:10px 0 8px; overflow:hidden; }
     .tips > button { width:100%; margin:0; text-align:left; background:transparent; border:0; border-radius:0; padding:10px 14px; font-size:14px; }
     .tips ul { display:none; margin:0; padding:0 14px 12px 32px; color:var(--muted); font-size:13px; line-height:1.45; }
@@ -500,7 +500,7 @@
         <button data-cr="ALL">MAX<small>all time</small></button>
       </div>
       <div class="mini-trend-top"><span class="mini-last" id="pubTrendVal">—</span><span class="mini-chg flat" id="pubTrendNote"></span></div>
-      <svg class="mini-spark" id="pubSpark" viewBox="0 0 300 72" preserveAspectRatio="none"></svg>
+      <svg class="mini-spark" id="pubSpark" viewBox="0 0 300 86" preserveAspectRatio="none"></svg>
     </div>
     <div class="vals">
       <div class="val"><b id="pubHold">—</b><span>This copy</span></div>
@@ -721,7 +721,7 @@
         <button data-cr="ALL">MAX<small>all time</small></button>
       </div>
       <div class="mini-trend-top"><span class="mini-last" id="cardTrendVal">—</span><span class="mini-chg flat" id="cardTrendNote"></span></div>
-      <svg class="mini-spark" id="cardSpark" viewBox="0 0 300 72" preserveAspectRatio="none"></svg>
+      <svg class="mini-spark" id="cardSpark" viewBox="0 0 300 86" preserveAspectRatio="none"></svg>
     </div>
     <div class="vals">
       <div class="val"><b id="vHold">—</b><span>This copy</span></div>
@@ -972,10 +972,23 @@ function histForRange(){
   const ds = cut.toISOString().slice(0,10);
   return h.filter(x => x.d >= ds);
 }
-function spark(vals, elId){
+function fmtChartDate(iso, r){
+  if (!iso) return "";
+  const d = new Date(String(iso).slice(0,10)+"T12:00:00");
+  if (isNaN(d)) return "";
+  const mon = d.toLocaleString("en-US",{month:"short"});
+  const day = d.getDate();
+  const yr = String(d.getFullYear()).slice(2);
+  if (r==="1D"||r==="7D"||r==="5D"||r==="1M") return mon+" "+day;
+  if (r==="6M"||r==="YTD"||r==="1Y") return mon+" "+yr;
+  return mon+" "+yr;
+}
+function spark(points, elId){
   const el = $(elId || "spark");
   if (!el) return;
-  const W = 360, H = 200, L = 8, R = 52, T = 12, B = 18;
+  const rows = (points||[]).map(p => (typeof p==="number" ? {v:p,d:""} : p)).filter(p => p && !isNaN(+p.v));
+  const vals = rows.map(p => +p.v);
+  const W = 360, H = 200, L = 10, R = 52, T = 12, B = 28;
   const plotW = W - L - R, plotH = H - T - B;
   if (!vals.length) {
     const msg = (elId==="cardSpark"||elId==="pubSpark") ? "Value after the next update" : "No book history yet";
@@ -999,6 +1012,18 @@ function spark(vals, elId){
     const y = T + (plotH*i/ticks);
     grid += "<line x1='"+L+"' x2='"+(W-R)+"' y1='"+y+"' y2='"+y+"' stroke='#24303a' stroke-width='1'/>";
     grid += "<text x='"+(W-R+6)+"' y='"+(y+4)+"' fill='#8aa3b5' font-size='9'>"+axisCash(toFx(v)||v)+"</text>";
+  }
+  const r = (elId==="cardSpark"||elId==="pubSpark") ? cardRangeKey() : rangeKey();
+  const want = Math.min(4, rows.length);
+  const seen = {};
+  for (let i=0;i<want;i++){
+    const idx = want===1 ? 0 : Math.round(i*(rows.length-1)/(want-1));
+    const lab = fmtChartDate(rows[idx].d, r);
+    if (!lab || seen[lab] && i!==0 && i!==want-1) continue;
+    seen[lab] = 1;
+    const x = xAt(idx);
+    const anchor = i===0 ? "start" : (i===want-1 ? "end" : "middle");
+    grid += "<text x='"+x+"' y='"+(T+plotH+16)+"' fill='#8aa3b5' font-size='9' text-anchor='"+anchor+"'>"+lab+"</text>";
   }
   el.innerHTML =
     "<defs><linearGradient id='yfFill' x1='0' y1='0' x2='0' y2='1'>"+
@@ -1156,7 +1181,7 @@ function paintTicker(){
     $("fxCAD").classList.toggle("on", fx()==="CAD");
     $("fxUSD").classList.toggle("on", fx()==="USD");
   }
-  spark(histForRange().map(x => x.v));
+  spark(histForRange());
   document.querySelectorAll("#ranges [data-r]").forEach(b => b.classList.toggle("on", b.getAttribute("data-r")===rangeKey()));
   maybeJumpNote(t.mkt, ch);
 }
@@ -1182,7 +1207,9 @@ function axisCash(v){
 function miniSpark(vals, elId){
   const el = $(elId);
   if (!el) return;
-  const W = 300, H = 72, L = 36, R = 6, T = 8, B = 8;
+  const rows = (vals||[]).map(p => (typeof p==="number" ? {v:p,d:""} : p)).filter(p => p && !isNaN(+p.v));
+  vals = rows.map(p => +p.v);
+  const W = 300, H = 86, L = 36, R = 8, T = 8, B = 18;
   const plotW = W - L - R, plotH = H - T - B;
   if (!vals.length) {
     el.innerHTML = "";
@@ -1212,6 +1239,20 @@ function miniSpark(vals, elId){
     "<polygon fill='url(#"+gid+")' points='"+fill+"'/>"+
     "<polyline fill='none' stroke='"+col+"' stroke-width='2' stroke-linejoin='round' stroke-linecap='round' points='"+pts+"'/>"+
     "<circle cx='"+lastX+"' cy='"+lastY+"' r='3' fill='"+col+"'/>";
+  const r = cardRangeKey();
+  const want = Math.min(3, rows.length);
+  let dates = "";
+  const seen = {};
+  for (let i=0;i<want;i++){
+    const idx = want===1 ? 0 : Math.round(i*(rows.length-1)/(want-1));
+    const lab = fmtChartDate(rows[idx].d, r);
+    if (!lab || seen[lab]) continue;
+    seen[lab] = 1;
+    const x = xAt(idx);
+    const anchor = i===0 ? "start" : (i===want-1 ? "end" : "middle");
+    dates += "<text x='"+x+"' y='"+(T+plotH+12)+"' fill='#8aa3b5' font-size='8' text-anchor='"+anchor+"'>"+lab+"</text>";
+  }
+  el.innerHTML = el.innerHTML + dates;
 }
 const CRNG = "ice-card-rng";
 function cardRangeKey(){
@@ -1234,9 +1275,9 @@ function sliceHist(h, r){
 }
 function paintCardSpark(card, elId, noteId){
   let hist = sliceHist((card && card.hist) || [], cardRangeKey());
-  let vals = hist.map(x => +x.v).filter(v => !isNaN(v));
-  if (!vals.length && card && card.comp != null && !isNaN(+card.comp)) vals = [+card.comp];
-  miniSpark(vals, elId || "cardSpark");
+  if (!hist.length && card && card.comp != null && !isNaN(+card.comp)) hist = [{ v:+card.comp, d: new Date().toISOString().slice(0,10) }];
+  const vals = hist.map(x => +x.v).filter(v => !isNaN(v));
+  miniSpark(hist, elId || "cardSpark");
   const lastEl = elId === "pubSpark" ? $("pubTrendVal") : $("cardTrendVal");
   const note = $(noteId || "cardTrendNote");
   if (lastEl) lastEl.textContent = vals.length ? money(vals[vals.length-1]) : "—";
