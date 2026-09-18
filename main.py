@@ -202,48 +202,17 @@ def check_cap():
         raise HTTPException(429, f"daily cap {DAILY_CAP} reached")
     _hits[day] = n + 1
 
-def _trim_card(img: Image.Image) -> Image.Image:
-    img = ImageOps.exif_transpose(img)
-    rgb = img.convert("RGB")
-    w, h = rgb.size
-    if w < 40 or h < 40:
-        return rgb
-    pix = rgb.load()
-    corners = [pix[2, 2], pix[w - 3, 2], pix[2, h - 3], pix[w - 3, h - 3]]
-    bg = tuple(sum(c[i] for c in corners) // 4 for i in range(3))
-    def far(p):
-        return abs(p[0] - bg[0]) + abs(p[1] - bg[1]) + abs(p[2] - bg[2]) > 48
-    step = max(1, min(w, h) // 280)
-    minx, miny, maxx, maxy = w, h, 0, 0
-    found = 0
-    for y in range(0, h, step):
-        for x in range(0, w, step):
-            if far(pix[x, y]):
-                found += 1
-                if x < minx: minx = x
-                if y < miny: miny = y
-                if x > maxx: maxx = x
-                if y > maxy: maxy = y
-    if found < 30 or maxx - minx < w * 0.28 or maxy - miny < h * 0.28:
-        return rgb
-    pad = int(0.04 * max(maxx - minx, maxy - miny))
-    box = (
-        max(0, minx - pad),
-        max(0, miny - pad),
-        min(w, maxx + pad),
-        min(h, maxy + pad),
-    )
-    return rgb.crop(box)
-
 def shrink(data: bytes) -> bytes:
     img = Image.open(BytesIO(data))
     try:
-        img = _trim_card(img)
+        from PIL import ImageOps
+        img = ImageOps.exif_transpose(img)
     except Exception:
-        img = img.convert("RGB")
+        pass
+    img = img.convert("RGB")
     img.thumbnail((1280, 1280))
     out = BytesIO()
-    img.save(out, format="JPEG", quality=82)
+    img.save(out, format="JPEG", quality=80)
     return out.getvalue()
 
 @app.get("/health")
@@ -824,7 +793,13 @@ def is_grail(c):
     blob = " ".join(str(c.get(k) or "") for k in ("parallel", "insert", "set", "number")).lower()
     if re.search(r"\b1\s*/\s*1\b|\b1 of 1\b|one of one|superfractor|printing plate", blob):
         return True
-    if re.search(r"(?<![0-9])/1(?![0-9])", blob):
+    for m in re.finditer(r"(?<![0-9])/\s*(\d{1,3})(?![0-9])", blob):
+        if 1 <= int(m.group(1)) <= 25:
+            return True
+    for m in re.finditer(r"\b(\d{1,3})\s*/\s*(\d{1,3})\b", blob):
+        if 1 <= int(m.group(2)) <= 25:
+            return True
+    if re.search(r"\bof\s*(?:[1-9]|1[0-9]|2[0-5])\b", blob):
         return True
     return False
 
