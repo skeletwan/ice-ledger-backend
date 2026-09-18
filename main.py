@@ -1366,6 +1366,46 @@ async def list_binders():
     con.close()
     return {"binders": out}
 
+@app.get("/feed")
+async def recent_feed():
+    con = db()
+    users = con.execute(
+        "SELECT id, slug, display, IFNULL(suspended,0) AS suspended FROM users WHERE slug IS NOT NULL AND slug != ''"
+    ).fetchall()
+    items = []
+    for u in users:
+        if int(u["suspended"] or 0):
+            continue
+        rows = con.execute("SELECT data FROM cards WHERE user_id=?", (u["id"],)).fetchall()
+        for r in rows:
+            try:
+                raw = json.loads(r["data"])
+            except Exception:
+                continue
+            c = public_card(raw)
+            if not c.get("id"):
+                continue
+            items.append({
+                "slug": u["slug"],
+                "display": u["display"] or "Collector",
+                "id": c.get("id"),
+                "player": c.get("player"),
+                "year": c.get("year"),
+                "set": c.get("set"),
+                "number": c.get("number"),
+                "insert": c.get("insert"),
+                "parallel": c.get("parallel"),
+                "team": c.get("team"),
+                "grader": c.get("grader"),
+                "grade": c.get("grade"),
+                "photo": c.get("photo"),
+                "comp": c.get("comp"),
+                "added": c.get("added") or "",
+            })
+    con.close()
+    items.sort(key=lambda x: str(x.get("added") or ""), reverse=True)
+    return {"cards": items[:80]}
+
 @app.post("/u/{slug}/like")
 async def like_binder(slug: str, request: Request, x_token: str | None = Header(default=None)):
     uid = require_user(request, x_token)

@@ -142,7 +142,7 @@
     .cava { width:28px; height:28px; border-radius:8px; background:var(--ice); color:#071016; font-weight:800; font-size:10px; display:inline-flex; align-items:center; justify-content:center; overflow:hidden; position:relative; vertical-align:middle; margin-right:6px; flex:0 0 auto; }
     .cava img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
     .cname { color:var(--ice); font-weight:800; cursor:pointer; }
-    .binder-hero { display:flex; align-items:center; gap:14px; margin:12px 0 14px; }
+    .binder-hero { display:flex; align-items:center; gap:14px; margin:12px 0 14px; position:relative; padding-right:72px; }
     .binder-hero .pava { width:88px; height:88px; border-radius:22px; font-size:22px; }
     .binder-hero h2 { margin:0 0 4px; font-size:22px; line-height:1.15; }
     .binder-hero .bio { margin:0 0 4px; color:var(--text); font-size:14px; }
@@ -275,11 +275,15 @@
     <div class="status" id="quotaBox">Free: 10 IDs / 30 days. Ice+: 200 IDs / 30 days. Rip Night: 20 extra IDs / 30 days.</div>
     <p class="muted" id="resetLine"></p>
     <div class="row2">
-      <button class="ghost" id="payBtn">Ice+ · $8</button>
-      <button class="ghost" id="ripBtn">Rip Night!</button>
+      <div>
+        <button class="ghost" id="payBtn">Ice+</button>
+        <p class="muted">$8 / 30 days · 200 IDs + 30 book refreshes</p>
+      </div>
+      <div>
+        <button class="ghost" id="ripBtn">Rip Night!</button>
+        <p class="muted">$2.99 · 20 extra IDs for 30 days</p>
+      </div>
     </div>
-    <p class="muted">Ice+ ($8 / 30 days) · 200 IDs + 30 book refreshes</p>
-    <p class="muted">Rip Night! ($2.99) · 20 extra IDs for 30 days</p>
     <label>Have a code?</label>
     <div class="row2" style="align-items:end">
       <input id="ripCode" placeholder="RIP-XXXXXX" autocomplete="off" />
@@ -401,6 +405,7 @@
   <section class="page" id="findPage">
     <div class="row2">
       <button class="ghost" id="openFollowing">Following</button>
+      <button class="ghost" id="openFeed">Just added</button>
       <button class="ghost" id="openNotes">Alerts</button>
     </div>
     <input id="findQ" placeholder="Screen name or player…" />
@@ -412,6 +417,20 @@
       <option value="likes">Most liked</option>
     </select>
     <div id="findList"></div>
+  </section>
+  <section class="page" id="feedPage">
+    <button class="ghost" id="backFindFeed">Community</button>
+    <h2 style="font-size:18px;margin:12px 0 8px">Just added</h2>
+    <div class="row2">
+      <select id="feedSort">
+        <option value="new">Newest</option>
+        <option value="value">Highest book</option>
+        <option value="player">Player</option>
+      </select>
+      <select id="feedTeam"><option value="">All teams</option></select>
+    </div>
+    <select id="feedSet"><option value="">All sets</option></select>
+    <div id="feedList"></div>
   </section>
   <section class="page" id="notesPage">
     <button class="ghost" id="backFindNotes">Community</button>
@@ -429,6 +448,7 @@
   <section class="page" id="pubPage">
     <button class="ghost" id="backFind">Community</button>
     <div class="binder-hero" id="pubHeroHead">
+      <button class="ghost" id="reportUserBtn" style="position:absolute;top:0;right:0;width:auto;padding:6px 10px;font-size:12px;margin:0">Report</button>
       <div class="pava" id="pubAva">IL</div>
       <div>
         <h2 id="pubName">Binder</h2>
@@ -457,8 +477,6 @@
       <option value="">All sets</option>
     </select>
     <div id="pubList"></div>
-    <p class="muted" style="margin-top:24px">Problem with this collector?</p>
-    <button class="ghost" id="reportUserBtn" style="width:auto;padding:6px 10px;font-size:12px">Report</button>
   </section>
   <section class="page" id="pubDetail">
     <button class="ghost" id="backPub">Back to binder</button>
@@ -944,6 +962,7 @@ function show(id){
   if ($("pubPage")) $("pubPage").classList.toggle("on", id==="pub");
   if ($("pubDetail")) $("pubDetail").classList.toggle("on", id==="pubDetail");
   if ($("findPage")) $("findPage").classList.toggle("on", id==="find");
+  if ($("feedPage")) $("feedPage").classList.toggle("on", id==="feed");
   if ($("helpPage")) $("helpPage").classList.toggle("on", id==="help");
   if ($("searchPage")) $("searchPage").classList.toggle("on", id==="search");
   if ($("notesPage")) $("notesPage").classList.toggle("on", id==="notes");
@@ -953,13 +972,14 @@ function show(id){
   if ($("opsPage")) $("opsPage").classList.toggle("on", id==="ops");
   if (id==="bind") renderBinder();
   if (id==="search") renderSearch();
-  if (id==="find" || id==="pub" || id==="notes" || id==="notesCat") refreshNotesBadge();
+  if (id==="find" || id==="pub" || id==="notes" || id==="notesCat" || id==="feed") refreshNotesBadge();
+  if (id==="feed") loadFeed();
   if (id==="find") loadFind();
   document.body.classList.toggle("bind-on", id==="bind");
   document.body.classList.toggle("dock-on", true);
   document.body.classList.toggle("chart-on", id==="bind" && document.body.classList.contains("chart-open"));
   ["tabScan","tabBind","tabFind","tabSet"].forEach(tid => {
-    if ($(tid)) $(tid).classList.toggle("on", (tid==="tabScan"&&id==="scan")||(tid==="tabBind"&&(id==="bind"||id==="detail"||id==="edit"||id==="search"))||(tid==="tabFind"&&(id==="find"||id==="pub"||id==="pubDetail"||id==="notes"||id==="notesCat"))||(tid==="tabSet"&&(id==="set"||id==="ops"||id==="help")));
+    if ($(tid)) $(tid).classList.toggle("on", (tid==="tabScan"&&id==="scan")||(tid==="tabBind"&&(id==="bind"||id==="detail"||id==="edit"||id==="search"))||(tid==="tabFind"&&(id==="find"||id==="pub"||id==="pubDetail"||id==="notes"||id==="notesCat"||id==="feed"))||(tid==="tabSet"&&(id==="set"||id==="ops"||id==="help")));
   });
   window.scrollTo(0,0);
 }
@@ -2712,6 +2732,63 @@ $("findList") && ($("findList").onclick = e => {
 $("backFind") && ($("backFind").onclick = () => show("find"));
 $("backFindNotes") && ($("backFindNotes").onclick = () => show("find"));
 $("openNotes") && ($("openNotes").onclick = () => { show("notes"); paintNotesHub(); });
+$("openFeed") && ($("openFeed").onclick = () => show("feed"));
+$("backFindFeed") && ($("backFindFeed").onclick = () => show("find"));
+let feedCache = [];
+async function loadFeed(){
+  const box = $("feedList");
+  if (!box) return;
+  box.innerHTML = "<p class=\"muted\">Loading…</p>";
+  try {
+    const r = await fetch("/feed");
+    const d = await r.json();
+    feedCache = d.cards || [];
+    renderFeed();
+  } catch(e) {
+    box.innerHTML = "<p class=\"muted\">Could not load new cards.</p>";
+  }
+}
+function renderFeed(){
+  const box = $("feedList");
+  if (!box) return;
+  const sort = ($("feedSort") && $("feedSort").value) || "new";
+  const teamF = ($("feedTeam") && $("feedTeam").value) || "";
+  const setF = ($("feedSet") && $("feedSet").value) || "";
+  const teams = [...new Set(feedCache.map(c => (c.team||"").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  const sets = [...new Set(feedCache.map(c => (c.set||"").trim() || "No set"))].sort((a,b)=>a.localeCompare(b));
+  if ($("feedTeam") && $("feedTeam").dataset.keys !== teams.join("|")) {
+    const cur = $("feedTeam").value;
+    $("feedTeam").innerHTML = "<option value=\"\">All teams</option>"+teams.map(t=>"<option>"+t+"</option>").join("");
+    $("feedTeam").dataset.keys = teams.join("|");
+    if (!cur || teams.indexOf(cur)>=0) $("feedTeam").value = cur;
+  }
+  if ($("feedSet") && $("feedSet").dataset.keys !== sets.join("|")) {
+    const cur = $("feedSet").value;
+    $("feedSet").innerHTML = "<option value=\"\">All sets</option>"+sets.map(t=>"<option>"+t+"</option>").join("");
+    $("feedSet").dataset.keys = sets.join("|");
+    if (!cur || sets.indexOf(cur)>=0) $("feedSet").value = cur;
+  }
+  let rows = feedCache.filter(c => {
+    if (teamF && (c.team||"").trim() !== teamF) return false;
+    if (setF && ((c.set||"").trim() || "No set") !== setF) return false;
+    return true;
+  });
+  if (sort==="value") rows.sort((a,b)=>(+b.comp||0)-(+a.comp||0));
+  else if (sort==="player") rows.sort((a,b)=> lastName(a.player).localeCompare(lastName(b.player)));
+  else rows.sort((a,b)=> String(b.added||"").localeCompare(String(a.added||"")));
+  box.innerHTML = rows.length ? rows.map(c => {
+    const line = [c.team,c.year,c.set,c.number?"#"+c.number:""].filter(Boolean).join(" · ");
+    return "<article class=\"item\" data-feed-slug=\""+c.slug+"\" data-feed-card=\""+c.id+"\"><div class=\"item-top\"><img src=\""+(c.photo||"")+"\" alt=\"\" /><div><h3>"+(c.player||"—")+"</h3><div class=\"muted\">"+line+"</div><div class=\"muted\">"+(c.display||"Collector")+" · "+timeAgo(c.added)+"</div><div class=\"muted\">"+money(c.comp)+"</div></div></div></article>";
+  }).join("") : "<p class=\"muted\">No new cards yet.</p>";
+}
+$("feedSort") && ($("feedSort").onchange = renderFeed);
+$("feedTeam") && ($("feedTeam").onchange = renderFeed);
+$("feedSet") && ($("feedSet").onchange = renderFeed);
+$("feedList") && ($("feedList").onclick = ev => {
+  const art = ev.target.closest("[data-feed-slug]");
+  if (!art) return;
+  openPublic(art.getAttribute("data-feed-slug"), art.getAttribute("data-feed-card"));
+});
 $("backNotesHub") && ($("backNotesHub").onclick = () => { show("notes"); paintNotesHub(); });
 ["noteCatCard","noteCatLike","noteCatComment"].forEach(id => {
   $(id) && ($(id).onclick = () => openNoteCat(id==="noteCatLike"?"like":id==="noteCatComment"?"comment":"card"));
@@ -2722,7 +2799,7 @@ function paintFollow(){
 }
 function paintBinderLike(n, liked){
   if (!$("likeBinderBtn")) return;
-  $("likeBinderBtn").textContent = (liked ? "Liked · " : "Like · ") + (n||0);
+  $("likeBinderBtn").innerHTML = "<span class=\"heart\">♥ "+(n||0)+"</span> " + (liked ? "Liked" : "Like");
 }
 $("followBtn") && ($("followBtn").onclick = async () => {
   if (!token()) { $("pubHead").textContent = "Sign in to follow."; return; }
@@ -2810,8 +2887,8 @@ async function paintLike(){
   try {
     const r = await fetch("/u/"+encodeURIComponent(viewSlug)+"/cards/"+encodeURIComponent(viewCard.id)+"/likes", { headers:{ "x-token": token() } });
     const d = await r.json();
-    $("likeBtn").textContent = (d.liked ? "Liked · " : "Like · ") + (d.likes||0);
-  } catch(e) { $("likeBtn").textContent = "Like · 0"; }
+    $("likeBtn").innerHTML = "<span class=\"heart\">♥ "+(d.likes||0)+"</span> " + (d.liked ? "Liked" : "Like");
+  } catch(e) { $("likeBtn").innerHTML = "<span class=\"heart\">♥ 0</span> Like"; }
 }
 $("likeBtn") && ($("likeBtn").onclick = async () => {
   if (!token()) { $("pubCStatus").textContent = "Sign in to like."; return; }
@@ -2821,7 +2898,7 @@ $("likeBtn") && ($("likeBtn").onclick = async () => {
   });
   const d = await r.json().catch(()=>({}));
   if (r.ok) {
-    $("likeBtn").textContent = (d.liked ? "Liked · " : "Like · ") + (d.likes||0);
+    $("likeBtn").innerHTML = "<span class=\"heart\">♥ "+(d.likes||0)+"</span> " + (d.liked ? "Liked" : "Like");
     refreshNotesBadge();
   }
 });
@@ -2873,6 +2950,7 @@ async function openPublic(slug, cardId){
     if (viewSlug === mySlug) { alert("That's your binder."); return; }
     const reason = await pickReason("Why are you reporting this collector?");
     if (!reason || reason.trim().length < 3) return;
+    if (!window.confirm("Are you sure about that?")) return;
     const rr = await fetch("/u/"+encodeURIComponent(viewSlug)+"/report", {
       method:"POST",
       headers:{ "Content-Type":"application/json", "x-token": token() },
