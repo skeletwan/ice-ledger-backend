@@ -120,9 +120,14 @@
     header { position:sticky; top:0; z-index:8; background:#071016; }
     #q { font-size:16px; }
     .bookbar { display:none; padding:10px 0 4px; }
-    body.bind-on .bookbar { display:block; }
+    .book-head { display:none; align-items:center; gap:8px; padding:10px 0 4px; }
+    body.bind-on .book-head { display:flex; }
+    body.bind-on .bookbar { display:block; flex:1; min-width:0; padding:0; }
+    .book-head #refreshBook { width:auto; flex:0 0 auto; margin:0; padding:10px 12px; }
     .bookbar button { width:100%; text-align:left; background:#121c26; border:1px solid var(--line); border-radius:12px; padding:10px 12px; }
     .bookbar b { font-size:22px; }
+    .book-pulse, .book-pulse b, .book-pulse .qs b { animation: bookPulse 1s ease-in-out infinite; }
+    @keyframes bookPulse { 50% { opacity:.4; } }
     .dock { position:fixed; left:0; right:0; bottom:0; z-index:20; display:none; grid-template-columns:repeat(4,1fr); gap:0; background:#0c141b; border-top:1px solid var(--line); padding:6px 4px calc(6px + env(safe-area-inset-bottom)); }
     body.dock-on .dock { display:grid; }
     .dock button { width:auto; margin:0; padding:10px 4px; font-size:12px; background:transparent; color:var(--muted); border:0; border-radius:0; }
@@ -264,10 +269,10 @@
   </div>
 
   <section class="page on" id="scanPage">
-    <div class="status" id="quotaBox">Free plan: 10 IDs / month. Ice+ is 200. Rip Night is 20 extra IDs.</div>
+    <div class="status" id="quotaBox">Free: 10 IDs / 30 days. Ice+: 200 IDs / 30 days. Rip Night: 20 extra IDs / 30 days.</div>
     <p class="muted" id="resetLine"></p>
     <div class="row2">
-      <button class="ghost" id="payBtn">Ice+ · $8/mo · 200 IDs + 30 refreshes</button>
+      <button class="ghost" id="payBtn">Ice+ · $8 / 30 days · 200 IDs + 30 refreshes</button>
       <button class="ghost" id="ripBtn">Rip Night · $2.99 · 20 IDs</button>
     </div>
     <label>Have a code?</label>
@@ -356,7 +361,12 @@
   </section>
 
   <section class="page" id="bindPage">
-    <div class="bookbar" id="bookBar"></div>
+    <div class="book-head">
+      <div class="bookbar" id="bookBar"></div>
+      <button class="ghost" id="refreshBook">Refresh book</button>
+    </div>
+    <p class="muted" id="bookNote"></p>
+    <p class="muted">Book values are estimates from public sold comps. Check eBay or a dealer before you buy or sell.</p>
     <p class="muted" id="valueNote"></p>
     <button class="ghost" id="openSearch">Search binder</button>
     <div class="row2">
@@ -374,8 +384,6 @@
       <option value="">All sets</option>
     </select>
     <div id="list"></div>
-    <button id="refreshBook">Refresh book</button>
-    <p class="muted" id="bookNote"></p>
     <button class="ghost" id="shareBtn">Share binder</button>
     <button class="ghost" id="viewPublicBtn">Open my public binder</button>
     <p class="muted" id="shareNote"></p>
@@ -550,6 +558,7 @@
   <section class="page" id="opsPage">
     <button class="ghost" id="backYouOps">Back to You</button>
     <h2 style="font-size:18px;margin:12px 0 8px">Owner tools</h2>
+    <p class="muted">Owner only. Unlock starts a 30-day Ice+ window on this signed-in account.</p>
     <label>App secret</label>
     <input id="plusSecret" type="password" autocomplete="off" />
     <button id="plusBtn">Unlock Ice+ on this account</button>
@@ -716,6 +725,22 @@
     <p class="muted" id="avaReportNote"></p>
   </div>
   <button type="button" class="close" id="avaFullX">Close</button>
+</div>
+<div class="ava-full hidden" id="reasonModal">
+  <div class="report-box">
+    <label id="reasonTitle">Why are you reporting this?</label>
+    <select id="reasonPick">
+      <option value="">Choose a reason</option>
+      <option>Inappropriate</option>
+      <option>Spam</option>
+      <option>Harassment</option>
+      <option>Impersonation</option>
+      <option>Scam / off-app deal</option>
+      <option>Other</option>
+    </select>
+    <button type="button" id="reasonGo">Submit report</button>
+    <button type="button" class="ghost" id="reasonNo">Cancel</button>
+  </div>
 </div>
 <div class="ava-full" id="cropFull">
   <div class="crop-frame" id="cropFrame"><img id="cropImg" alt="" /></div>
@@ -1201,7 +1226,7 @@ $("go").onclick = async () => {
     const r = await fetch("/identify", { method:"POST", headers:{ "x-token": token() }, body: fd, signal: ctrl.signal });
     const t = await r.text();
     if (r.status === 401) throw new Error("Session expired. Sign in again.");
-    if (r.status === 402) { showPaywall("No IDs left this month. Upgrade Ice+."); refreshUsage(); return; }
+    if (r.status === 402) { showPaywall("No IDs left in this 30-day window. Upgrade Ice+."); refreshUsage(); return; }
     if (!r.ok) throw new Error(t.slice(0,200));
     refreshUsage();
     const d = JSON.parse(t);
@@ -1711,7 +1736,11 @@ $("refreshBook") && ($("refreshBook").onclick = async () => {
     btn.dataset.busy = "0"; btn.disabled = false; return;
   }
   localStorage.setItem("ice-book-day", day);
-  note.textContent = "Refreshing "+batch.length+" cards — don’t tap again.";
+  note.textContent = "Updating book…";
+  document.body.classList.add("book-pulse");
+  $("bookBar") && $("bookBar").classList.add("book-pulse");
+  $("quotes") && $("quotes").classList.add("book-pulse");
+  btn.textContent = "Updating…";
   let ok = 0;
   for (const row of batch) {
     const card = row.c;
@@ -1725,7 +1754,7 @@ $("refreshBook") && ($("refreshBook").onclick = async () => {
           grader:card.grader, grade:card.grade, cert:card.cert
         }))
       });
-      if (r.status === 402) { note.textContent = "Book refresh cap hit. Ice+ is 30/mo."; break; }
+      if (r.status === 402) { note.textContent = "Book refresh cap hit. Ice+ is 30 per 30 days."; break; }
       if (!r.ok) continue;
       applyCompObj(card, await r.json());
       ok++;
@@ -1733,9 +1762,16 @@ $("refreshBook") && ($("refreshBook").onclick = async () => {
     } catch(e) {}
   }
   saveAll(cards);
+  paintTicker();
+  renderBinder();
   refreshUsage();
+  document.body.classList.remove("book-pulse");
+  $("bookBar") && $("bookBar").classList.remove("book-pulse");
+  $("quotes") && $("quotes").classList.remove("book-pulse");
   note.textContent = "Updated "+ok+" card"+(ok===1?"":"s")+". Next refresh tomorrow.";
+  btn.textContent = "Refresh book";
   btn.dataset.busy = "0";
+  btn.disabled = false;
 });
 function noteKind(n){
   const b = (n.body||"").toLowerCase();
@@ -1789,7 +1825,7 @@ async function refreshUsage(){
 }
 function showPaywall(msg){
   if ($("quotaBox")) {
-    $("quotaBox").textContent = msg || "Scan cap reached. Upgrade Ice+ ($8/mo) for 200 IDs.";
+    $("quotaBox").textContent = msg || "Scan cap reached. Upgrade Ice+ ($8 / 30 days) for 200 IDs.";
     $("quotaBox").className = "status err";
   }
   show("scan");
@@ -1799,8 +1835,8 @@ async function unlockPlus(){
   if (!secret) { if ($("plusNote")) $("plusNote").textContent = "Paste APP_SECRET from Railway first."; show("set"); return; }
   const p = await authPost("/plus", { secret, token: token() });
   await refreshUsage();
-  if ($("plusNote")) $("plusNote").textContent = "Ice+ on. "+p.left+" IDs this month.";
-  if ($("quotaBox")) { $("quotaBox").textContent = "Ice+ on. "+p.left+" IDs left this month."; $("quotaBox").className = "status ok"; }
+  if ($("plusNote")) $("plusNote").textContent = "Ice+ on. "+p.left+" IDs in this 30-day window.";
+  if ($("quotaBox")) { $("quotaBox").textContent = "Ice+ on. "+p.left+" IDs left in this 30-day window."; $("quotaBox").className = "status ok"; }
 }
 $("modLoad") && ($("modLoad").onclick = async () => {
   const box = $("modList");
@@ -2315,6 +2351,28 @@ $("viewPublicBtn") && ($("viewPublicBtn").onclick = async () => {
   if (!mySlug) { $("shareNote").textContent = "Save a card first so the public binder exists."; return; }
   openPublic(mySlug);
 });
+
+function pickReason(title){
+  return new Promise(resolve => {
+    const box = $("reasonModal");
+    const sel = $("reasonPick");
+    const lab = $("reasonTitle");
+    if (!box || !sel) { resolve(""); return; }
+    if (lab) lab.textContent = title || "Why are you reporting this?";
+    sel.value = "";
+    box.classList.remove("hidden");
+    const done = v => {
+      box.classList.add("hidden");
+      $("reasonGo").onclick = null;
+      $("reasonNo").onclick = null;
+      box.onclick = null;
+      resolve(v);
+    };
+    $("reasonGo").onclick = ev => { ev.stopPropagation(); const v = (sel.value||"").trim(); if (v.length < 3) return; done(v); };
+    $("reasonNo").onclick = ev => { ev.stopPropagation(); done(""); };
+    box.onclick = ev => { if (ev.target === box) done(""); };
+  });
+}
 function commentBlock(c, nested){
   const dead = reportedHas("comment:"+c.id);
   const n = +c.replies || 0;
@@ -2348,7 +2406,7 @@ async function loadComments(slug, cid, box){
     const send = ev.target.closest("[data-send-reply]");
     if (rep) {
       if (!token() || rep.classList.contains("dead")) return;
-      const reason = window.prompt("Why are you reporting this comment?", "Inappropriate");
+      const reason = await pickReason("Why are you reporting this comment?");
       if (!reason || reason.trim().length < 3) return;
       const rr = await fetch("/comments/"+rep.getAttribute("data-rep")+"/report", {
         method:"POST",
@@ -2744,7 +2802,7 @@ async function openPublic(slug, cardId){
   $("reportUserBtn") && ($("reportUserBtn").onclick = async () => {
     if (!token() || !viewSlug) return;
     if (viewSlug === mySlug) { alert("That's your binder."); return; }
-    const reason = window.prompt("Why are you reporting this collector?", "Harassment");
+    const reason = await pickReason("Why are you reporting this collector?");
     if (!reason || reason.trim().length < 3) return;
     const rr = await fetch("/u/"+encodeURIComponent(viewSlug)+"/report", {
       method:"POST",
