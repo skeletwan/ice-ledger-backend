@@ -370,7 +370,7 @@
       <p class="muted" id="compNote"></p>
       <label>Notes</label>
       <textarea id="notes" rows="2"></textarea>
-      <button id="saveBtn">Save to binder</button>
+      <button type="button" id="saveBtn">Save to binder</button>
     </div>
   </section>
 
@@ -1581,14 +1581,19 @@ if ($("refreshPhotos")) $("refreshPhotos").onclick = async ev => {
     $("photoStrip").innerHTML = "<p class=\"muted\">Photo search failed. Use Google Images or your scan.</p>";
   }
 };
+function saveNote(msg, cls){
+  if ($("resultStatus")) { $("resultStatus").textContent = msg || ""; $("resultStatus").className = "status " + (cls || ""); }
+  if ($("status")) { $("status").textContent = msg || ""; $("status").className = "status " + (cls || ""); }
+}
 $("saveBtn").onclick = () => {
+  try {
+  $("saveBtn").disabled = false;
   if (last && last.hockey === false) {
-    $("status").textContent = "Hockey only for now. This card was not added.";
-    $("status").className = "status err";
+    saveNote("Hockey only for now. This card was not added.", "err");
     return;
   }
   const rec = readCard();
-  if (!rec.player) { $("status").textContent = "Player is required."; $("status").className = "status err"; return; }
+  if (!rec.player) { saveNote("Player is required.", "err"); return; }
   const cards = load();
   const comp = numOrNull("comp");
   cards.unshift({
@@ -1626,7 +1631,11 @@ $("saveBtn").onclick = () => {
   if ($("bindBox")) $("bindBox").classList.add("hidden");
   $("scanImg").removeAttribute("src");
   $("backImg").removeAttribute("src");
+  saveNote("");
   show("bind");
+  } catch(e) {
+    saveNote((e && e.message) || "Could not save. Try again.", "err");
+  }
 };
 
 function versionLine(c){
