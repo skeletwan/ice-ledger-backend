@@ -364,7 +364,7 @@
         <div class="field"><label>Insert / subset</label><input id="f_insert" placeholder="Young Guns, Canvas, SP…" /></div>
         <div class="field"><label>Team</label><input id="f_team" /></div>
         <div class="field"><label>Grader</label>
-          <select id="f_grader"><option>Raw</option><option>PSA</option><option>BGS</option><option>SGC</option><option>CGC</option></select>
+          <select id="f_grader"><option>Raw</option><option>PSA</option><option>BGS</option><option>SGC</option><option>CGC</option><option>SMA</option></select>
         </div>
         <div class="field"><label>Grade</label><input id="f_grade" /></div>
         <div class="field" style="grid-column:1/-1"><label>Cert</label><input id="f_cert" /></div>
@@ -389,6 +389,7 @@
       </div>
       <div class="row2">
         <div><label>BGS 9.5 sold CAD</label><input id="bgs95Comp" type="number" step="0.01" /></div>
+        <div><label>BGS 10 / Found 10 sold CAD</label><input id="bgs10Comp" type="number" step="0.01" /></div>
         <div><label>SGC 10 sold CAD</label><input id="sgc10Comp" type="number" step="0.01" /></div>
       </div>
       <p class="muted" id="compNote"></p>
@@ -544,7 +545,7 @@
     <label>Look up another grade</label>
     <div class="row2">
       <select id="pgSvc">
-        <option>Raw</option><option>PSA</option><option>BGS</option><option>SGC</option>
+        <option>Raw</option><option>PSA</option><option>BGS</option><option>SGC</option><option>CGC</option><option>SMA</option>
         <option>CGC</option><option>TAG</option><option>HGA</option><option>ISA</option><option>ACE</option>
       </select>
       <select id="pgNum">
@@ -767,7 +768,7 @@
     <label>Look up another grade</label>
     <div class="row2">
       <select id="gSvc">
-        <option>Raw</option><option>PSA</option><option>BGS</option><option>SGC</option>
+        <option>Raw</option><option>PSA</option><option>BGS</option><option>SGC</option><option>CGC</option><option>SMA</option>
         <option>CGC</option><option>TAG</option><option>HGA</option><option>ISA</option><option>ACE</option>
       </select>
       <select id="gNum">
@@ -803,7 +804,7 @@
     <label>Team</label><input id="e_team" />
     <div class="row2">
       <div><label>Grader</label>
-        <select id="e_grader"><option>Raw</option><option>PSA</option><option>BGS</option><option>SGC</option><option>CGC</option></select>
+        <select id="e_grader"><option>Raw</option><option>PSA</option><option>BGS</option><option>SGC</option><option>CGC</option><option>SMA</option></select>
       </div>
       <div><label>Grade</label><input id="e_grade" /></div>
     </div>
@@ -895,7 +896,8 @@ function showApp(){
   $("authPage").classList.add("hidden");
   $("appShell").classList.remove("hidden");
   document.body.classList.add("dock-on");
-  refreshUsage(); loadNotePrefs(); scheduleDaily(); refreshNotesBadge(); checkGrails();
+  loadNotePrefs(); scheduleDaily(); refreshNotesBadge(); checkGrails();
+  Promise.resolve(refreshUsage()).then(() => maybeAutoBook()).catch(()=>{});
   loadMe().then(() => { paintTicker(); renderBinder(); }).catch(() => { paintTicker(); renderBinder(); });
   if (!window._noteTick) window._noteTick = setInterval(refreshNotesBadge, 25000);
 }
@@ -1788,7 +1790,7 @@ function lockSave(ready, label){
   });
 }
 function clearCompFields(){
-  ["comp","rawComp","psa8Comp","psa9Comp","psa10Comp","bgs95Comp","sgc10Comp","e_raw","e_psa8","e_psa9","e_psa10"].forEach(id => { if ($(id)) $(id).value = ""; });
+  ["comp","rawComp","psa8Comp","psa9Comp","psa10Comp","bgs95Comp","bgs10Comp","sgc10Comp","e_raw","e_psa8","e_psa9","e_psa10"].forEach(id => { if ($(id)) $(id).value = ""; });
   window.lastSysComp = null;
   if ($("compNote")) $("compNote").textContent = "";
 }
@@ -1799,8 +1801,10 @@ function soldForCopy(c){
   if (g === "PSA" && /^10/.test(gr)) return c.psa10_cad;
   if (g === "PSA" && /^9/.test(gr)) return c.psa9_cad;
   if (g === "PSA" && /^8/.test(gr)) return c.psa8_cad;
-  if (g === "BGS" && /^9\.5/.test(gr)) return c.bgs95_cad;
-  if (g === "SGC" && /^10/.test(gr)) return c.sgc10_cad;
+  if (g === "BGS" && /found|pristine|^10(\b|\.0)/i.test(gr)) return c.bgs10_cad;
+  if (g === "BGS" && /9\.5/.test(gr)) return c.bgs95_cad;
+  if (g === "SGC" && /(^|\s)10(\b|\.0)|gem/i.test(gr)) return c.sgc10_cad;
+  if (g && g !== "Raw") return c.suggested_cad;
   return null;
 }
 async function lookupComp(){
@@ -1834,6 +1838,7 @@ async function lookupComp(){
   put("psa9Comp", c.psa9_cad); put("e_psa9", c.psa9_cad);
   put("psa10Comp", c.psa10_cad); put("e_psa10", c.psa10_cad);
   put("bgs95Comp", c.bgs95_cad);
+  put("bgs10Comp", c.bgs10_cad);
   put("sgc10Comp", c.sgc10_cad);
   const setIf = (id, v) => { if (v != null && $(id) && $(id).value === "") $(id).value = v; };
   const g = ($("f_grader").value||"Raw");
@@ -1920,6 +1925,7 @@ async function saveToBinder(ev){
     psa9Comp: numOrNull("psa9Comp"),
     psa10Comp: numOrNull("psa10Comp"),
     bgs95Comp: numOrNull("bgs95Comp"),
+    bgs10Comp: numOrNull("bgs10Comp"),
     sgc10Comp: numOrNull("sgc10Comp"),
     book: {
       Raw: numOrNull("rawComp"),
@@ -1927,6 +1933,7 @@ async function saveToBinder(ev){
       "PSA 9": numOrNull("psa9Comp"),
       "PSA 10": numOrNull("psa10Comp"),
       "BGS 9.5": numOrNull("bgs95Comp"),
+      "BGS 10": numOrNull("bgs10Comp"),
       "SGC 10": numOrNull("sgc10Comp")
     },
     compAt: comp==null ? null : new Date().toISOString(),
@@ -1978,6 +1985,7 @@ function bookOf(c){
   if (c.psa9Comp!=null) b["PSA 9"] = c.psa9Comp;
   if (c.psa10Comp!=null) b["PSA 10"] = c.psa10Comp;
   if (c.bgs95Comp!=null) b["BGS 9.5"] = c.bgs95Comp;
+  if (c.bgs10Comp!=null) b["BGS 10"] = c.bgs10Comp;
   if (c.sgc10Comp!=null) b["SGC 10"] = c.sgc10Comp;
   return b;
 }
@@ -2289,17 +2297,20 @@ function applyCompObj(card, c){
   card.compAt = new Date().toISOString();
   pushCardHist(card);
 }
-$("refreshBook") && ($("refreshBook").onclick = async () => {
+function localDay(){
+  const d = new Date();
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+async function refreshBookNow(){
   const note = $("bookNote");
   const btn = $("refreshBook");
-  const day = new Date().toISOString().slice(0,10);
+  const day = localDay();
   if (localStorage.getItem("ice-book-day") === day) {
     note.textContent = "Already ran Refresh book today. Come back tomorrow.";
     return;
   }
-  if (btn.dataset.busy === "1") return;
-  btn.dataset.busy = "1";
-  btn.disabled = true;
+  if (btn && btn.dataset.busy === "1") return;
+  if (btn) { btn.dataset.busy = "1"; btn.disabled = true; }
   const cards = load();
   const now = Date.now();
   const scored = cards.map(c => {
@@ -2362,8 +2373,16 @@ $("refreshBook") && ($("refreshBook").onclick = async () => {
   paintTicker();
   btn.textContent = "Refresh book";
   btn.dataset.busy = "0";
-  btn.disabled = false;
-});
+  if (btn) btn.disabled = false;
+}
+$("refreshBook") && ($("refreshBook").onclick = () => refreshBookNow());
+async function maybeAutoBook(){
+  if (window.lastPlan !== "plus") return;
+  if (localStorage.getItem("ice-book-day") === localDay()) return;
+  if (!load().length) return;
+  if ($("bookNote")) $("bookNote").textContent = "Ice+ daily book update…";
+  await refreshBookNow();
+}
 function noteKind(n){
   const b = (n.body||"").toLowerCase();
   if (b.indexOf("grail")>=0) return "grail";
@@ -2422,6 +2441,7 @@ async function refreshUsage(){
   const r = await fetch("/usage", { headers:{ "x-token": token() } });
   if (!r.ok) return;
   const u = await r.json();
+  window.lastPlan = u.plan || "free";
   const bonus = u.bonus ? " + "+u.bonus+" extra" : "";
   const line = (u.plan==="plus"?"Ice+":"Free")+" · "+u.left+" IDs left"+bonus+" · "+(u.book_left??"?")+" book refreshes";
   if ($("quotaBox")) {

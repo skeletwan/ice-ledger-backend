@@ -101,7 +101,7 @@ Hockey = NHL, AHL, CHL (OHL/WHL/QMJHL), IIHF, Team Canada/USA, PWHL, junior/inte
 If the card is baseball, basketball, football, soccer, Pokemon, TCG, entertainment, or anything else: set hockey false and sport to that category. Do not pretend it is hockey.
 Return ONLY JSON, no markdown.
 You may get FRONT and sometimes BACK. Back is source of truth for year, set name, card number, copyright line.
-Slab: read the grading label first (grader, grade, cert), then the card through the case.
+Slab: read the grading label first (grader, grade, cert), then the card through the case. Graders include PSA, BGS, SGC, CGC, SMA.
 
 Upper Deck hockey rules (2015–2026 especially):
 - Young Guns = insert "Young Guns" (not a parallel). Canvas Young Guns = insert "Young Guns Canvas".
@@ -110,6 +110,9 @@ Upper Deck hockey rules (2015–2026 especially):
 - Copy set name from the back: Series 1, Series 2, Extended, SP Authentic, SP Game Used, The Cup, Stature, Premier, Allure, Synergy, Metal Universe, Chronology, Trilogy, O-Pee-Chee, Parkhurst, Choice, Fleer Ultra, Skybox Impact.
 - Vintage 1990s: never return only "Ultra" or only "Impact". Set must include the brand: Fleer Ultra, Skybox Impact, Score, Pinnacle, Donruss, Leaf, Topps, OPC, Stadium Club, Be A Player. Rookie / RC on those cards is insert "Rookie", not the set.
 - Parallel examples: Silver Foil, Gold /100, Exclusives /100, High Gloss /10, Clear Cut, Outburst Gold, Rainbow, Black /1. If no /n and no foil name, parallel is null or Base.
+- Numbered print runs (23/25, /99, /10, SN25) belong in parallel together with the foil name: "Gold /25", "Emerald /99", "Black /1". Never put 23/25 or /25 in "number".
+- "number" is only the checklist # on the back or bottom (e.g. 201, 144). Jersey number is not the card number unless no checklist # exists.
+- If the front/back shows both a checklist # and a serial (12/25), number=checklist, parallel includes /25.
 - Do not invent a numbered parallel because the photo is shiny.
 - 1990s Pinnacle / Score / Donruss / Leaf: Starquest, Artist's Proofs, Rink Collection, Ice Breakers. Starquest color versions are parallels — Green, Red, Blue, Gold, Purple, Black. If the card face or foil is clearly green, parallel is "Green" (not Base). Same for other named colors.
 - Set name Starquest (Pinnacle) is the set, not an insert, when the front says STARQUEST. Player still from the photo (e.g. Eric Lindros).
@@ -132,7 +135,7 @@ If a field is not readable, use null. Never invent a rare parallel.
   "parallel": string|null,
   "insert": string|null,
   "team": string|null,
-  "grader": "Raw"|"PSA"|"BGS"|"SGC"|"CGC"|null,
+  "grader": "Raw"|"PSA"|"BGS"|"SGC"|"CGC"|"SMA"|null,
   "grade": string|null,
   "cert": string|null,
   "foil_color": string|null,
@@ -322,6 +325,14 @@ async def identify(
         if not ins or ins.lower() in ("base", "null", "none"):
             if "rookie" not in st_l:
                 data["insert"] = "Rookie"
+    num = str(data.get("number") or "").strip()
+    serial = re.search(r"(\d{1,3})\s*/\s*(\d{1,3})\b", num) or re.search(r"/\s*(\d{1,3})\b", num)
+    if serial:
+        run = serial.group(0).replace(" ", "")
+        data["number"] = re.sub(r"\s*\d{1,3}\s*/\s*\d{1,3}\b", "", num).strip(" -#") or None
+        if run.lower() not in par.lower():
+            data["parallel"] = (par + " " + run).strip() if par and par.lower() not in ("base", "null", "none") else run
+            par = data["parallel"]
     if "choice" in blob and "reserve" in blob:
         if "choice" not in st.lower():
             data["set"] = (st + " Choice").strip() if st else "Choice"
@@ -348,6 +359,7 @@ Return ONLY JSON, no markdown:
   "psa9_cad": number|null,
   "psa10_cad": number|null,
   "bgs95_cad": number|null,
+  "bgs10_cad": number|null,
   "sgc10_cad": number|null,
   "low": number|null,
   "high": number|null,
@@ -358,7 +370,7 @@ Return ONLY JSON, no markdown:
   "summary": string,
   "sources": [string]
 }}
-Search separately for RAW solds, PSA 8, PSA 9, PSA 10, BGS 9.5, and SGC 10 of this same player/set/number/parallel.
+Search separately for RAW solds, PSA 8, PSA 9, PSA 10, BGS 9.5, BGS 10 / Found 10 / Pristine, and SGC 10 of this same player/set/number/parallel.
 Fill each *_cad field you can. suggested_cad is the price for THIS copy's grader/grade. If this copy is Raw, suggested_cad MUST equal raw_cad.
 Only use sold sale prices (money). Never use the card number, year, print run, or cert as a price.
 Use the median of matching solds for each grade. Do not pick a random sale. Same card should return the same numbers.
@@ -474,6 +486,7 @@ async def comp(
             "psa9": "psa9_cad", "psa 9": "psa9_cad",
             "psa10": "psa10_cad", "psa 10": "psa10_cad",
             "bgs95": "bgs95_cad", "bgs 9.5": "bgs95_cad",
+            "bgs10": "bgs10_cad", "bgs 10": "bgs10_cad", "found 10": "bgs10_cad", "pristine": "bgs10_cad",
             "sgc10": "sgc10_cad", "sgc 10": "sgc10_cad",
         }
         for k, v in grades.items():
@@ -487,6 +500,8 @@ async def comp(
         (r"PSA\s*9(?:\.0)?[^0-9.]{0,12}(?:CAD|USD|C\$|US\$|\$)\s*([0-9]{1,5}(?:\.[0-9]{1,2})?)", "psa9_cad"),
         (r"PSA\s*8(?:\.0)?[^0-9.]{0,12}(?:CAD|USD|C\$|US\$|\$)\s*([0-9]{1,5}(?:\.[0-9]{1,2})?)", "psa8_cad"),
         (r"BGS\s*9\.5[^0-9]{0,12}(?:CAD|USD|C\$|US\$|\$)\s*([0-9]{1,5}(?:\.[0-9]{1,2})?)", "bgs95_cad"),
+        (r"BGS\s*10[^0-9]{0,12}(?:CAD|USD|C\$|US\$|\$)\s*([0-9]{1,5}(?:\.[0-9]{1,2})?)", "bgs10_cad"),
+        (r"(?:Found|Pristine)\s*10[^0-9]{0,12}(?:CAD|USD|C\$|US\$|\$)\s*([0-9]{1,5}(?:\.[0-9]{1,2})?)", "bgs10_cad"),
         (r"SGC\s*10[^0-9]{0,12}(?:CAD|USD|C\$|US\$|\$)\s*([0-9]{1,5}(?:\.[0-9]{1,2})?)", "sgc10_cad"),
         (r"(?:raw|ungraded)[^0-9]{0,16}(?:CAD|USD|C\$|US\$|\$)\s*([0-9]{1,5}(?:\.[0-9]{1,2})?)", "raw_cad"),
     ):
@@ -495,7 +510,7 @@ async def comp(
             if m:
                 data[dest] = m.group(1)
 
-    for key in ("suggested_cad", "suggested_usd", "raw_cad", "psa8_cad", "psa9_cad", "psa10_cad", "bgs95_cad", "sgc10_cad", "low", "high"):
+    for key in ("suggested_cad", "suggested_usd", "raw_cad", "psa8_cad", "psa9_cad", "psa10_cad", "bgs95_cad", "bgs10_cad", "sgc10_cad", "low", "high"):
         n = _as_price(data.get(key))
         if n is None:
             data[key] = None
