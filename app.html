@@ -149,6 +149,10 @@
     .dock button { width:auto; margin:0; padding:10px 4px; font-size:12px; background:transparent; color:var(--muted); border:0; border-radius:0; }
     .dock button.on { color:var(--ice); }
     .dock button.ping, button.ghost.ping { color:#7ef0d2; font-weight:800; box-shadow:inset 0 0 0 2px #7ef0d2; border-radius:10px; }
+    #tabFind.grail-new, #openGrails.grail-new {
+      animation: grail-burn 1.15s ease-in-out infinite;
+      color:#ffb0a0;
+    }
     .page { padding-bottom:120px; }
     #saveBtn { margin:16px 0 28px; }
     .pwid { display:flex; align-items:center; gap:12px; margin-bottom:10px; }
@@ -421,6 +425,7 @@
     <div class="row2">
       <button class="ghost" id="openFollowing">Following</button>
       <button class="ghost" id="openFeed">Just added</button>
+      <button class="ghost" id="openGrails">Grails</button>
       <button class="ghost" id="openNotes">Alerts</button>
     </div>
     <input id="findQ" placeholder="Screen name or player…" />
@@ -435,7 +440,7 @@
   </section>
   <section class="page" id="feedPage">
     <button class="ghost" id="backFindFeed">Community</button>
-    <h2 style="font-size:18px;margin:12px 0 8px">Just added</h2>
+    <h2 style="font-size:18px;margin:12px 0 8px" id="feedTitle">Just added</h2>
     <div class="row2">
       <select id="feedSort">
         <option value="new">Newest</option>
@@ -452,6 +457,7 @@
     <h2 style="font-size:18px;margin:12px 0 8px">Alerts</h2>
     <p class="muted">Pick a type.</p>
     <button class="ghost" id="noteCatCard">New cards</button>
+    <button class="ghost" id="noteCatGrail">Grails</button>
     <button class="ghost" id="noteCatLike">Likes</button>
     <button class="ghost" id="noteCatComment">Comments</button>
   </section>
@@ -620,6 +626,7 @@
     <h3 style="font-size:15px;margin:16px 0 8px">Follow alerts</h3>
     <p class="muted">Ping when a binder you follow adds a card. Works with the app open or on the Home Screen.</p>
     <label><input id="followAlertOn" type="checkbox" style="width:auto;margin-right:8px" /> New cards on binders I follow</label>
+    <label><input id="grailAlertOn" type="checkbox" style="width:auto;margin-right:8px" /> New grails (1/1s)</label>
     <label><input id="likeAlertOn" type="checkbox" style="width:auto;margin-right:8px" /> Likes on my binder and cards</label>
     <label><input id="commentAlertOn" type="checkbox" style="width:auto;margin-right:8px" /> Comments and replies</label>
     <button class="ghost" id="followAlertSave">Save alerts</button>
@@ -869,7 +876,8 @@ function showApp(){
   $("authPage").classList.add("hidden");
   $("appShell").classList.remove("hidden");
   document.body.classList.add("dock-on");
-  paintTicker(); renderBinder(); refreshUsage(); loadNotePrefs(); scheduleDaily(); loadMe(); refreshNotesBadge();
+  refreshUsage(); loadNotePrefs(); scheduleDaily(); refreshNotesBadge(); checkGrails();
+  loadMe().then(() => { paintTicker(); renderBinder(); }).catch(() => { paintTicker(); renderBinder(); });
   if (!window._noteTick) window._noteTick = setInterval(refreshNotesBadge, 25000);
 }
 function niceErr(raw){
@@ -1133,6 +1141,7 @@ function show(id){
   if ($("pubDetail")) $("pubDetail").classList.toggle("on", id==="pubDetail");
   if ($("findPage")) $("findPage").classList.toggle("on", id==="find");
   if ($("feedPage")) $("feedPage").classList.toggle("on", id==="feed");
+  if (id==="feed") loadFeed();
   if ($("helpPage")) $("helpPage").classList.toggle("on", id==="help");
   if ($("searchPage")) $("searchPage").classList.toggle("on", id==="search");
   if ($("notesPage")) $("notesPage").classList.toggle("on", id==="notes");
@@ -1864,10 +1873,12 @@ function fillEdit(){
 }
 function teamName(c){ return (c.team||"").trim() || "No team"; }
 function photoSrc(c, slug){
-  const s = slug || c.slug || mySlug || "";
+  c = c || {};
   if (c.photo && String(c.photo).slice(0,5)==="data:") return c.photo;
+  if (c.scan && String(c.scan).slice(0,5)==="data:") return c.scan;
+  const s = slug || c.slug || mySlug || "";
   if (s && c.id) return "/u/"+encodeURIComponent(s)+"/cards/"+encodeURIComponent(c.id)+"/photo";
-  return c.photo || c.scan || "";
+  return "";
 }
 function cardLooksGrail(c){
   if (!c) return false;
@@ -1887,15 +1898,19 @@ function grailCls(c){
   return "";
 }
 function cardRowHtml(c){
+  try {
   const img = photoSrc(c);
   const line = [c.team,c.year,c.set,c.number?"#"+c.number:""].filter(Boolean).join(" · ");
   const grade = (!c.grader||c.grader==="Raw")?"Raw":[c.grader,c.grade].filter(Boolean).join(" ");
   const chips = "<div>"+(c.insert?"<span class=\"chip\">"+c.insert+"</span>":"")+(c.parallel?"<span class=\"chip\">"+c.parallel+"</span>":(!c.insert?"<span class=\"chip dim\">Base</span>":""))+"<span class=\"chip dim\">"+grade+"</span></div>";
   return "<article class=\"item"+grailCls(c)+"\" data-open=\""+c.id+"\">"+
-    "<div class=\"item-top\"><img src=\""+img+"\" alt=\"\" /><div><h3>"+dash(c.player)+"</h3>"+
+    "<div class=\"item-top\"><img src=\""+img+"\" alt=\"\" onerror=\"this.style.opacity=0\" /><div><h3>"+dash(c.player)+"</h3>"+
     "<div class=\"muted\">"+dash(line)+"</div>"+chips+
     "<div class=\"muted\" style=\"margin-top:4px\">"+money(c.comp)+" market · "+money(c.cost)+" paid</div>"+
     "<button class=\"ghost\" data-edit=\""+c.id+"\" style=\"width:auto;margin-top:8px;padding:6px 12px\">Edit</button></div></div></article>";
+  } catch(e) {
+    return "<article class=\"item\" data-open=\""+(c&&c.id||"")+"\"><h3>"+dash(c&&c.player)+"</h3></article>";
+  }
 }
 function renderBinder(){
   const cards = load();
@@ -2072,7 +2087,6 @@ $("refreshBook") && ($("refreshBook").onclick = async () => {
     note.textContent = "Nothing stale enough (needs ~1 day since last comp).";
     btn.dataset.busy = "0"; btn.disabled = false; return;
   }
-  localStorage.setItem("ice-book-day", day);
   note.textContent = "Updating book…";
   document.body.classList.add("book-pulse");
   $("bookBar") && $("bookBar").classList.add("book-pulse");
@@ -2082,15 +2096,26 @@ $("refreshBook") && ($("refreshBook").onclick = async () => {
   for (const row of batch) {
     const card = row.c;
     try {
-      const r = await fetch("/book-refresh", {
+      let r = await fetch("/book-refresh", {
         method:"POST",
-        headers:{ "Content-Type":"application/json", "x-token": token(), "x-app-secret": $("secret").value },
-        body: JSON.stringify(Object.assign({ secret:$("secret").value }, {
+        headers:{ "Content-Type":"application/json", "x-token": token() },
+        body: JSON.stringify({
           player:card.player, year:card.year, set:card.set, number:card.number,
           parallel:card.parallel, insert:card.insert, team:card.team,
           grader:card.grader, grade:card.grade, cert:card.cert
-        }))
+        })
       });
+      if (!r.ok && r.status !== 402) {
+        r = await fetch("/comp", {
+          method:"POST",
+          headers:{ "Content-Type":"application/json", "x-token": token() },
+          body: JSON.stringify({
+            player:card.player, year:card.year, set:card.set, number:card.number,
+            parallel:card.parallel, insert:card.insert, team:card.team,
+            grader:card.grader, grade:card.grade, cert:card.cert
+          })
+        });
+      }
       if (r.status === 402) { note.textContent = "Book refresh cap hit. Ice+ is 30 per 30 days."; break; }
       if (!r.ok) continue;
       applyCompObj(card, await r.json());
@@ -2105,16 +2130,36 @@ $("refreshBook") && ($("refreshBook").onclick = async () => {
   document.body.classList.remove("book-pulse");
   $("bookBar") && $("bookBar").classList.remove("book-pulse");
   $("quotes") && $("quotes").classList.remove("book-pulse");
-  note.textContent = "Updated "+ok+" card"+(ok===1?"":"s")+". Next refresh tomorrow.";
+  if (ok) localStorage.setItem("ice-book-day", day);
+  note.textContent = ok
+    ? ("Updated "+ok+" card"+(ok===1?"":"s")+". Book point saved for today.")
+    : "Refresh ran but no new solds landed. Ticker still uses current binder total.";
+  paintTicker();
   btn.textContent = "Refresh book";
   btn.dataset.busy = "0";
   btn.disabled = false;
 });
 function noteKind(n){
   const b = (n.body||"").toLowerCase();
+  if (b.indexOf("grail")>=0) return "grail";
   if (b.indexOf("liked")>=0) return "like";
   if (b.indexOf("comment")>=0 || b.indexOf("replied")>=0) return "comment";
   return "card";
+}
+function markGrailHot(on){
+  if ($("tabFind")) $("tabFind").classList.toggle("grail-new", !!on);
+  if ($("openGrails")) $("openGrails").classList.toggle("grail-new", !!on);
+}
+async function checkGrails(){
+  if (!alertOn("ice-grail-alerts")) { markGrailHot(false); return; }
+  try {
+    const r = await fetch("/feed");
+    const d = await r.json();
+    const rows = (d.cards||[]).filter(cardLooksGrail).sort((a,b)=>String(b.added||"").localeCompare(String(a.added||"")));
+    const newest = rows[0] && rows[0].added || "";
+    const seen = localStorage.getItem("ice-grail-seen") || "";
+    markGrailHot(!!newest && newest > seen);
+  } catch(e) {}
 }
 function resetLabel(resetAt, month){
   let t = resetAt ? new Date(resetAt) : null;
@@ -2248,14 +2293,21 @@ $("modList") && ($("modList").onclick = async ev => {
   if ($("modLoad")) $("modLoad").click();
   if (!r.ok) alert("Could not restore");
 });
-function alertOn(key){ return localStorage.getItem(key) === "1"; }
+function alertOn(key){
+  const v = localStorage.getItem(key);
+  if (v==null && key==="ice-grail-alerts") return true;
+  return v==="1";
+}
 if ($("followAlertOn")) $("followAlertOn").checked = alertOn("ice-follow-alerts");
+if ($("grailAlertOn")) $("grailAlertOn").checked = alertOn("ice-grail-alerts");
 if ($("likeAlertOn")) $("likeAlertOn").checked = alertOn("ice-like-alerts");
 if ($("commentAlertOn")) $("commentAlertOn").checked = alertOn("ice-comment-alerts");
 $("followAlertSave") && ($("followAlertSave").onclick = async () => {
   localStorage.setItem("ice-follow-alerts", $("followAlertOn") && $("followAlertOn").checked ? "1" : "0");
+  localStorage.setItem("ice-grail-alerts", $("grailAlertOn") && $("grailAlertOn").checked ? "1" : "0");
   localStorage.setItem("ice-like-alerts", $("likeAlertOn") && $("likeAlertOn").checked ? "1" : "0");
   localStorage.setItem("ice-comment-alerts", $("commentAlertOn") && $("commentAlertOn").checked ? "1" : "0");
+  checkGrails();
   let msg = "Alert choices saved.";
   if (("followAlertOn" in window) && (($("followAlertOn")&&$("followAlertOn").checked) || ($("likeAlertOn")&&$("likeAlertOn").checked) || ($("commentAlertOn")&&$("commentAlertOn").checked)) && "Notification" in window) {
     const perm = await Notification.requestPermission();
@@ -3033,7 +3085,8 @@ $("findList") && ($("findList").onclick = e => {
 $("backFind") && ($("backFind").onclick = () => show("find"));
 $("backFindNotes") && ($("backFindNotes").onclick = () => show("find"));
 $("openNotes") && ($("openNotes").onclick = () => { show("notes"); paintNotesHub(); });
-$("openFeed") && ($("openFeed").onclick = () => show("feed"));
+$("openFeed") && ($("openFeed").onclick = () => { window.feedGrailMode = false; show("feed"); });
+$("openGrails") && ($("openGrails").onclick = () => { window.feedGrailMode = true; show("feed"); });
 $("backFindFeed") && ($("backFindFeed").onclick = () => show("find"));
 let feedCache = [];
 async function loadFeed(){
@@ -3069,11 +3122,18 @@ function renderFeed(){
     $("feedSet").dataset.keys = sets.join("|");
     if (!cur || sets.indexOf(cur)>=0) $("feedSet").value = cur;
   }
+  if ($("feedTitle")) $("feedTitle").textContent = window.feedGrailMode ? "Grails" : "Just added";
   let rows = feedCache.filter(c => {
+    if (window.feedGrailMode && !cardLooksGrail(c)) return false;
     if (teamF && (c.team||"").trim() !== teamF) return false;
     if (setF && ((c.set||"").trim() || "No set") !== setF) return false;
     return true;
   });
+  if (window.feedGrailMode) {
+    const newest = rows[0] && rows[0].added;
+    if (newest) localStorage.setItem("ice-grail-seen", newest);
+    markGrailHot(false);
+  }
   if (sort==="value") rows.sort((a,b)=>(+b.comp||0)-(+a.comp||0));
   else if (sort==="player") rows.sort((a,b)=> lastName(a.player).localeCompare(lastName(b.player)));
   else rows.sort((a,b)=> String(b.added||"").localeCompare(String(a.added||"")));
@@ -3091,8 +3151,8 @@ $("feedList") && ($("feedList").onclick = ev => {
   openPublic(art.getAttribute("data-feed-slug"), art.getAttribute("data-feed-card"));
 });
 $("backNotesHub") && ($("backNotesHub").onclick = () => { show("notes"); paintNotesHub(); });
-["noteCatCard","noteCatLike","noteCatComment"].forEach(id => {
-  $(id) && ($(id).onclick = () => openNoteCat(id==="noteCatLike"?"like":id==="noteCatComment"?"comment":"card"));
+["noteCatCard","noteCatGrail","noteCatLike","noteCatComment"].forEach(id => {
+  $(id) && ($(id).onclick = () => openNoteCat(id==="noteCatLike"?"like":id==="noteCatComment"?"comment":id==="noteCatGrail"?"grail":"card"));
 });
 function paintFollow(){
   if (!$("followBtn") || !viewSlug) return;
@@ -3138,7 +3198,7 @@ async function refreshNotesBadge(){
     localStorage.setItem("ice-note-unread", String(n));
   } catch(e){}
 }
-setInterval(() => { if (token()) refreshNotesBadge(); }, 15000);
+setInterval(() => { if (token()) { refreshNotesBadge(); checkGrails(); } }, 15000);
 let notesCache = [];
 async function fetchNotes(){
   if (!token()) return [];
@@ -3158,11 +3218,12 @@ async function paintNotesHub(){
     $(id).classList.toggle("ping", n>0);
   };
   label("noteCatCard", "New cards", "card");
+  label("noteCatGrail", "Grails", "grail");
   label("noteCatLike", "Likes", "like");
   label("noteCatComment", "Comments", "comment");
 }
 async function openNoteCat(kind){
-  const titles = { card:"New cards", like:"Likes", comment:"Comments" };
+  const titles = { card:"New cards", grail:"Grails", like:"Likes", comment:"Comments" };
   if ($("notesList")) $("notesList").innerHTML = "";
   if ($("notesCatTitle")) $("notesCatTitle").textContent = titles[kind] || "Alerts";
   show("notesCat");
