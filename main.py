@@ -107,9 +107,18 @@ Upper Deck hockey rules (2015–2026 especially):
 - Young Guns = insert "Young Guns" (not a parallel). Canvas Young Guns = insert "Young Guns Canvas".
 - Exclusives, High Gloss, Clear Cut, Outburst, Traxx are parallels or separate inserts — never label a plain YG as those.
 - "C" or Young Guns badge on silver UD Series 1/2 rookies is usually Young Guns, not SP Authentic.
-- Copy set name from the back: Series 1, Series 2, Extended, SP Authentic, SP Game Used, The Cup, Stature, Premier, Allure, Synergy, Metal Universe, Chronology, Trilogy, O-Pee-Chee, Parkhurst.
+- Copy set name from the back: Series 1, Series 2, Extended, SP Authentic, SP Game Used, The Cup, Stature, Premier, Allure, Synergy, Metal Universe, Chronology, Trilogy, O-Pee-Chee, Parkhurst, Choice.
 - Parallel examples: Silver Foil, Gold /100, Exclusives /100, High Gloss /10, Clear Cut, Outburst Gold, Rainbow, Black /1. If no /n and no foil name, parallel is null or Base.
 - Do not invent a numbered parallel because the photo is shiny.
+- 1990s Pinnacle / Score / Donruss / Leaf: Starquest, Artist's Proofs, Rink Collection, Ice Breakers. Starquest color versions are parallels — Green, Red, Blue, Gold, Purple, Black. If the card face or foil is clearly green, parallel is "Green" (not Base). Same for other named colors.
+- Set name Starquest (Pinnacle) is the set, not an insert, when the front says STARQUEST. Player still from the photo (e.g. Eric Lindros).
+- Upper Deck Choice (1998–99 Choice, 1999–00 Choice, etc.): if the card says Choice Reserve, set is "Choice" (or the full year + Choice from the back) and parallel/insert is "Reserve" — do not call it Series 1 or a generic Upper Deck base. Choice Preview, Choice Reserve Mini, Choice StarQuest-style names stay as printed. Joe Thornton Choice Reserve is player Thornton, set Choice, parallel or insert Reserve.
+
+Foil / color (required look):
+- foil_color = dominant color of the foil or card stock if it is clearly not a normal white/cream base: Green, Red, Blue, Gold, Purple, Black, Silver, Bronze, Orange. "A bit shiny" is not a color. A green Starquest face is Green.
+- foil_text = exact words you can read in the foil stamp or colored plate (CHOICE, RESERVE, STARQUEST, EXCLUSIVES, etc.). Copy them even if stylized.
+- If foil_color is a named color and parallel is empty or Base, set parallel to that color.
+- If foil_text includes RESERVE with Choice, parallel or insert is Reserve.
 
 If a field is not readable, use null. Never invent a rare parallel.
 {
@@ -125,6 +134,8 @@ If a field is not readable, use null. Never invent a rare parallel.
   "grader": "Raw"|"PSA"|"BGS"|"SGC"|"CGC"|null,
   "grade": string|null,
   "cert": string|null,
+  "foil_color": string|null,
+  "foil_text": string|null,
   "confidence": {
     "player": number,
     "year": number,
@@ -278,6 +289,26 @@ async def identify(
     if any(w in sport for w in other_words):
         hockey = False
     data["hockey"] = bool(hockey)
+    foil = re.sub(r"[^a-z ]", "", str(data.get("foil_color") or "").strip().lower())
+    foil_text = str(data.get("foil_text") or "")
+    par = str(data.get("parallel") or "").strip()
+    ins = str(data.get("insert") or "").strip()
+    st = str(data.get("set") or "").strip()
+    blob = " ".join([st, par, ins, foil_text, str(data.get("player") or "")]).lower()
+    color_map = {
+        "green": "Green", "red": "Red", "blue": "Blue", "gold": "Gold",
+        "purple": "Purple", "black": "Black", "silver": "Silver",
+        "bronze": "Bronze", "orange": "Orange", "teal": "Teal",
+    }
+    named = color_map.get(foil.split()[0] if foil else "")
+    if named and (not par or par.lower() in ("base", "null", "none", "raw")):
+        data["parallel"] = named
+        par = named
+    if "choice" in blob and "reserve" in blob:
+        if "choice" not in st.lower():
+            data["set"] = (st + " Choice").strip() if st else "Choice"
+        if "reserve" not in (par + " " + ins).lower():
+            data["parallel"] = ((par + " Reserve").strip() if par and par.lower() not in ("base",) else "Reserve")
     if not data["hockey"]:
         data["needs_review"] = True
         data["blocked"] = True

@@ -321,7 +321,7 @@
       <div class="preview hidden" id="scanBox"><h3>Front</h3><img id="scanImg" alt="" /></div>
       <div class="preview hidden" id="backBox"><h3>Back</h3><img id="backImg" alt="" /></div>
     </div>
-    <button id="go">Identify card</button>
+    <button id="go" disabled>Identify card</button>
     <p class="status" id="status"></p>
   </section>
   <section class="page" id="resultPage">
@@ -1016,6 +1016,10 @@ $("photoTipsBtn") && ($("photoTipsBtn").onclick = () => {
   $("photoTipsBtn").textContent = box.classList.contains("open") ? "Hide photo tips" : "Photo tips";
 });
 let last = null, scanData = null, bindData = null, frontFile = null, backFile = null;
+function lockIdentify(){
+  const on = !!(frontFile || ($("file") && $("file").files && $("file").files[0]));
+  if ($("go")) $("go").disabled = !on;
+}
 
 function load(){ try { return JSON.parse(localStorage.getItem(KEY)||"[]"); } catch(e){ return []; } }
 function persistCards(cards){
@@ -1344,6 +1348,7 @@ $("file").onchange = async () => {
   $("scanImg").src = scanData || URL.createObjectURL(f);
   $("scanBox").classList.remove("hidden");
   if ($("shotFront")) $("shotFront").classList.add("on");
+  lockIdentify();
   $("status").textContent = backFile
     ? "New front loaded. Back is still attached. Identify when ready."
     : "Front loaded. Add the back on raws, then Identify.";
@@ -1398,7 +1403,8 @@ function blobJpeg(file, max){
 $("go").onclick = async () => {
   frontFile = ($("file") && $("file").files[0]) || frontFile;
   backFile = ($("fileBack") && $("fileBack").files[0]) || backFile;
-  if (!frontFile) { $("status").textContent = "Pick a front photo first."; $("status").className = "status err"; return; }
+  lockIdentify();
+  if (!frontFile) { $("status").textContent = "Pick a front photo first."; $("status").className = "status err"; $("go").disabled = true; return; }
   if (!token()) { $("status").textContent = "Sign in first — Identify needs an account."; $("status").className = "status err"; return; }
   $("go").disabled = true;
   $("status").className = "status";
@@ -1662,7 +1668,7 @@ async function saveToBinder(ev){
   }
   $("status").textContent = "";
   clearIdFields();
-  frontFile = null; backFile = null; scanData = null; bindData = null;
+  frontFile = null; backFile = null; scanData = null; bindData = null; lockIdentify();
   $("scanBox").classList.add("hidden");
   $("backBox").classList.add("hidden");
   if ($("bindBox")) $("bindBox").classList.add("hidden");
