@@ -110,13 +110,13 @@
     .item.tier-bronze { border-color:#8d5a2b; border-width:2px; box-shadow:inset 0 0 0 1px #c48a4a, 0 0 10px rgba(141,90,43,.35); }
     .item.tier-silver { border-color:#9aa7b5; border-width:2px; box-shadow:inset 0 0 0 1px #e8eef4, 0 0 10px rgba(180,196,210,.28); }
     .item.tier-gold { border-color:#b8892a; border-width:2px; box-shadow:inset 0 0 0 1px #e6d09a, 0 0 12px rgba(184,137,42,.35); }
-    .item.tier-platinum { border-color:#cfd8e0; border-width:2px; box-shadow:inset 0 0 0 1px #ffffff, 0 0 12px rgba(220,230,240,.35); }
+    .item.tier-platinum { border-color:#dce8f4; border-width:2px; box-shadow:inset 0 0 0 1px #ffffff, 0 0 8px rgba(210,230,255,.55), 0 0 20px rgba(140,190,255,.32); }
     .item.tier-diamond { border-color:#8fd4ee; border-width:2px; box-shadow:inset 0 0 0 1px #e7fbff, 0 0 14px rgba(143,212,238,.4); }
     .tier-tag { position:absolute; right:8px; bottom:8px; font-size:9px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; padding:3px 7px; border-radius:6px; background:rgba(8,12,16,.88); z-index:2; }
     .tier-tag.bronze { color:#c48a4a; }
     .tier-tag.silver { color:#d5dee6; letter-spacing:.1em; }
     .tier-tag.gold { color:#e0c27a; font-family:Georgia,"Times New Roman",serif; font-weight:700; letter-spacing:.14em; font-size:10px; }
-    .tier-tag.platinum { color:#eef3f7; font-family:Georgia,"Times New Roman",serif; font-weight:600; letter-spacing:.16em; font-size:10px; }
+    .tier-tag.platinum { color:#dce8f4; font-family:Georgia,"Times New Roman",serif; font-weight:600; letter-spacing:.16em; font-size:10px; text-shadow:0 0 8px rgba(180,210,255,.7); }
     .tier-tag.diamond { color:#bfefff; font-family:Georgia,"Times New Roman",serif; font-weight:600; letter-spacing:.18em; font-size:10px; font-style:italic; }
     .item-top { display:grid; grid-template-columns:72px 1fr; gap:10px; }
     .item img { width:72px; height:72px; object-fit:contain; background:#000; border-radius:8px; }
@@ -375,7 +375,6 @@
       </div>
       <a class="ghost btn" id="pt130" target="_blank" rel="noopener">Fanatics sold</a>
       <a class="ghost btn hidden" id="psa" target="_blank" rel="noopener">PSA cert</a>
-      <button id="refreshComp">Update comps</button>
       <div class="row2">
         <div><label>Paid CAD</label><input id="cost" type="number" step="0.01" placeholder="What you paid" /></div>
         <div><label>Your copy (sold)</label><input id="comp" type="number" step="0.01" placeholder="This copy’s market" /></div>
@@ -1610,6 +1609,10 @@ $("file").onchange = async () => {
   $("status").textContent = backFile
     ? "New front loaded. Back is still attached. Identify when ready."
     : "Front loaded. Add the back on raws, then Identify.";
+  requestAnimationFrame(() => {
+    const btn = $("go");
+    if (btn) btn.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
 };
 $("fileBack").onchange = async () => {
   const f = $("fileBack").files[0];
@@ -1725,8 +1728,8 @@ $("go").onclick = async () => {
     $("result").classList.remove("hidden");
     setCompBanner("wait", "Card IDed. Searching sold comps…");
     show("result");
+    clearCompFields();
     $("compNote").textContent = "";
-    $("comp").value = "";
     try {
       await lookupComp();
     } catch (ce) {
@@ -1784,7 +1787,24 @@ function lockSave(ready, label){
     if (id==="saveBtn") $(id).textContent = ready ? "Save to binder" : (label || "Waiting on solds…");
   });
 }
+function clearCompFields(){
+  ["comp","rawComp","psa8Comp","psa9Comp","psa10Comp","bgs95Comp","sgc10Comp","e_raw","e_psa8","e_psa9","e_psa10"].forEach(id => { if ($(id)) $(id).value = ""; });
+  window.lastSysComp = null;
+  if ($("compNote")) $("compNote").textContent = "";
+}
+function soldForCopy(c){
+  const g = ($("f_grader") && $("f_grader").value) || "Raw";
+  const gr = String(($("f_grade") && $("f_grade").value) || "").trim();
+  if (g === "Raw" || !gr) return c.raw_cad != null ? c.raw_cad : c.suggested_cad;
+  if (g === "PSA" && /^10/.test(gr)) return c.psa10_cad;
+  if (g === "PSA" && /^9/.test(gr)) return c.psa9_cad;
+  if (g === "PSA" && /^8/.test(gr)) return c.psa8_cad;
+  if (g === "BGS" && /^9\.5/.test(gr)) return c.bgs95_cad;
+  if (g === "SGC" && /^10/.test(gr)) return c.sgc10_cad;
+  return null;
+}
 async function lookupComp(){
+  clearCompFields();
   setCompBanner("wait", "Searching sold comps…");
   $("status").textContent = "Looking up sold comps…";
   if ($("resultStatus")) $("resultStatus").textContent = "ID done. Pulling solds next.";
@@ -1796,11 +1816,11 @@ async function lookupComp(){
   const ct = await cr.text();
   if (!cr.ok) throw new Error(ct.slice(0,200));
   const c = JSON.parse(ct);
-  const g0 = ($("f_grader").value||"Raw");
-  let sug = c.suggested_cad != null ? c.suggested_cad : c.suggested_usd;
-  if (g0==="Raw" && c.raw_cad != null) sug = c.raw_cad;
-  if (sug == null && c.low != null && c.high != null) sug = Math.round((+c.low + +c.high) / 2);
-  if (sug == null && c.low != null) sug = c.low;
+  let sug = soldForCopy(c);
+  if (sug == null && (($("f_grader").value||"Raw")==="Raw")) {
+    if (c.suggested_cad != null) sug = c.suggested_cad;
+    else if (c.low != null && c.high != null) sug = Math.round((+c.low + +c.high) / 2);
+  }
   window.lastSysComp = (sug != null && !isNaN(+sug)) ? +sug : null;
   const cardNo = parseFloat(String($("f_number").value||"").replace("#",""));
   if (sug != null && !(cardNo && Math.abs(+sug - cardNo) < 0.001)) $("comp").value = sug;
@@ -1837,16 +1857,6 @@ async function lookupComp(){
   setCompBanner(sug != null ? "ok" : "bad", sug != null ? "Comps loaded. Check the numbers, then save." : "No sold found automatically. Use eBay or Fanatics.");
   lockSave(true);
 }
-$("refreshComp").onclick = async ev => {
-  ev.preventDefault();
-  try { await lookupComp(); } catch(e) {
-    $("compNote").textContent = "Comp lookup failed. Use Sold and type a number.";
-    $("status").textContent = "Comp lookup failed: " + e.message;
-    $("status").className = "status warn";
-    setCompBanner("bad", "Comp search failed. You can still type a number.");
-    lockSave(true);
-  }
-};
 async function loadPhotos(){
   $("photoStrip").innerHTML = "<p class=\"muted\">Finding listing photos…</p>";
   const r = await fetch("/photos", {
@@ -2069,7 +2079,7 @@ function publicCad(c){
   return asCad(c.sysComp) || asCad(c.sys_comp) || asCad(c.rawComp);
 }
 function tierFromCad(n){
-  if (n==null || isNaN(+n) || +n < 1) return "";
+  if (n==null || isNaN(+n) || +n < 5) return "";
   const v = +n;
   if (v < 25) return "bronze";
   if (v < 100) return "silver";

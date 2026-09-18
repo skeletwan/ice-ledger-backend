@@ -361,6 +361,7 @@ Return ONLY JSON, no markdown:
 Search separately for RAW solds, PSA 8, PSA 9, PSA 10, BGS 9.5, and SGC 10 of this same player/set/number/parallel.
 Fill each *_cad field you can. suggested_cad is the price for THIS copy's grader/grade. If this copy is Raw, suggested_cad MUST equal raw_cad.
 Only use sold sale prices (money). Never use the card number, year, print run, or cert as a price.
+Use the median of matching solds for each grade. Do not pick a random sale. Same card should return the same numbers.
 If you cannot find a sold price for a grade, leave that field null. Do not copy one grade into another.
 Convert USD to CAD at 1.35.
 """
@@ -410,6 +411,20 @@ async def comp(
         raise HTTPException(500, "XAI_API_KEY not set on server")
     check_cap()
     card = {k: payload.get(k) for k in ("player","year","set","number","parallel","insert","team","grader","grade","cert")}
+    ck = "|".join(str(card.get(k) or "").strip().lower() for k in ("player","year","set","number","parallel","insert","grader","grade"))
+    fresh = bool(payload.get("fresh"))
+    if ck.strip("|") and not fresh:
+        con = db()
+        row = con.execute("SELECT data, t FROM comp_cache WHERE k=?", (ck,)).fetchone()
+        con.close()
+        if row and (time.time() - float(row["t"])) < 12 * 3600:
+            try:
+                cached = json.loads(row["data"])
+                if isinstance(cached, dict):
+                    cached["cached"] = True
+                    return cached
+            except Exception:
+                pass
     label = ", ".join(f"{k}={v}" for k,v in card.items() if v)
     headers = {"Authorization": f"Bearer {XAI_API_KEY}", "Content-Type": "application/json"}
     prompt = COMP_PROMPT.format(card=label)
@@ -506,6 +521,17 @@ async def comp(
         data["error"] = err
         data["needs_review"] = True
         data["summary"] = data.get("summary") or "Could not read solds automatically."
+    if ck.strip("|") and (data.get("suggested_cad") or data.get("raw_cad") or data.get("psa10_cad")):
+        try:
+            con = db()
+            con.execute(
+                "INSERT OR REPLACE INTO comp_cache(k,data,t) VALUES(?,?,?)",
+                (ck, json.dumps(data), time.time()),
+            )
+            con.commit()
+            con.close()
+        except Exception:
+            pass
     return data
 
 
@@ -644,6 +670,11 @@ def init_db():
       month TEXT NOT NULL,
       n INTEGER NOT NULL,
       PRIMARY KEY (user_id, month)
+    );
+    CREATE TABLE IF NOT EXISTS comp_cache (
+      k TEXT PRIMARY KEY,
+      data TEXT NOT NULL,
+      t REAL NOT NULL
     );
     """)
     try:
