@@ -32,7 +32,8 @@
     .tips.open ul { display:block; }
     .tips li { margin:0 0 4px; }
     .ranges { display:flex; gap:0; padding:0; background:#10161d; border-bottom:1px solid var(--line); }
-    .ranges button { flex:1; width:auto; margin:0; padding:10px 0 8px; font-size:12px; font-weight:700; letter-spacing:.02em; border:0; border-bottom:2px solid transparent; border-radius:0; background:transparent; color:var(--muted); }
+    .ranges button { flex:1; width:auto; margin:0; padding:8px 0 6px; font-size:12px; font-weight:700; letter-spacing:.02em; border:0; border-bottom:2px solid transparent; border-radius:0; background:transparent; color:var(--muted); line-height:1.15; }
+    .ranges button small { display:block; font-size:9px; font-weight:600; letter-spacing:0; opacity:.65; }
     .ranges button.on { color:var(--text); border-bottom-color:#26a69a; background:transparent; }
     .ticker { padding:8px 14px 10px; background:#10161d; }
     .quote { display:flex; align-items:flex-end; gap:12px; flex-wrap:wrap; }
@@ -169,6 +170,7 @@
     .ava-full.on { display:flex; }
     .ava-full img { max-width:80vw; max-height:70vh; border-radius:16px; border:4px solid var(--ice); pointer-events:none; }
     .ava-full .close { width:auto; margin:0; padding:10px 18px; }
+    .likers-box { width:min(400px,92vw); max-height:70vh; overflow:auto; background:#121c26; border:1px solid var(--line); border-radius:14px; padding:12px; }
     .ava-full .report-box { width:min(360px,90vw); background:#121c26; border:1px solid var(--line); border-radius:12px; padding:12px; }
     .ava-full .report-box label { margin-top:0; }
     button.dead { background:#2a3d4d; color:#8aa3b5; pointer-events:none; border-color:#2a3d4d; }
@@ -263,13 +265,13 @@
   <div class="yf">
   <svg id="spark" viewBox="0 0 360 200" class="spark" preserveAspectRatio="none"></svg>
   <div class="ranges" id="ranges">
-    <button data-r="1D">1D</button>
-    <button data-r="5D">5D</button>
-    <button data-r="1M">1M</button>
-    <button data-r="6M">6M</button>
-    <button data-r="YTD">YTD</button>
-    <button data-r="1Y">1Y</button>
-    <button data-r="ALL">MAX</button>
+    <button data-r="1D">1D<small>day</small></button>
+    <button data-r="7D">7D<small>week</small></button>
+    <button data-r="1M">1M<small>month</small></button>
+    <button data-r="6M">6M<small>6 months</small></button>
+    <button data-r="YTD">YTD<small>year to date</small></button>
+    <button data-r="1Y">1Y<small>year</small></button>
+    <button data-r="ALL">MAX<small>all time</small></button>
   </div>
   </div>
   </div>
@@ -378,7 +380,6 @@
       <button class="ghost" id="refreshBook">Refresh book</button>
     </div>
     <p class="muted" id="bookNote"></p>
-    <p class="muted">Book values are estimates from public sold comps. Check eBay or a dealer before you buy or sell.</p>
     <p class="muted" id="valueNote"></p>
     <button class="ghost" id="openSearch">Search binder</button>
     <div class="row2">
@@ -485,20 +486,20 @@
     <button class="ghost" id="backPub">Back to binder</button>
     <div class="hero"><img id="pubHero" alt="" /></div>
     <button class="ghost" id="likeBtn">Like · 0</button>
-    <p class="muted" id="cardLikers"></p>
+    <button class="ghost hidden" id="cardLikers" style="width:auto;padding:6px 10px;font-size:12px;margin:8px 0 0"></button>
     <h2 id="pubTitle"></h2>
     <p class="muted" id="pubLine"></p>
     <div class="mini-trend">
       <div class="ranges" id="pubRanges">
-        <button data-cr="5D">5D</button>
-        <button data-cr="1M">1M</button>
-        <button data-cr="6M">6M</button>
-        <button data-cr="YTD">YTD</button>
-        <button data-cr="1Y">1Y</button>
-        <button data-cr="ALL">MAX</button>
+        <button data-cr="7D">7D<small>week</small></button>
+        <button data-cr="1M">1M<small>month</small></button>
+        <button data-cr="6M">6M<small>6 months</small></button>
+        <button data-cr="YTD">YTD<small>year to date</small></button>
+        <button data-cr="1Y">1Y<small>year</small></button>
+        <button data-cr="ALL">MAX<small>all time</small></button>
       </div>
       <div class="mini-trend-top"><span class="mini-last" id="pubTrendVal">—</span><span class="mini-chg flat" id="pubTrendNote"></span></div>
-      <svg class="mini-spark" id="pubSpark" viewBox="0 0 280 56" preserveAspectRatio="none"></svg>
+      <svg class="mini-spark" id="pubSpark" viewBox="0 0 300 72" preserveAspectRatio="none"></svg>
     </div>
     <div class="vals">
       <div class="val"><b id="pubHold">—</b><span>This copy</span></div>
@@ -670,15 +671,15 @@
     <p class="muted" id="dLine"></p>
     <div class="mini-trend">
       <div class="ranges" id="cardRanges">
-        <button data-cr="5D">5D</button>
-        <button data-cr="1M">1M</button>
-        <button data-cr="6M">6M</button>
-        <button data-cr="YTD">YTD</button>
-        <button data-cr="1Y">1Y</button>
-        <button data-cr="ALL">MAX</button>
+        <button data-cr="7D">7D<small>week</small></button>
+        <button data-cr="1M">1M<small>month</small></button>
+        <button data-cr="6M">6M<small>6 months</small></button>
+        <button data-cr="YTD">YTD<small>year to date</small></button>
+        <button data-cr="1Y">1Y<small>year</small></button>
+        <button data-cr="ALL">MAX<small>all time</small></button>
       </div>
       <div class="mini-trend-top"><span class="mini-last" id="cardTrendVal">—</span><span class="mini-chg flat" id="cardTrendNote"></span></div>
-      <svg class="mini-spark" id="cardSpark" viewBox="0 0 280 56" preserveAspectRatio="none"></svg>
+      <svg class="mini-spark" id="cardSpark" viewBox="0 0 300 72" preserveAspectRatio="none"></svg>
     </div>
     <div class="vals">
       <div class="val"><b id="vHold">—</b><span>This copy</span></div>
@@ -758,6 +759,13 @@
     <button id="tabSet">You</button>
   </nav>
   </div>
+<div class="ava-full" id="likersFull">
+  <div class="likers-box">
+    <h3 style="font-size:16px;margin:0 0 8px">Liked by</h3>
+    <div id="likersList"></div>
+  </div>
+  <button type="button" class="close" id="likersX">Close</button>
+</div>
 <div class="ava-full" id="avaFull">
   <img id="avaFullImg" alt="" />
   <div class="report-box" id="avaReportBox">
@@ -905,7 +913,7 @@ function histForRange(){
     const y = new Date().getFullYear()+"-01-01";
     return h.filter(x => x.d >= y);
   }
-  const days = { "1D":1, "5D":5, "1M":30, "6M":183, "1Y":365 }[r];
+  const days = { "1D":1, "7D":7, "5D":7, "1M":30, "6M":183, "1Y":365 }[r];
   if (!days) return h;
   const cut = new Date();
   cut.setDate(cut.getDate() - (days-1));
@@ -938,7 +946,7 @@ function spark(vals, elId){
     const v = hi - (span*i/ticks);
     const y = T + (plotH*i/ticks);
     grid += "<line x1='"+L+"' x2='"+(W-R)+"' y1='"+y+"' y2='"+y+"' stroke='#24303a' stroke-width='1'/>";
-    grid += "<text x='"+(W-R+6)+"' y='"+(y+4)+"' fill='#8aa3b5' font-size='9'>"+Math.round(toFx(v)||v)+"</text>";
+    grid += "<text x='"+(W-R+6)+"' y='"+(y+4)+"' fill='#8aa3b5' font-size='9'>"+axisCash(toFx(v)||v)+"</text>";
   }
   el.innerHTML =
     "<defs><linearGradient id='yfFill' x1='0' y1='0' x2='0' y2='1'>"+
@@ -1077,10 +1085,16 @@ function pushCardHist(card){
   else h.push({ d: day, v: +card.comp, t: new Date().toISOString() });
   card.hist = h.slice(-400);
 }
+function axisCash(v){
+  const n = Math.abs(+v||0);
+  if (n >= 10000) return "$"+Math.round(n/1000)+"k";
+  if (n >= 1000) return "$"+(n/1000).toFixed(1).replace(/\.0$/,"")+"k";
+  return "$"+Math.round(n);
+}
 function miniSpark(vals, elId){
   const el = $(elId);
   if (!el) return;
-  const W = 280, H = 56, L = 4, R = 4, T = 6, B = 6;
+  const W = 300, H = 72, L = 36, R = 6, T = 8, B = 8;
   const plotW = W - L - R, plotH = H - T - B;
   if (!vals.length) {
     el.innerHTML = "";
@@ -1097,18 +1111,25 @@ function miniSpark(vals, elId){
   const lastX = xAt(vals.length-1), lastY = yAt(vals[vals.length-1]);
   const fill = pts+" "+lastX.toFixed(1)+","+(T+plotH)+" "+L+","+(T+plotH);
   const gid = "mg-"+elId;
+  const mid = (min+max)/2;
+  const axis =
+    "<text x='2' y='"+(T+3)+"' fill='#8aa3b5' font-size='8'>"+axisCash(max)+"</text>"+
+    "<text x='2' y='"+(T+plotH/2+3)+"' fill='#8aa3b5' font-size='8'>"+axisCash(mid)+"</text>"+
+    "<text x='2' y='"+(T+plotH)+"' fill='#8aa3b5' font-size='8'>"+axisCash(min)+"</text>";
   el.innerHTML =
     "<defs><linearGradient id='"+gid+"' x1='0' y1='0' x2='0' y2='1'>"+
     "<stop offset='0%' stop-color='"+col+"' stop-opacity='0.28'/>"+
     "<stop offset='100%' stop-color='"+col+"' stop-opacity='0'/></linearGradient></defs>"+
+    axis+
     "<polygon fill='url(#"+gid+")' points='"+fill+"'/>"+
     "<polyline fill='none' stroke='"+col+"' stroke-width='2' stroke-linejoin='round' stroke-linecap='round' points='"+pts+"'/>"+
     "<circle cx='"+lastX+"' cy='"+lastY+"' r='3' fill='"+col+"'/>";
 }
 const CRNG = "ice-card-rng";
 function cardRangeKey(){
-  const r = localStorage.getItem(CRNG) || "5D";
-  return ["5D","1M","6M","YTD","1Y","ALL"].indexOf(r)>=0 ? r : "5D";
+  const r = localStorage.getItem(CRNG) || "7D";
+  if (r==="5D") return "7D";
+  return ["7D","1M","6M","YTD","1Y","ALL"].indexOf(r)>=0 ? r : "7D";
 }
 function sliceHist(h, r){
   h = h || [];
@@ -1116,7 +1137,7 @@ function sliceHist(h, r){
     const y = new Date().getFullYear()+"-01-01";
     return h.filter(x => x.d >= y);
   }
-  const days = { "5D":5, "1M":30, "6M":183, "1Y":365 }[r];
+  const days = { "7D":7, "5D":7, "1M":30, "6M":183, "1Y":365 }[r];
   if (!days) return h;
   const cut = new Date();
   cut.setDate(cut.getDate() - (days-1));
@@ -2924,15 +2945,39 @@ $("notesList") && ($("notesList").onclick = e => {
   const art = e.target.closest("[data-slug]");
   if (art && art.getAttribute("data-slug")) openPublic(art.getAttribute("data-slug"), art.getAttribute("data-card"));
 });
+let lastLikers = [];
+function openLikers(){
+  const box = $("likersFull");
+  const list = $("likersList");
+  if (!box || !list || !lastLikers.length) return;
+  list.innerHTML = lastLikers.map(personChip).join("");
+  box.classList.add("on");
+}
+$("cardLikers") && ($("cardLikers").onclick = openLikers);
+$("likersX") && ($("likersX").onclick = () => $("likersFull") && $("likersFull").classList.remove("on"));
+$("likersFull") && ($("likersFull").onclick = ev => {
+  if (ev.target.id === "likersFull") $("likersFull").classList.remove("on");
+});
+$("likersList") && ($("likersList").onclick = ev => {
+  const row = ev.target.closest("[data-open-user]");
+  if (!row) return;
+  $("likersFull") && $("likersFull").classList.remove("on");
+  openPublic(row.getAttribute("data-open-user"));
+});
 async function paintLike(){
   if (!viewSlug || !viewCard || !$("likeBtn")) return;
   try {
     const r = await fetch("/u/"+encodeURIComponent(viewSlug)+"/cards/"+encodeURIComponent(viewCard.id)+"/likes", { headers:{ "x-token": token() } });
     const d = await r.json();
     $("likeBtn").innerHTML = "<span class=\"heart\">♥ "+(d.likes||0)+"</span> " + (d.liked ? "Liked" : "Like");
+    lastLikers = d.people || [];
     if ($("cardLikers")) {
-      const names = (d.people||[]).map(p => p.display || p.slug).filter(Boolean);
-      $("cardLikers").textContent = names.length ? ("Liked by "+names.join(", ")) : "";
+      if (!lastLikers.length) $("cardLikers").classList.add("hidden");
+      else {
+        $("cardLikers").classList.remove("hidden");
+        const first = lastLikers[0].display || lastLikers[0].slug || "someone";
+        $("cardLikers").textContent = lastLikers.length===1 ? ("Liked by "+first) : ("Liked by "+first+" and "+(lastLikers.length-1)+" other"+(lastLikers.length===2?"":"s"));
+      }
     }
   } catch(e) { $("likeBtn").innerHTML = "<span class=\"heart\">♥ 0</span> Like"; }
 }
