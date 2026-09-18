@@ -524,7 +524,20 @@
   </section>
   <section class="page" id="setPage">
     <h2 style="font-size:18px;margin:0 0 8px">You</h2>
-    <p class="muted">Profile and account.</p>
+    <div id="youHub">
+      <p class="muted">Profile and account.</p>
+      <button class="ghost" data-you="youProfile">Profile</button>
+      <button class="ghost" data-you="youBanner">Banner</button>
+      <button class="ghost" data-you="youComm">Community</button>
+      <button class="ghost" data-you="youAlerts">Alerts</button>
+      <button class="ghost" data-you="youBill">Ice+ / Rip Night!</button>
+      <button class="ghost" id="tabHelp">Support / feedback</button>
+      <button class="ghost hidden" id="ownerToolsBtn">Owner tools</button>
+      <button class="ghost" id="logoutBtn">Get out</button>
+      <button class="ghost" data-you="youGone" style="margin-top:18px">Delete account</button>
+    </div>
+    <div id="youProfile" class="hidden">
+    <button class="ghost" data-you="youHub">Back</button>
     <div class="card" style="margin-top:12px">
       <div class="pwid" id="pWid"><div class="pava" id="pAva">IL</div><div><b id="pName">Collector</b><div class="muted" id="pSlug"></div></div></div>
       <label>Display name</label>
@@ -540,6 +553,7 @@
         <div>
           <label>Border</label>
           <input id="pHue" class="hue-swatch" type="color" value="#8fd4ee" />
+          <button class="ghost" type="button" id="hueFromBan" style="width:auto;padding:6px 10px;font-size:12px;margin-top:6px">Use banner colour</button>
         </div>
       </div>
       <label>Short bio</label>
@@ -564,6 +578,9 @@
       <button class="ghost" id="pClearPhoto">Remove photo</button>
       <p class="muted" id="pNote"></p>
     </div>
+    </div>
+    <div id="youBanner" class="hidden">
+    <button class="ghost" data-you="youHub">Back</button>
     <div class="card" style="margin-top:12px">
       <h3 style="margin:0 0 6px;font-size:16px">Binder banner</h3>
       <p class="muted">One banner on your public binder. Edit it, then save. A new save replaces the old one.</p>
@@ -576,18 +593,23 @@
       <input id="banUrl" placeholder="https://youtube.com/…" />
       <label>Color</label>
       <input id="banColor" class="hue-swatch" type="color" value="#8fd4ee" />
+      <button class="ghost" type="button" id="banFromHue" style="width:auto;padding:6px 10px;font-size:12px;margin-top:6px">Use profile colour</button>
       <button id="banAdd">Save banner</button>
       <button class="ghost" id="banClear">Remove banner</button>
       <p class="muted" id="banNote"></p>
       <div id="banList"></div>
     </div>
-    <button class="ghost" id="tabHelp">Support / feedback</button>
-    <button class="ghost hidden" id="ownerToolsBtn">Owner tools</button>
+    </div>
+    <div id="youComm" class="hidden">
+    <button class="ghost" data-you="youHub">Back</button>
     <h3 style="font-size:15px;margin:16px 0 8px">Your community</h3>
     <p class="muted" id="commStats"></p>
     <div id="commFollowers"></div>
     <div id="commBinder"></div>
     <div id="commCards"></div>
+    </div>
+    <div id="youAlerts" class="hidden">
+    <button class="ghost" data-you="youHub">Back</button>
     <h3 style="font-size:15px;margin:16px 0 8px">Follow alerts</h3>
     <p class="muted">Ping when a binder you follow adds a card. Works with the app open or on the Home Screen.</p>
     <label><input id="followAlertOn" type="checkbox" style="width:auto;margin-right:8px" /> New cards on binders I follow</label>
@@ -595,7 +617,30 @@
     <label><input id="commentAlertOn" type="checkbox" style="width:auto;margin-right:8px" /> Comments and replies</label>
     <button class="ghost" id="followAlertSave">Save alerts</button>
     <p class="muted" id="followAlertNote"></p>
-    <button class="ghost" id="logoutBtn">Get out</button>
+    </div>
+    <div id="youBill" class="hidden">
+    <button class="ghost" data-you="youHub">Back</button>
+    <h3 style="font-size:15px;margin:16px 0 8px">Ice+ / Rip Night!</h3>
+    <p class="muted" id="youQuota"></p>
+    <button class="ghost" id="youPayBtn">Ice+</button>
+    <p class="muted">$8 / 30 days · 200 IDs + 30 book refreshes</p>
+    <button class="ghost" id="youRipBtn">Rip Night!</button>
+    <p class="muted">$2.99 · 20 extra IDs for 30 days</p>
+    <label>Have a code?</label>
+    <div class="row2" style="align-items:end">
+      <input id="youRipCode" placeholder="RIP-XXXXXX" autocomplete="off" />
+      <button class="ghost" id="youRipRedeem">Redeem</button>
+    </div>
+    <p class="muted" id="youRipNote"></p>
+    </div>
+    <div id="youGone" class="hidden">
+    <button class="ghost" data-you="youHub">Back</button>
+    <h3 style="font-size:15px;margin:16px 0 8px">Delete account</h3>
+    <p class="muted">This wipes your binder, comments, likes, and login. Type your password.</p>
+    <input id="gonePw" type="password" placeholder="Password" autocomplete="current-password" />
+    <button id="goneBtn">Delete my account</button>
+    <p class="muted" id="goneNote"></p>
+    </div>
   </section>
   <section class="page" id="opsPage">
     <button class="ghost" id="backYouOps">Back to You</button>
@@ -969,6 +1014,18 @@ function load(){ try { return JSON.parse(localStorage.getItem(KEY)||"[]"); } cat
 function saveAll(cards){ localStorage.setItem(KEY, JSON.stringify(cards)); paintTicker(); renderBinder(); }
 let openId = null;
 let editPhoto = "";
+function youShow(which){
+  ["youHub","youProfile","youBanner","youComm","youAlerts","youBill","youGone"].forEach(id => {
+    if ($(id)) $(id).classList.toggle("hidden", id !== which);
+  });
+  if (which==="youBill") refreshUsage();
+  if (which==="youComm") loadCommunity();
+}
+document.addEventListener("click", ev => {
+  const b = ev.target.closest("[data-you]");
+  if (!b || !b.closest("#setPage")) return;
+  youShow(b.getAttribute("data-you"));
+});
 function show(id){
   $("scanPage").classList.toggle("on", id==="scan");
   $("resultPage").classList.toggle("on", id==="result");
@@ -987,6 +1044,7 @@ function show(id){
   if (id==="scan" && $("status")) $("status").textContent = "";
   if (id!=="set" && $("pNote")) $("pNote").textContent = "";
   if ($("opsPage")) $("opsPage").classList.toggle("on", id==="ops");
+  if (id==="set") youShow("youHub");
   if (id==="bind") renderBinder();
   if (id==="search") renderSearch();
   if (id==="find" || id==="pub" || id==="notes" || id==="notesCat" || id==="feed") refreshNotesBadge();
@@ -1931,6 +1989,7 @@ async function refreshUsage(){
     $("quotaBox").className = "status " + (u.left<=0 ? "err" : (u.left<=3 ? "warn" : "ok"));
   }
   if ($("resetLine")) $("resetLine").textContent = resetLabel(u.reset_at, u.month);
+  if ($("youQuota")) $("youQuota").textContent = line;
 }
 function showPaywall(msg){
   if ($("quotaBox")) {
@@ -2383,6 +2442,15 @@ function paintProfile(name, hue, avatar){
   if ($("pSlug")) $("pSlug").textContent = "";
 }
 $("pHue") && ($("pHue").oninput = () => paintProfile(($("pDisplay").value||"Collector"), $("pHue").value, myAvatar));
+$("hueFromBan") && ($("hueFromBan").onclick = () => {
+  if (!$("pHue") || !$("banColor")) return;
+  $("pHue").value = $("banColor").value;
+  paintProfile(($("pDisplay").value||"Collector"), $("pHue").value, myAvatar);
+});
+$("banFromHue") && ($("banFromHue").onclick = () => {
+  if (!$("pHue") || !$("banColor")) return;
+  $("banColor").value = $("pHue").value;
+});
 $("pDisplay") && ($("pDisplay").oninput = () => paintProfile($("pDisplay").value, $("pHue").value, myAvatar));
 ["pCropX","pCropY","pCropZ"].forEach(id => { $(id) && ($(id).oninput = () => paintProfile($("pDisplay").value||"Collector", $("pHue").value, myAvatar)); });
 $("pPhoto") && ($("pPhoto").onchange = async () => {
@@ -3065,6 +3133,23 @@ $("pubList") && ($("pubList").onclick = e => {
 $("backPub") && ($("backPub").onclick = () => show("pub"));
 
 $("logoutBtn").onclick = () => { setToken(""); location.reload(); };
+$("youPayBtn") && ($("youPayBtn").onclick = () => $("payBtn") && $("payBtn").click());
+$("youRipBtn") && ($("youRipBtn").onclick = () => $("ripBtn") && $("ripBtn").click());
+$("youRipRedeem") && ($("youRipRedeem").onclick = async () => {
+  try {
+    const d = await authPost("/rip/redeem", { code: ($("youRipCode")&&$("youRipCode").value) || "" });
+    await refreshUsage();
+    if ($("youRipNote")) $("youRipNote").textContent = "Added "+d.added+" extra IDs. You have "+d.left+" left.";
+  } catch(e) { if ($("youRipNote")) $("youRipNote").textContent = e.message; }
+});
+$("goneBtn") && ($("goneBtn").onclick = async () => {
+  if (!window.confirm("Are you sure about that? This cannot be undone.")) return;
+  try {
+    await authPost("/me/delete", { password: ($("gonePw")&&$("gonePw").value) || "" });
+    setToken("");
+    location.reload();
+  } catch(e) { if ($("goneNote")) $("goneNote").textContent = e.message; }
+});
 const guestB = new URLSearchParams(location.search).get("b");
 const guestC = new URLSearchParams(location.search).get("c");
 if (guestB) {

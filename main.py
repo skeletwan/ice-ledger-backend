@@ -2345,6 +2345,34 @@ async def admin_delete_user(payload: dict, request: Request, x_token: str | None
     send_mail("Ice Ledger account deleted", f"{row['email']} / {slug} removed")
     return {"ok": True}
 
+@app.post("/me/delete")
+async def me_delete(payload: dict, request: Request, x_token: str | None = Header(default=None)):
+    uid = require_user(request, x_token)
+    pw = payload.get("password") or payload.get("pw") or ""
+    con = db()
+    row = con.execute("SELECT id,email,slug,pw FROM users WHERE id=?", (uid,)).fetchone()
+    if not row or not check_pw(pw, row["pw"]):
+        con.close()
+        raise HTTPException(401, "wrong password")
+    slug = row["slug"] or ""
+    con.execute("DELETE FROM sessions WHERE user_id=?", (uid,))
+    con.execute("DELETE FROM cards WHERE user_id=?", (uid,))
+    con.execute("DELETE FROM comments WHERE user_id=?", (uid,))
+    con.execute("DELETE FROM likes WHERE user_id=?", (uid,))
+    con.execute("DELETE FROM binder_likes WHERE user_id=?", (uid,))
+    con.execute("DELETE FROM follows WHERE follower=?", (uid,))
+    con.execute("DELETE FROM notes WHERE user_id=?", (uid,))
+    con.execute("DELETE FROM banner_posts WHERE user_id=?", (uid,))
+    if slug:
+        con.execute("DELETE FROM follows WHERE slug=?", (slug,))
+        con.execute("DELETE FROM binder_likes WHERE slug=?", (slug,))
+        con.execute("DELETE FROM reports WHERE slug=?", (slug,))
+    con.execute("DELETE FROM users WHERE id=?", (uid,))
+    con.commit()
+    con.close()
+    send_mail("Ice Ledger account deleted", f"{row['email']} / {slug} deleted their account")
+    return {"ok": True}
+
 @app.delete("/comments/{cid}")
 async def del_comment(cid: int, request: Request, x_token: str | None = Header(default=None)):
     uid = require_user(request, x_token)
