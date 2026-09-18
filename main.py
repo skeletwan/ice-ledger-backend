@@ -782,10 +782,31 @@ def ensure_slug(uid: int) -> str:
     con.close()
     return s
 
+def is_grail(c):
+    if not isinstance(c, dict):
+        return False
+    blob = " ".join(str(c.get(k) or "") for k in ("parallel", "insert", "set", "number")).lower()
+    if re.search(r"\b1\s*/\s*1\b|\b1 of 1\b|one of one|superfractor|printing plate", blob):
+        return True
+    if re.search(r"(?<![0-9])/1(?![0-9])", blob):
+        return True
+    return False
+
+def card_market(c):
+    if not isinstance(c, dict):
+        return None
+    for k in ("sysComp", "sys_comp", "rawComp"):
+        v = c.get(k)
+        try:
+            n = float(v)
+        except (TypeError, ValueError):
+            continue
+        if 1 <= n <= 20000:
+            return n
+    return None
+
 def public_card(raw: dict) -> dict:
     c = dict(raw or {})
-    for k in ("cost", "notes", "scan"):
-        c.pop(k, None)
     return {
         "id": c.get("id"),
         "player": c.get("player"),
@@ -803,6 +824,7 @@ def public_card(raw: dict) -> dict:
         "book": c.get("book") or {},
         "hist": (c.get("hist") or [])[-60:],
         "added": c.get("added"),
+        "grail": is_grail(c),
     }
 
 init_db()
@@ -1353,11 +1375,13 @@ async def upsert_card(payload: dict, request: Request, x_token: str | None = Hea
         who = (owner["display"] if owner else None) or "Collector"
         player = (card.get("player") or "a card")
         created = time.strftime("%Y-%m-%dT%H:%M:%SZ")
+        grail = is_grail(card)
+        body = f"GRAIL: {who} added {player}" if grail else f"{who} added {player}"
         fans = con.execute("SELECT follower FROM follows WHERE slug=?", (slug,)).fetchall() if slug else []
         for f in fans:
             con.execute(
                 "INSERT INTO notes(user_id,slug,body,created,read,card_id) VALUES(?,?,?,?,0,?)",
-                (f["follower"], slug, f"{who} added {player}", created, cid),
+                (f["follower"], slug, body, created, cid),
             )
     con.commit()
     con.close()
@@ -1394,8 +1418,13 @@ async def list_binders():
         book = 0.0
         teams, players = [], []
         for c in cards:
-            if isinstance(c.get("comp"), (int, float)):
-                book += float(c["comp"])
+            mv = None
+            for k in ("sysComp", "sys_comp", "rawComp"):
+                if isinstance(c.get(k), (int, float)) and 1 <= float(c[k]) <= 20000:
+                    mv = float(c[k])
+                    break
+            if mv is not None:
+                book += mv
             if c.get("team"):
                 teams.append(c["team"])
             if c.get("player"):
@@ -1411,6 +1440,7 @@ async def list_binders():
             "cropy": u["cropy"] or "50",
             "cropz": u["cropz"] or "100",
             "count": len(cards),
+            "grails": sum(1 for c in cards if is_grail(c)),
             "book": round(book, 2),
             "team": top,
             "players": " ".join(players).lower(),
@@ -1455,6 +1485,7 @@ async def recent_feed():
                 "photo": c.get("photo"),
                 "comp": c.get("comp"),
                 "added": c.get("added") or "",
+                "grail": bool(c.get("grail")),
             })
     con.close()
     items.sort(key=lambda x: str(x.get("added") or ""), reverse=True)
@@ -1825,7 +1856,13 @@ async def public_binder(slug: str, request: Request, x_token: str | None = Heade
         con.close()
         raise HTTPException(404, "binder not found")
     rows = con.execute("SELECT data FROM cards WHERE user_id=?", (u["id"],)).fetchall()
-    cards = [public_card(json.loads(r["data"])) for r in rows]
+    raws = []
+    for r in rows:
+        try:
+            raws.append(json.loads(r["data"]))
+        except Exception:
+            pass
+    cards = [public_card(x) for x in raws]
     for c in cards:
         n = con.execute(
             "SELECT COUNT(*) AS n FROM likes WHERE slug=? AND card_id=?",
@@ -1845,7 +1882,8 @@ async def public_binder(slug: str, request: Request, x_token: str | None = Heade
         (u["id"],),
     ).fetchall()
     con.close()
-    book = sum((c.get("comp") or 0) for c in cards if isinstance(c.get("comp"), (int, float)))
+    book = sum((card_market(x) or 0) for x in raws)
+    grails = sum(1 for x in raws if is_grail(x))
     return {
         "slug": slug,
         "display": u["display"] or "Collector",
@@ -1857,6 +1895,7 @@ async def public_binder(slug: str, request: Request, x_token: str | None = Heade
         "cropy": u["cropy"] or "50",
         "cropz": u["cropz"] or "100",
         "count": len(cards),
+        "grails": grails,
         "book": book,
         "likes": blink,
         "liked": liked,

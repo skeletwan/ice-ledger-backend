@@ -49,6 +49,15 @@
     .range-fill { position:absolute; left:0; top:0; bottom:0; background:#3d5a6a; border-radius:99px; }
     .range-dot { position:absolute; top:-3px; width:12px; height:12px; margin-left:-6px; border-radius:50%; background:var(--ice); border:2px solid #10161d; }
     .pos { color:var(--good); } .neg { color:var(--bad); }
+    @keyframes grail-burn {
+      0%,100% { box-shadow: 0 0 0 2px #ff2a00, 0 0 14px #ff3b00, 0 0 28px #7a1000; }
+      50% { box-shadow: 0 0 0 2px #ffb347, 0 0 22px #ff4500, 0 0 36px #ff1a00; }
+    }
+    .item.grail { outline: 1px solid #5a1818; }
+    .item.grail-new, article.grail-new {
+      animation: grail-burn 1.15s ease-in-out infinite;
+      border-radius: 14px;
+    }
     header { padding:12px 16px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; }
     h1 { font-size:18px; margin:0; } h1 span { color:var(--ice); }
     nav { display:flex; gap:8px; }
@@ -122,7 +131,8 @@
     .item { cursor:pointer; }
     .stick { background:var(--bg); padding:0 0 10px; }
     .quote-wrap { display:none; }
-    body.chart-on .quote-wrap { display:block; }
+    body.bind-on .quote-wrap { display:block; }
+    body.chart-on .quote-wrap { display:block; } /* leftover */
     header { position:sticky; top:0; z-index:8; background:#071016; }
     #q { font-size:16px; }
     .bookbar { display:none; padding:10px 0 4px; }
@@ -264,16 +274,16 @@
   </div>
   <div class="ticker" id="ticker"></div>
   <div class="yf">
-  <svg id="spark" viewBox="0 0 360 200" class="spark" preserveAspectRatio="none"></svg>
+  <svg id="spark" viewBox="0 0 360 200" class="spark" preserveAspectRatio="xMidYMid meet"></svg>
   <div class="ranges" id="ranges">
-    <button data-r="1D">1D<small>day</small></button>
-    <button data-r="7D">7D<small>week</small></button>
-    <button data-r="1M">1M<small>month</small></button>
-    <button data-r="6M">6M<small>6 months</small></button>
-    <button data-r="YTD">YTD<small>year to date</small></button>
-    <button data-r="1Y">1Y<small>year</small></button>
-    <button data-r="ALL">MAX<small>all time</small></button>
+    <button data-r="7D">7D</button>
+    <button data-r="1M">1M</button>
+    <button data-r="6M">6M</button>
+    <button data-r="YTD">YTD</button>
+    <button data-r="1Y">1Y</button>
+    <button data-r="ALL">MAX</button>
   </div>
+  <div class="ticker" id="bookStats"></div>
   </div>
   </div>
 
@@ -492,12 +502,12 @@
     <p class="muted" id="pubLine"></p>
     <div class="mini-trend">
       <div class="ranges" id="pubRanges">
-        <button data-cr="7D">7D<small>week</small></button>
-        <button data-cr="1M">1M<small>month</small></button>
-        <button data-cr="6M">6M<small>6 months</small></button>
-        <button data-cr="YTD">YTD<small>year to date</small></button>
-        <button data-cr="1Y">1Y<small>year</small></button>
-        <button data-cr="ALL">MAX<small>all time</small></button>
+        <button data-cr="7D">7D</button>
+        <button data-cr="1M">1M</button>
+        <button data-cr="6M">6M</button>
+        <button data-cr="YTD">YTD</button>
+        <button data-cr="1Y">1Y</button>
+        <button data-cr="ALL">MAX</button>
       </div>
       <div class="mini-trend-top"><span class="mini-last" id="pubTrendVal">—</span><span class="mini-chg flat" id="pubTrendNote"></span></div>
       <svg class="mini-spark" id="pubSpark" viewBox="0 0 300 86" preserveAspectRatio="none"></svg>
@@ -713,12 +723,12 @@
     <p class="muted" id="dLine"></p>
     <div class="mini-trend">
       <div class="ranges" id="cardRanges">
-        <button data-cr="7D">7D<small>week</small></button>
-        <button data-cr="1M">1M<small>month</small></button>
-        <button data-cr="6M">6M<small>6 months</small></button>
-        <button data-cr="YTD">YTD<small>year to date</small></button>
-        <button data-cr="1Y">1Y<small>year</small></button>
-        <button data-cr="ALL">MAX<small>all time</small></button>
+        <button data-cr="7D">7D</button>
+        <button data-cr="1M">1M</button>
+        <button data-cr="6M">6M</button>
+        <button data-cr="YTD">YTD</button>
+        <button data-cr="1Y">1Y</button>
+        <button data-cr="ALL">MAX</button>
       </div>
       <div class="mini-trend-top"><span class="mini-last" id="cardTrendVal">—</span><span class="mini-chg flat" id="cardTrendNote"></span></div>
       <svg class="mini-spark" id="cardSpark" viewBox="0 0 300 86" preserveAspectRatio="none"></svg>
@@ -943,7 +953,11 @@ function money(n){
   return (cur==="USD"?"US$":"C$")+Number(v).toLocaleString(cur==="USD"?"en-US":"en-CA",{minimumFractionDigits:0,maximumFractionDigits:0});
 }
 const RNG = "ice-range";
-function rangeKey(){ return localStorage.getItem(RNG) || "1M"; }
+function rangeKey(){
+  const r = localStorage.getItem(RNG) || "7D";
+  if (r==="1D"||r==="5D") return "7D";
+  return ["7D","1M","6M","YTD","1Y","ALL"].indexOf(r)>=0 ? r : "7D";
+}
 function loadHist(){ try { return JSON.parse(localStorage.getItem(HIST)||"[]"); } catch(e){ return []; } }
 function pushHist(bookCad){
   if (bookCad==null) return;
@@ -961,16 +975,29 @@ function pushHist(bookCad){
 function histForRange(){
   const h = loadHist();
   const r = rangeKey();
-  if (r === "YTD") {
-    const y = new Date().getFullYear()+"-01-01";
-    return h.filter(x => x.d >= y);
+  const end = new Date();
+  end.setHours(12,0,0,0);
+  let start = new Date(end);
+  if (r === "YTD") start = new Date(end.getFullYear(), 0, 1, 12);
+  else if (r === "ALL") {
+    if (!h.length) return [];
+    start = new Date(h[0].d + "T12:00:00");
+  } else {
+    const n = { "7D":7, "5D":7, "1M":30, "6M":183, "1Y":365 }[r] || 7;
+    start.setDate(start.getDate() - (n - 1));
   }
-  const days = { "1D":1, "7D":7, "5D":7, "1M":30, "6M":183, "1Y":365 }[r];
-  if (!days) return h;
-  const cut = new Date();
-  cut.setDate(cut.getDate() - (days-1));
-  const ds = cut.toISOString().slice(0,10);
-  return h.filter(x => x.d >= ds);
+  const map = {};
+  h.forEach(x => { if (x && x.d) map[x.d] = +x.v; });
+  let last = null;
+  const firstDay = start.toISOString().slice(0,10);
+  h.forEach(x => { if (x.d <= firstDay && !isNaN(+x.v)) last = +x.v; });
+  const out = [];
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const key = d.toISOString().slice(0,10);
+    if (map[key] != null && !isNaN(map[key])) last = map[key];
+    if (last != null && !isNaN(last)) out.push({ d: key, v: last });
+  }
+  return out;
 }
 function fmtChartDate(iso, r){
   if (!iso) return "";
@@ -1066,7 +1093,21 @@ function persistCards(cards){
   }
   throw new Error("quota exceeded");
 }
-function saveAll(cards){ return persistCards(cards); }
+function syncBookHist(){
+  const t = totals();
+  const h = loadHist();
+  const day = new Date().toISOString().slice(0,10);
+  const v = t.mktN ? t.mkt : 0;
+  const last = h[h.length-1];
+  if (last && last.d === day) last.v = v;
+  else h.push({ d: day, v: v, t: new Date().toISOString() });
+  localStorage.setItem(HIST, JSON.stringify(h.slice(-400)));
+}
+function saveAll(cards){
+  const kept = persistCards(cards);
+  syncBookHist();
+  return kept;
+}
 let openId = null;
 let editPhoto = "";
 function youShow(which){
@@ -1143,12 +1184,13 @@ function totals(){
 }
 function paintTicker(){
   const t = totals();
-  if (t.mktN) pushHist(t.mkt);
+  syncBookHist();
   const hist = loadHist();
   const slice = histForRange();
-  const prev = hist.length>=2 ? hist[hist.length-2].v : null;
-  const ch = (t.mktN && prev!=null) ? t.mkt - prev : null;
-  const pct = (ch!=null && prev) ? (ch/prev*100) : null;
+  const first = slice.length ? slice[0].v : null;
+  const lastV = slice.length ? slice[slice.length-1].v : t.mkt;
+  const ch = (first!=null && lastV!=null) ? lastV - first : null;
+  const pct = (ch!=null && first) ? (ch/first*100) : null;
   const chCls = ch==null ? "" : (ch>=0 ? "pos" : "neg");
   const chTxt = ch==null ? "—" : ((ch>=0?"+":"−")+money(Math.abs(ch)).replace(/^C\$|^US\$/,"")+(pct!=null?"  "+(pct>=0?"+":"")+pct.toFixed(2)+"%":""));
   const lows = slice.map(x => x.v);
@@ -1160,23 +1202,14 @@ function paintTicker(){
   const last = t.mktN ? money(t.mkt) : "—";
   $("ticker").innerHTML =
     "<div class=\"quote\"><div class=\"quote-last "+(chCls)+"\">"+last+"</div>"+
-    "<div class=\"quote-chg "+chCls+"\">"+chTxt+"</div></div>"+
+    "<div class=\"quote-chg "+chCls+"\">"+chTxt+"</div></div>";
+  if ($("bookStats")) $("bookStats").innerHTML =
     "<div class=\"quote-stats\">"+
     "<div class=\"qs\"><b>"+(t.mktN?money(t.mkt):"—")+"</b><span>Book · "+t.mktN+"/"+t.cards+"</span></div>"+
     "<div class=\"qs\"><b>"+(t.paidN?money(t.paid):"—")+"</b><span>Paid · "+t.paidN+"/"+t.cards+"</span></div>"+
     "<div class=\"qs\"><b class=\""+plCls+"\">"+(t.pl==null?"—":((t.pl>=0?"+":"")+money(Math.abs(t.pl))))+"</b><span>Up / down</span></div>"+
     "</div>";
-  if ($("bookBar")) {
-    const pts = slice.map(x=>x.v);
-    const flat = pts.length < 2 || Math.max.apply(null,pts) === Math.min.apply(null,pts);
-    $("bookBar").innerHTML = "<button type=\"button\" id=\"openChart\"><b>"+last+"</b> · "+(chTxt==="—"?"—":chTxt)+
-      "<div class=\"muted\">Tap for chart</div></button>";
-    const ob = $("openChart");
-    if (ob) ob.onclick = () => {
-      document.body.classList.toggle("chart-open");
-      document.body.classList.toggle("chart-on", $("bindPage").classList.contains("on") && document.body.classList.contains("chart-open"));
-    };
-  }
+  if ($("bookBar")) $("bookBar").innerHTML = "";
   if ($("fxCAD")) {
     $("fxCAD").classList.toggle("on", fx()==="CAD");
     $("fxUSD").classList.toggle("on", fx()==="USD");
@@ -1261,17 +1294,30 @@ function cardRangeKey(){
   return ["7D","1M","6M","YTD","1Y","ALL"].indexOf(r)>=0 ? r : "7D";
 }
 function sliceHist(h, r){
-  h = h || [];
-  if (r === "YTD") {
-    const y = new Date().getFullYear()+"-01-01";
-    return h.filter(x => x.d >= y);
+  h = (h || []).filter(x => x && x.d && !isNaN(+x.v));
+  const end = new Date();
+  end.setHours(12,0,0,0);
+  let start = new Date(end);
+  if (r === "YTD") start = new Date(end.getFullYear(), 0, 1, 12);
+  else if (r === "ALL") {
+    if (!h.length) return [];
+    start = new Date(h[0].d + "T12:00:00");
+  } else {
+    const n = { "7D":7, "5D":7, "1M":30, "6M":183, "1Y":365 }[r] || 7;
+    start.setDate(start.getDate() - (n - 1));
   }
-  const days = { "7D":7, "5D":7, "1M":30, "6M":183, "1Y":365 }[r];
-  if (!days) return h;
-  const cut = new Date();
-  cut.setDate(cut.getDate() - (days-1));
-  const ds = cut.toISOString().slice(0,10);
-  return h.filter(x => x.d >= ds);
+  const map = {};
+  h.forEach(x => { map[x.d] = +x.v; });
+  let last = null;
+  const firstDay = start.toISOString().slice(0,10);
+  h.forEach(x => { if (x.d <= firstDay) last = +x.v; });
+  const out = [];
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const key = d.toISOString().slice(0,10);
+    if (map[key] != null) last = map[key];
+    if (last != null) out.push({ d: key, v: last });
+  }
+  return out;
 }
 function paintCardSpark(card, elId, noteId){
   let hist = sliceHist((card && card.hist) || [], cardRangeKey());
@@ -1286,8 +1332,9 @@ function paintCardSpark(card, elId, noteId){
     if (vals.length < 2) note.textContent = vals.length ? "—" : "No comps yet";
     else {
       const ch = vals[vals.length-1] - vals[0];
+      const pct = vals[0] ? (ch/vals[0]*100) : null;
       note.className = "mini-chg " + (ch>0?"up":ch<0?"dn":"flat");
-      note.textContent = (ch>0?"+":ch<0?"−":"")+money(Math.abs(ch));
+      note.textContent = (ch>0?"+":ch<0?"−":"")+money(Math.abs(ch))+(pct==null?"":"  "+(pct>=0?"+":"")+pct.toFixed(1)+"%");
     }
   }
   document.querySelectorAll("[data-cr]").forEach(b => b.classList.toggle("on", b.getAttribute("data-cr")===cardRangeKey()));
@@ -1576,6 +1623,7 @@ async function lookupComp(){
   if (g0==="Raw" && c.raw_cad != null) sug = c.raw_cad;
   if (sug == null && c.low != null && c.high != null) sug = Math.round((+c.low + +c.high) / 2);
   if (sug == null && c.low != null) sug = c.low;
+  window.lastSysComp = (sug != null && !isNaN(+sug)) ? +sug : null;
   const cardNo = parseFloat(String($("f_number").value||"").replace("#",""));
   if (sug != null && !(cardNo && Math.abs(+sug - cardNo) < 0.001)) $("comp").value = sug;
   else if (sug != null && cardNo && Math.abs(+sug - cardNo) < 0.001) {
@@ -1691,6 +1739,7 @@ async function saveToBinder(ev){
     },
     compAt: comp==null ? null : new Date().toISOString(),
     photo: scanData || "",
+    sysComp: window.lastSysComp != null ? window.lastSysComp : null,
     added: new Date().toISOString()
   };
   try { await pushCard(row); }
@@ -1820,12 +1869,29 @@ function photoSrc(c, slug){
   if (s && c.id) return "/u/"+encodeURIComponent(s)+"/cards/"+encodeURIComponent(c.id)+"/photo";
   return c.photo || c.scan || "";
 }
+function cardLooksGrail(c){
+  if (!c) return false;
+  if (c.grail) return true;
+  const blob = [c.parallel,c.insert,c.set,c.number].join(" ").toLowerCase();
+  return /\b1\s*\/\s*1\b|\b1 of 1\b|one of one|superfractor|printing plate|(?:^|[^0-9])\/1(?:[^0-9]|$)/.test(blob);
+}
+function grailFresh(c){
+  if (!cardLooksGrail(c)) return false;
+  const t = Date.parse(c.added || "");
+  if (!t) return true;
+  return (Date.now() - t) < 72*3600*1000;
+}
+function grailCls(c){
+  if (grailFresh(c)) return " grail grail-new";
+  if (cardLooksGrail(c)) return " grail";
+  return "";
+}
 function cardRowHtml(c){
   const img = photoSrc(c);
   const line = [c.team,c.year,c.set,c.number?"#"+c.number:""].filter(Boolean).join(" · ");
   const grade = (!c.grader||c.grader==="Raw")?"Raw":[c.grader,c.grade].filter(Boolean).join(" ");
   const chips = "<div>"+(c.insert?"<span class=\"chip\">"+c.insert+"</span>":"")+(c.parallel?"<span class=\"chip\">"+c.parallel+"</span>":(!c.insert?"<span class=\"chip dim\">Base</span>":""))+"<span class=\"chip dim\">"+grade+"</span></div>";
-  return "<article class=\"item\" data-open=\""+c.id+"\">"+
+  return "<article class=\"item"+grailCls(c)+"\" data-open=\""+c.id+"\">"+
     "<div class=\"item-top\"><img src=\""+img+"\" alt=\"\" /><div><h3>"+dash(c.player)+"</h3>"+
     "<div class=\"muted\">"+dash(line)+"</div>"+chips+
     "<div class=\"muted\" style=\"margin-top:4px\">"+money(c.comp)+" market · "+money(c.cost)+" paid</div>"+
@@ -2411,7 +2477,7 @@ let viewSlug = "";
 let viewCard = null;
 let pubCards = [];
 function pubCardHtml(c){
-  return "<article class=\"item\" data-pub=\""+c.id+"\"><div class=\"item-top\"><img src=\""+photoSrc(c, viewSlug)+"\" alt=\"\" /><div><h3>"+(c.player||"—")+" <span class=\"heart\">♥ "+(c.likes||0)+"</span></h3><div class=\"muted\">"+[c.team,c.year,c.set,c.number?"#"+c.number:""].filter(Boolean).join(" · ")+"</div></div></div></article>";
+  return "<article class=\"item"+grailCls(c)+"\" data-pub=\""+c.id+"\"><div class=\"item-top\"><img src=\""+photoSrc(c, viewSlug)+"\" alt=\"\" /><div><h3>"+(c.player||"—")+" <span class=\"heart\">♥ "+(c.likes||0)+"</span></h3><div class=\"muted\">"+[c.team,c.year,c.set,c.number?"#"+c.number:""].filter(Boolean).join(" · ")+"</div></div></div></article>";
 }
 function renderPubList(){
   const box = $("pubList");
@@ -2849,7 +2915,7 @@ function renderFind(){
     const hue = b.hue || "#8fd4ee";
     const ini = name.slice(0,2).toUpperCase();
     const av = ini+"<img alt=\"\" src=\"/u/"+b.slug+"/avatar\" onerror=\"this.remove()\" />";
-    const extra = [b.count+" cards", b.book?money(b.book):""].filter(Boolean).join(" · ");
+    const extra = [b.count+" cards", b.grails?b.grails+" grails":"", b.book?money(b.book):""].filter(Boolean).join(" · ");
     const heart = "<span class=\"heart\">♥ "+(b.likes||0)+"</span>";
     const fol = following[b.slug] ? " · Following" : "";
     const bio = (b.bio||"").replace(/[<>]/g,"");
@@ -3013,7 +3079,7 @@ function renderFeed(){
   else rows.sort((a,b)=> String(b.added||"").localeCompare(String(a.added||"")));
   box.innerHTML = rows.length ? rows.map(c => {
     const line = [c.team,c.year,c.set,c.number?"#"+c.number:""].filter(Boolean).join(" · ");
-    return "<article class=\"item\" data-feed-slug=\""+c.slug+"\" data-feed-card=\""+c.id+"\"><div class=\"item-top\"><img src=\""+photoSrc(c, c.slug)+"\" alt=\"\" /><div><h3>"+(c.player||"—")+"</h3><div class=\"muted\">"+line+"</div><div class=\"muted\">"+(c.display||"Collector")+" · "+timeAgo(c.added)+"</div><div class=\"muted\">"+money(c.comp)+"</div></div></div></article>";
+    return "<article class=\"item"+grailCls(c)+"\" data-feed-slug=\""+c.slug+"\" data-feed-card=\""+c.id+"\"><div class=\"item-top\"><img src=\""+photoSrc(c, c.slug)+"\" alt=\"\" /><div><h3>"+(c.player||"—")+"</h3><div class=\"muted\">"+line+"</div><div class=\"muted\">"+(c.display||"Collector")+" · "+timeAgo(c.added)+"</div><div class=\"muted\">"+money(c.comp)+"</div></div></div></article>";
   }).join("") : "<p class=\"muted\">No new cards yet.</p>";
 }
 $("feedSort") && ($("feedSort").onchange = renderFeed);
@@ -3180,7 +3246,7 @@ async function openPublic(slug, cardId){
     $("pubBio").textContent = d.bio || "";
     $("pubBio").style.display = d.bio ? "block" : "none";
   }
-  $("pubHead").textContent = d.count+" cards · book "+(d.book?money(d.book):"—");
+  $("pubHead").textContent = d.count+" cards"+(d.grails?" · "+d.grails+" grails":"")+" · book "+(d.book?money(d.book):"—");
   const labs = { instagram:"Instagram", youtube:"YouTube", x:"X", ebay:"eBay", tiktok:"TikTok", site:"Site" };
   const so = d.socials || {};
   if ($("pubSocials")) {
