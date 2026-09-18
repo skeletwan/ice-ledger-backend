@@ -4,7 +4,7 @@ from io import BytesIO
 from fastapi import FastAPI, UploadFile, File, Header, Form, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, FileResponse, Response
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote_plus
 from pathlib import Path
 from PIL import Image
 import httpx
@@ -317,9 +317,9 @@ async def identify(
     return data
 
 
-COMP_MODEL = os.environ.get("COMP_MODEL", "grok-4-1-fast-reasoning")
+COMP_MODEL = os.environ.get("COMP_MODEL", "grok-4-1-fast-non-reasoning")
 COMP_PROMPT = """Search recent SOLD / completed hockey card sales for this exact card (not asking prices).
-Prefer eBay completed/sold listings and Fanatics Collect auction sales history. Do not use 130point.
+Prefer public sold results and Fanatics Collect auction history. Do not scrape eBay. Do not use 130point.
 Card: {card}
 Return ONLY JSON, no markdown:
 {{
@@ -398,30 +398,16 @@ async def comp(
     text = ""
     used = COMP_MODEL
     err = None
-    async with httpx.AsyncClient(timeout=120) as client:
-        for model in (COMP_MODEL, "grok-4-1-fast", MODEL):
-            r = await client.post(
-                "https://api.x.ai/v1/responses",
-                headers=headers,
-                json={"model": model, "tools": [{"type": "web_search"}], "input": prompt},
-            )
-            if r.status_code < 400:
-                used = model
-                text = _extract_response_text(r.json()).strip()
-                if text:
-                    break
+    async with httpx.AsyncClient(timeout=40) as client:
+        r = await client.post(
+            "https://api.x.ai/v1/responses",
+            headers=headers,
+            json={"model": COMP_MODEL, "tools": [{"type": "web_search"}], "input": prompt},
+        )
+        if r.status_code < 400:
+            text = _extract_response_text(r.json()).strip()
+        else:
             err = f"{r.status_code}: {r.text[:180]}"
-        if not text:
-            r2 = await client.post(
-                "https://api.x.ai/v1/chat/completions",
-                headers=headers,
-                json={"model": MODEL, "temperature": 0, "messages": [{"role": "user", "content": prompt}]},
-            )
-            if r2.status_code < 400:
-                used = MODEL
-                text = _extract_response_text(r2.json()).strip()
-            else:
-                err = err or f"{r2.status_code}: {r2.text[:180]}"
     data = {}
     try:
         data = _parse_json_blob(text) if text else {}

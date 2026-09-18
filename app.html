@@ -1467,7 +1467,7 @@ $("go").onclick = async () => {
     if (d.cert) { $("psa").href = "https://www.psacard.com/cert/"+encodeURIComponent(d.cert); $("psa").classList.remove("hidden"); }
     else $("psa").classList.add("hidden");
     $("result").classList.remove("hidden");
-    setCompBanner("wait", "Card IDed. Searching sold comps… 15–40 seconds.");
+    setCompBanner("wait", "Card IDed. Searching sold comps…");
     show("result");
     $("compNote").textContent = "";
     $("comp").value = "";
@@ -1519,7 +1519,7 @@ function setCompBanner(mode, text){
 }
 function hideCompBanner(){ const b=$("compBanner"); if (b) b.className = "banner"; }
 async function lookupComp(){
-  setCompBanner("wait", "Searching sold comps… this can take 15–40 seconds.");
+  setCompBanner("wait", "Searching sold comps…");
   $("status").textContent = "Looking up sold comps…";
   if ($("resultStatus")) $("resultStatus").textContent = "ID done. Pulling solds next.";
   const cr = await fetch("/comp", {
