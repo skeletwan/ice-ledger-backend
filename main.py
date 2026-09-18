@@ -767,7 +767,8 @@ def public_card(raw: dict) -> dict:
         "team": c.get("team"),
         "grader": c.get("grader"),
         "grade": c.get("grade"),
-        "photo": c.get("photo"),
+        "photo": "",
+        "has_photo": bool((c.get("photo") or c.get("scan") or "") and len(str(c.get("photo") or c.get("scan") or "")) > 80),
         "comp": c.get("comp"),
         "book": c.get("book") or {},
         "hist": (c.get("hist") or [])[-60:],
@@ -1287,7 +1288,17 @@ async def list_cards(request: Request, x_token: str | None = Header(default=None
     con = db()
     rows = con.execute("SELECT data FROM cards WHERE user_id=?", (uid,)).fetchall()
     con.close()
-    return {"cards": [json.loads(r["data"]) for r in rows]}
+    out = []
+    for r in rows:
+        try:
+            raw = json.loads(r["data"])
+        except Exception:
+            continue
+        pc = public_card(raw)
+        pc["cost"] = raw.get("cost")
+        pc["notes"] = raw.get("notes")
+        out.append(pc)
+    return {"cards": out}
 
 @app.post("/cards")
 async def upsert_card(payload: dict, request: Request, x_token: str | None = Header(default=None)):
@@ -1298,8 +1309,8 @@ async def upsert_card(payload: dict, request: Request, x_token: str | None = Hea
     # do not store giant data-urls if huge
     for k in ("scan", "photo"):
         v = card.get(k)
-        if isinstance(v, str) and len(v) > 250000:
-            card[k] = None
+        if isinstance(v, str) and len(v) > 1800000:
+            card[k] = v[:1800000]
     con = db()
     existed = con.execute("SELECT id FROM cards WHERE id=? AND user_id=?", (cid, uid)).fetchone()
     con.execute(
@@ -1467,6 +1478,42 @@ async def follow_binder(slug: str, request: Request, x_token: str | None = Heade
     con.commit()
     con.close()
     return {"following": True}
+
+@app.get("/u/{slug}/cards/{cid}/photo")
+async def card_photo(slug: str, cid: str):
+    slug = re.sub(r"[^a-z0-9]", "", (slug or "").lower())
+    con = db()
+    u = con.execute("SELECT id, IFNULL(suspended,0) AS suspended FROM users WHERE slug=?", (slug,)).fetchone()
+    if not u or int(u["suspended"] or 0):
+        con.close()
+        raise HTTPException(404, "no photo")
+    row = con.execute("SELECT data FROM cards WHERE user_id=? AND id=?", (u["id"], cid)).fetchone()
+    con.close()
+    if not row:
+        raise HTTPException(404, "no photo")
+    try:
+        raw = json.loads(row["data"])
+    except Exception:
+        raise HTTPException(404, "no photo")
+    blob = raw.get("photo") or raw.get("scan") or ""
+    if not isinstance(blob, str) or len(blob) < 80:
+        raise HTTPException(404, "no photo")
+    kind = "image/jpeg"
+    b64 = blob
+    if blob.startswith("data:"):
+        head, b64 = blob.split(",", 1) if "," in blob else (blob, "")
+        if "png" in head:
+            kind = "image/png"
+        elif "webp" in head:
+            kind = "image/webp"
+    b64 = re.sub(r"\s+", "", b64)
+    try:
+        data = base64.b64decode(b64)
+    except Exception:
+        raise HTTPException(404, "no photo")
+    if len(data) < 32:
+        raise HTTPException(404, "no photo")
+    return Response(data, media_type=kind, headers={"Cache-Control": "public, max-age=120"})
 
 @app.get("/u/{slug}/avatar")
 async def binder_avatar(slug: str):

@@ -139,7 +139,8 @@
     .dock button { width:auto; margin:0; padding:10px 4px; font-size:12px; background:transparent; color:var(--muted); border:0; border-radius:0; }
     .dock button.on { color:var(--ice); }
     .dock button.ping, button.ghost.ping { color:#7ef0d2; font-weight:800; box-shadow:inset 0 0 0 2px #7ef0d2; border-radius:10px; }
-    .page { padding-bottom:88px; }
+    .page { padding-bottom:120px; }
+    #saveBtn { margin:16px 0 28px; }
     .pwid { display:flex; align-items:center; gap:12px; margin-bottom:10px; }
     .pava { width:56px; height:56px; border-radius:16px; background:var(--ice); color:#071016; font-weight:800; display:flex; align-items:center; justify-content:center; font-size:16px; overflow:hidden; border:3px solid var(--ice); flex:0 0 auto; position:relative; }
     .pava img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; background:#0e171e; }
@@ -370,7 +371,7 @@
       <p class="muted" id="compNote"></p>
       <label>Notes</label>
       <textarea id="notes" rows="2"></textarea>
-      <button type="button" id="saveBtn">Save to binder</button>
+      <button type="button" id="saveBtn" onclick="return saveToBinder(event)">Save to binder</button>
     </div>
   </section>
 
@@ -527,7 +528,6 @@
     <div id="youHub">
       <p class="muted">Profile and account.</p>
       <button class="ghost" data-you="youProfile">Profile</button>
-      <button class="ghost" data-you="youBanner">Banner</button>
       <button class="ghost" data-you="youComm">Community</button>
       <button class="ghost" data-you="youAlerts">Alerts</button>
       <button class="ghost" data-you="youBill">Ice+ / Rip Night!</button>
@@ -578,9 +578,6 @@
       <button class="ghost" id="pClearPhoto">Remove photo</button>
       <p class="muted" id="pNote"></p>
     </div>
-    </div>
-    <div id="youBanner" class="hidden">
-    <button class="ghost" data-you="youHub">Back</button>
     <div class="card" style="margin-top:12px">
       <h3 style="margin:0 0 6px;font-size:16px">Binder banner</h3>
       <p class="muted">One banner on your public binder. Edit it, then save. A new save replaces the old one.</p>
@@ -902,8 +899,18 @@ async function pullCloud(){
   const remote = data.cards || [];
   const local = load();
   const map = {};
-  local.concat(remote).forEach(c => { if (c && c.id) map[c.id] = c; });
-  localStorage.setItem(KEY, JSON.stringify(Object.values(map)));
+  local.concat(remote).forEach(c => {
+    if (!c || !c.id) return;
+    const slim = Object.assign({}, c);
+    if (slim.photo && String(slim.photo).length > 200000) slim.photo = "";
+    delete slim.scan;
+    map[c.id] = Object.assign(map[c.id]||{}, slim);
+  });
+  try { localStorage.setItem(KEY, JSON.stringify(Object.values(map))); }
+  catch(e) {
+    Object.values(map).forEach(c => { delete c.scan; if (c.photo && String(c.photo).length>200) c.photo=""; });
+    try { localStorage.setItem(KEY, JSON.stringify(Object.values(map))); } catch(e2){}
+  }
 }
 async function pushCard(card){
   if (!token()) return;
@@ -1011,11 +1018,30 @@ $("photoTipsBtn") && ($("photoTipsBtn").onclick = () => {
 let last = null, scanData = null, bindData = null, frontFile = null, backFile = null;
 
 function load(){ try { return JSON.parse(localStorage.getItem(KEY)||"[]"); } catch(e){ return []; } }
-function saveAll(cards){ localStorage.setItem(KEY, JSON.stringify(cards)); paintTicker(); renderBinder(); }
+function persistCards(cards){
+  const copy = cards.map(c => Object.assign({}, c));
+  for (let n=0;n<12;n++){
+    try {
+      localStorage.setItem(KEY, JSON.stringify(copy));
+      paintTicker(); renderBinder();
+      return copy;
+    } catch(e) {
+      let cut = false;
+      for (let i=copy.length-1;i>=0;i--){
+        if (copy[i].scan) { delete copy[i].scan; cut = true; }
+        else if (copy[i].photo && String(copy[i].photo).length > 120) { copy[i].photo = ""; cut = true; }
+        if (cut && (copy.length-i) >= 4) break;
+      }
+      if (!cut) throw e;
+    }
+  }
+  throw new Error("quota exceeded");
+}
+function saveAll(cards){ return persistCards(cards); }
 let openId = null;
 let editPhoto = "";
 function youShow(which){
-  ["youHub","youProfile","youBanner","youComm","youAlerts","youBill","youGone"].forEach(id => {
+  ["youHub","youProfile","youComm","youAlerts","youBill","youGone"].forEach(id => {
     if ($(id)) $(id).classList.toggle("hidden", id !== which);
   });
   if (which==="youBill") refreshUsage();
@@ -1414,13 +1440,15 @@ $("go").onclick = async () => {
       $("badge").className = "badge review";
       $("status").textContent = "That’s a " + (d.sport || "non-hockey") + " card. Ice Ledger only saves hockey right now.";
       $("status").className = "status warn";
-      if ($("saveBtn")) $("saveBtn").disabled = true;
+      if ($("saveBtn")) $("saveBtn").disabled = false;
+      if ($("saveBtnTop")) $("saveBtnTop").disabled = false;
       $("result").classList.remove("hidden");
       show("result");
       setCompBanner("bad", "Hockey only for now. Other sports / Pokemon will get their own binders later.");
       return;
     }
     if ($("saveBtn")) $("saveBtn").disabled = false;
+    if ($("saveBtnTop")) $("saveBtnTop").disabled = false;
     $("badge").textContent = d.needs_review ? "Needs review — edit fields below" : "Looks good — still edit if wrong";
     $("badge").className = "badge" + (d.needs_review ? " review" : "");
     const qq = qstr({
@@ -1585,18 +1613,16 @@ function saveNote(msg, cls){
   if ($("resultStatus")) { $("resultStatus").textContent = msg || ""; $("resultStatus").className = "status " + (cls || ""); }
   if ($("status")) { $("status").textContent = msg || ""; $("status").className = "status " + (cls || ""); }
 }
-$("saveBtn").onclick = () => {
+async function saveToBinder(ev){
+  if (ev && ev.preventDefault) ev.preventDefault();
   try {
-  $("saveBtn").disabled = false;
-  if (last && last.hockey === false) {
-    saveNote("Hockey only for now. This card was not added.", "err");
-    return;
-  }
+  if ($("saveBtn")) $("saveBtn").disabled = false;
+  if ($("saveBtnTop")) $("saveBtnTop").disabled = false;
   const rec = readCard();
-  if (!rec.player) { saveNote("Player is required.", "err"); return; }
+  if (!rec.player) { saveNote("Player is required.", "err"); return false; }
   const cards = load();
   const comp = numOrNull("comp");
-  cards.unshift({
+  const row = {
     id: "c"+Date.now(),
     ...rec,
     notes: $("notes").value || "",
@@ -1617,12 +1643,23 @@ $("saveBtn").onclick = () => {
       "SGC 10": numOrNull("sgc10Comp")
     },
     compAt: comp==null ? null : new Date().toISOString(),
-    scan: scanData, photo: scanData,
+    photo: scanData || "",
     added: new Date().toISOString()
-  });
+  };
+  try { await pushCard(row); }
+  catch(err) { saveNote((err && err.message) || "Server save failed.", "err"); return false; }
+  const localRow = Object.assign({}, row);
+  if (String(localRow.photo||"").length > 180000) localRow.photo = "";
+  delete localRow.scan;
+  cards.unshift(localRow);
   pushCardHist(cards[0]);
-  saveAll(cards);
-  pushCard(cards[0]).catch(()=>{});
+  try {
+    saveAll(cards);
+  } catch(err) {
+    cards[0].photo = "";
+    try { saveAll(cards); }
+    catch(err2) { saveNote("Saved to your account. This browser is out of site storage for pictures.", "warn"); show("bind"); return false; }
+  }
   $("status").textContent = "";
   clearIdFields();
   frontFile = null; backFile = null; scanData = null; bindData = null;
@@ -1633,10 +1670,15 @@ $("saveBtn").onclick = () => {
   $("backImg").removeAttribute("src");
   saveNote("");
   show("bind");
+  return false;
   } catch(e) {
     saveNote((e && e.message) || "Could not save. Try again.", "err");
+    return false;
   }
-};
+}
+$("saveBtn") && ($("saveBtn").onclick = saveToBinder);
+$("saveBtnTop") && ($("saveBtnTop").onclick = saveToBinder);
+window.saveToBinder = saveToBinder;
 
 function versionLine(c){
   return [c.insert, c.parallel].filter(Boolean).join(" · ") || "Base";
@@ -1678,7 +1720,7 @@ function openDetail(id){
   const c = load().find(x => x.id===id);
   if (!c) return;
   openId = id;
-  $("dImg").src = c.photo || c.scan || "";
+  $("dImg").src = photoSrc(c);
   $("dPlayer").textContent = dash(c.player);
   const chips = [];
   if (c.insert) chips.push("<span class=\"chip\">"+c.insert+"</span>");
@@ -1725,8 +1767,14 @@ function fillEdit(){
   $("e_notes").value = c.notes||"";
 }
 function teamName(c){ return (c.team||"").trim() || "No team"; }
+function photoSrc(c, slug){
+  const s = slug || c.slug || mySlug || "";
+  if (c.photo && String(c.photo).slice(0,5)==="data:") return c.photo;
+  if (s && c.id) return "/u/"+encodeURIComponent(s)+"/cards/"+encodeURIComponent(c.id)+"/photo";
+  return c.photo || c.scan || "";
+}
 function cardRowHtml(c){
-  const img = c.photo || c.scan || "";
+  const img = photoSrc(c);
   const line = [c.team,c.year,c.set,c.number?"#"+c.number:""].filter(Boolean).join(" · ");
   const grade = (!c.grader||c.grader==="Raw")?"Raw":[c.grader,c.grade].filter(Boolean).join(" ");
   const chips = "<div>"+(c.insert?"<span class=\"chip\">"+c.insert+"</span>":"")+(c.parallel?"<span class=\"chip\">"+c.parallel+"</span>":(!c.insert?"<span class=\"chip dim\">Base</span>":""))+"<span class=\"chip dim\">"+grade+"</span></div>";
@@ -2316,7 +2364,7 @@ let viewSlug = "";
 let viewCard = null;
 let pubCards = [];
 function pubCardHtml(c){
-  return "<article class=\"item\" data-pub=\""+c.id+"\"><div class=\"item-top\"><img src=\""+(c.photo||"")+"\" alt=\"\" /><div><h3>"+(c.player||"—")+" <span class=\"heart\">♥ "+(c.likes||0)+"</span></h3><div class=\"muted\">"+[c.team,c.year,c.set,c.number?"#"+c.number:""].filter(Boolean).join(" · ")+"</div></div></div></article>";
+  return "<article class=\"item\" data-pub=\""+c.id+"\"><div class=\"item-top\"><img src=\""+photoSrc(c, viewSlug)+"\" alt=\"\" /><div><h3>"+(c.player||"—")+" <span class=\"heart\">♥ "+(c.likes||0)+"</span></h3><div class=\"muted\">"+[c.team,c.year,c.set,c.number?"#"+c.number:""].filter(Boolean).join(" · ")+"</div></div></div></article>";
 }
 function renderPubList(){
   const box = $("pubList");
@@ -2696,7 +2744,7 @@ $("pubPost") && ($("pubPost").onclick = () => {
 });
 function openPubCard(c){
   viewCard = c;
-  $("pubHero").src = c.photo || "";
+  $("pubHero").src = photoSrc(c, viewSlug);
   $("pubTitle").textContent = c.player || "Card";
   $("pubLine").textContent = [c.team,c.year,c.set,c.number?"#"+c.number:"",c.insert,c.parallel].filter(Boolean).join(" · ");
   if ($("pubHold")) $("pubHold").textContent = money(c.comp);
@@ -2918,7 +2966,7 @@ function renderFeed(){
   else rows.sort((a,b)=> String(b.added||"").localeCompare(String(a.added||"")));
   box.innerHTML = rows.length ? rows.map(c => {
     const line = [c.team,c.year,c.set,c.number?"#"+c.number:""].filter(Boolean).join(" · ");
-    return "<article class=\"item\" data-feed-slug=\""+c.slug+"\" data-feed-card=\""+c.id+"\"><div class=\"item-top\"><img src=\""+(c.photo||"")+"\" alt=\"\" /><div><h3>"+(c.player||"—")+"</h3><div class=\"muted\">"+line+"</div><div class=\"muted\">"+(c.display||"Collector")+" · "+timeAgo(c.added)+"</div><div class=\"muted\">"+money(c.comp)+"</div></div></div></article>";
+    return "<article class=\"item\" data-feed-slug=\""+c.slug+"\" data-feed-card=\""+c.id+"\"><div class=\"item-top\"><img src=\""+photoSrc(c, c.slug)+"\" alt=\"\" /><div><h3>"+(c.player||"—")+"</h3><div class=\"muted\">"+line+"</div><div class=\"muted\">"+(c.display||"Collector")+" · "+timeAgo(c.added)+"</div><div class=\"muted\">"+money(c.comp)+"</div></div></div></article>";
   }).join("") : "<p class=\"muted\">No new cards yet.</p>";
 }
 $("feedSort") && ($("feedSort").onchange = renderFeed);
