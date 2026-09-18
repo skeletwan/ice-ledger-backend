@@ -107,12 +107,17 @@
     .badge { display:inline-block; font-size:12px; padding:3px 8px; border-radius:999px; background:#2a3544; margin-bottom:8px; }
     .badge.review { background:#4a3b16; color:var(--warn); }
     .item { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px; margin-bottom:10px; position:relative; }
-    .item.tier-bronze { border-color:#b08d57; border-width:2px; }
-    .item.tier-silver { border-color:#c5d0dc; border-width:2px; }
-    .item.tier-gold { border-color:#d4af37; border-width:2px; }
-    .item.tier-platinum { border-color:#9fb7c9; border-width:2px; }
-    .item.tier-diamond { border-color:#7ef0d2; border-width:2px; }
-    .tier-tag { position:absolute; right:8px; bottom:8px; font-size:10px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; padding:3px 7px; border-radius:6px; background:#0b1116; color:#fff; z-index:2; }
+    .item.tier-bronze { border-color:#8d5a2b; border-width:2px; box-shadow:inset 0 0 0 1px #c48a4a, 0 0 10px rgba(141,90,43,.35); }
+    .item.tier-silver { border-color:#9aa7b5; border-width:2px; box-shadow:inset 0 0 0 1px #e8eef4, 0 0 10px rgba(180,196,210,.28); }
+    .item.tier-gold { border-color:#b8892a; border-width:2px; box-shadow:inset 0 0 0 1px #e6d09a, 0 0 12px rgba(184,137,42,.35); }
+    .item.tier-platinum { border-color:#cfd8e0; border-width:2px; box-shadow:inset 0 0 0 1px #ffffff, 0 0 12px rgba(220,230,240,.35); }
+    .item.tier-diamond { border-color:#8fd4ee; border-width:2px; box-shadow:inset 0 0 0 1px #e7fbff, 0 0 14px rgba(143,212,238,.4); }
+    .tier-tag { position:absolute; right:8px; bottom:8px; font-size:9px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; padding:3px 7px; border-radius:6px; background:rgba(8,12,16,.88); z-index:2; }
+    .tier-tag.bronze { color:#c48a4a; }
+    .tier-tag.silver { color:#d5dee6; letter-spacing:.1em; }
+    .tier-tag.gold { color:#e0c27a; font-family:Georgia,"Times New Roman",serif; font-weight:700; letter-spacing:.14em; font-size:10px; }
+    .tier-tag.platinum { color:#eef3f7; font-family:Georgia,"Times New Roman",serif; font-weight:600; letter-spacing:.16em; font-size:10px; }
+    .tier-tag.diamond { color:#bfefff; font-family:Georgia,"Times New Roman",serif; font-weight:600; letter-spacing:.18em; font-size:10px; font-style:italic; }
     .item-top { display:grid; grid-template-columns:72px 1fr; gap:10px; }
     .item img { width:72px; height:72px; object-fit:contain; background:#000; border-radius:8px; }
     .item h3 { margin:0 0 2px; font-size:15px; }
@@ -1424,68 +1429,145 @@ function daysAgo(iso){
   if (!iso) return null;
   return Math.floor((Date.now()-new Date(iso).getTime())/86400000);
 }
+function sampleCard(ctx, w, h){
+  const step = Math.max(1, Math.floor(Math.min(w, h) / 220));
+  const data = ctx.getImageData(0, 0, w, h).data;
+  const at = (x, y) => {
+    const i = (y * w + x) * 4;
+    return [data[i], data[i+1], data[i+2]];
+  };
+  const corners = [at(2,2), at(w-3,2), at(2,h-3), at(w-3,h-3)];
+  const bg = [0,1,2].map(i => Math.round(corners.reduce((a,p)=>a+p[i],0)/4));
+  const pts = [];
+  let minx = w, miny = h, maxx = 0, maxy = 0;
+  for (let y = 0; y < h; y += step) {
+    for (let x = 0; x < w; x += step) {
+      const p = at(x, y);
+      if (Math.abs(p[0]-bg[0])+Math.abs(p[1]-bg[1])+Math.abs(p[2]-bg[2]) > 48) {
+        pts.push([x, y]);
+        if (x < minx) minx = x;
+        if (y < miny) miny = y;
+        if (x > maxx) maxx = x;
+        if (y > maxy) maxy = y;
+      }
+    }
+  }
+  return { pts, minx, miny, maxx, maxy };
+}
+function cardSkewDeg(pts){
+  if (!pts || pts.length < 40) return 0;
+  let sx = 0, sy = 0;
+  pts.forEach(p => { sx += p[0]; sy += p[1]; });
+  const n = pts.length, mx = sx / n, my = sy / n;
+  let xx = 0, yy = 0, xy = 0;
+  pts.forEach(p => {
+    const dx = p[0] - mx, dy = p[1] - my;
+    xx += dx * dx; yy += dy * dy; xy += dx * dy;
+  });
+  let deg = Math.atan2(2 * xy, xx - yy) * 90 / Math.PI;
+  if (yy > xx) deg += (deg > 0 ? -90 : 90);
+  while (deg > 45) deg -= 90;
+  while (deg < -45) deg += 90;
+  if (Math.abs(deg) < 0.8 || Math.abs(deg) > 18) return 0;
+  return deg;
+}
 function frameCardCanvas(img, max){
   const w = img.width || 1, h = img.height || 1;
   const src = document.createElement("canvas");
   src.width = w; src.height = h;
   const sctx = src.getContext("2d");
   sctx.drawImage(img, 0, 0);
-  let minx = w, miny = h, maxx = 0, maxy = 0, hits = 0;
+  let work = src;
   try {
-    const step = Math.max(1, Math.floor(Math.min(w, h) / 220));
-    const data = sctx.getImageData(0, 0, w, h).data;
-    const at = (x, y) => {
-      const i = (y * w + x) * 4;
-      return [data[i], data[i+1], data[i+2]];
-    };
-    const corners = [at(2,2), at(w-3,2), at(2,h-3), at(w-3,h-3)];
-    const bg = [0,1,2].map(i => Math.round(corners.reduce((a,p)=>a+p[i],0)/4));
-    for (let y = 0; y < h; y += step) {
-      for (let x = 0; x < w; x += step) {
-        const p = at(x, y);
-        if (Math.abs(p[0]-bg[0])+Math.abs(p[1]-bg[1])+Math.abs(p[2]-bg[2]) > 48) {
-          hits++;
-          if (x < minx) minx = x;
-          if (y < miny) miny = y;
-          if (x > maxx) maxx = x;
-          if (y > maxy) maxy = y;
-        }
-      }
+    const first = sampleCard(sctx, w, h);
+    const deg = cardSkewDeg(first.pts);
+    if (deg) {
+      const rad = deg * Math.PI / 180;
+      const cos = Math.abs(Math.cos(rad)), sin = Math.abs(Math.sin(rad));
+      const rw = Math.ceil(w * cos + h * sin), rh = Math.ceil(w * sin + h * cos);
+      const rot = document.createElement("canvas");
+      rot.width = rw; rot.height = rh;
+      const rctx = rot.getContext("2d");
+      rctx.translate(rw / 2, rh / 2);
+      rctx.rotate(-rad);
+      rctx.drawImage(src, -w / 2, -h / 2);
+      work = rot;
     }
+  } catch(e) {}
+  const ww = work.width, hh = work.height;
+  const wctx = work.getContext("2d");
+  let minx = 0, miny = 0, maxx = ww, maxy = hh, hits = 0;
+  try {
+    const box = sampleCard(wctx, ww, hh);
+    hits = box.pts.length;
+    minx = box.minx; miny = box.miny; maxx = box.maxx; maxy = box.maxy;
   } catch(e) { hits = 0; }
-  let sx = 0, sy = 0, sw = w, sh = h;
-  if (hits > 40 && (maxx-minx) > w*0.28 && (maxy-miny) > h*0.28) {
-    const pad = Math.round(0.04 * Math.max(maxx-minx, maxy-miny));
+  let sx = 0, sy = 0, sw = ww, sh = hh;
+  if (hits > 40 && (maxx-minx) > ww*0.28 && (maxy-miny) > hh*0.28) {
+    const pad = Math.round(0.05 * Math.max(maxx-minx, maxy-miny));
     sx = Math.max(0, minx - pad);
     sy = Math.max(0, miny - pad);
-    sw = Math.min(w, maxx + pad) - sx;
-    sh = Math.min(h, maxy + pad) - sy;
+    sw = Math.min(ww, maxx + pad) - sx;
+    sh = Math.min(hh, maxy + pad) - sy;
   }
   const scale = Math.min(1, max / Math.max(sw, sh));
   const c = document.createElement("canvas");
   c.width = Math.max(1, Math.round(sw * scale));
   c.height = Math.max(1, Math.round(sh * scale));
-  c.getContext("2d").drawImage(src, sx, sy, sw, sh, 0, 0, c.width, c.height);
+  c.getContext("2d").drawImage(work, sx, sy, sw, sh, 0, 0, c.width, c.height);
+  return c;
+}
+function readJpegOri(buf){
+  try {
+    const v = new DataView(buf);
+    if (v.getUint16(0) !== 0xFFD8) return 1;
+    let off = 2;
+    while (off + 4 < v.byteLength) {
+      if (v.getUint8(off) !== 0xFF) break;
+      const mark = v.getUint8(off + 1);
+      const len = v.getUint16(off + 2);
+      if (mark === 0xE1 && off + 8 < v.byteLength && v.getUint32(off + 4) === 0x45786966) {
+        const start = off + 10;
+        const le = v.getUint16(start) === 0x4949;
+        const u16 = p => le ? v.getUint16(p, true) : v.getUint16(p);
+        const u32 = p => le ? v.getUint32(p, true) : v.getUint32(p);
+        const ifd = start + u32(start + 4);
+        const n = u16(ifd);
+        for (let i = 0; i < n; i++) {
+          const e = ifd + 2 + i * 12;
+          if (u16(e) === 0x0112) return u16(e + 8) || 1;
+        }
+      }
+      off += 2 + len;
+    }
+  } catch(e) {}
+  return 1;
+}
+function applyOri(img, ori){
+  const w = img.width || 1, h = img.height || 1;
+  const c = document.createElement("canvas");
+  const ctx = c.getContext("2d");
+  if (ori === 6 || ori === 8) { c.width = h; c.height = w; }
+  else { c.width = w; c.height = h; }
+  if (ori === 3) { ctx.translate(w, h); ctx.rotate(Math.PI); }
+  else if (ori === 6) { ctx.translate(h, 0); ctx.rotate(Math.PI / 2); }
+  else if (ori === 8) { ctx.translate(0, w); ctx.rotate(-Math.PI / 2); }
+  ctx.drawImage(img, 0, 0);
   return c;
 }
 function loadOriented(file){
-  return new Promise((resolve, reject) => {
-    const done = bmp => resolve(bmp);
-    if (typeof createImageBitmap === "function") {
-      createImageBitmap(file, { imageOrientation: "from-image" }).then(done).catch(() => {
-        const img = new Image();
-        const url = URL.createObjectURL(file);
-        img.onload = () => { URL.revokeObjectURL(url); done(img); };
-        img.onerror = () => { URL.revokeObjectURL(url); reject(); };
-        img.src = url;
-      });
-    } else {
+  return file.arrayBuffer().then(buf => {
+    const ori = readJpegOri(buf);
+    return new Promise((resolve, reject) => {
       const img = new Image();
       const url = URL.createObjectURL(file);
-      img.onload = () => { URL.revokeObjectURL(url); done(img); };
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        resolve(ori > 1 ? applyOri(img, ori) : img);
+      };
       img.onerror = () => { URL.revokeObjectURL(url); reject(); };
       img.src = url;
-    }
+    });
   });
 }
 function toJpeg(file, max){
@@ -1989,7 +2071,7 @@ function cardRowHtml(c){
     "<div class=\"muted\">"+dash(line)+"</div>"+chips+
     "<div class=\"muted\" style=\"margin-top:4px\">"+money(c.comp)+" market · "+money(c.cost)+" paid</div>"+
     "<button class=\"ghost\" data-edit=\""+c.id+"\" style=\"width:auto;margin-top:8px;padding:6px 12px\">Edit</button></div></div>"+
-    (tier?"<span class=\"tier-tag\">"+tierLabel(tier)+"</span>":"")+
+    (tier?"<span class=\"tier-tag "+tier+"\">"+tierLabel(tier)+"</span>":"")+
     "</article>";
   } catch(e) {
     return "<article class=\"item\" data-open=\""+(c&&c.id||"")+"\"><h3>"+dash(c&&c.player)+"</h3></article>";
@@ -2620,7 +2702,7 @@ let viewCard = null;
 let pubCards = [];
 function pubCardHtml(c){
   const pt = tierFromCad(publicCad(c) || (viewSlug===mySlug ? binderCad(c) : null));
-  return "<article class=\"item"+grailCls(c)+(pt?" tier-"+pt:"")+"\" data-pub=\""+c.id+"\"><div class=\"item-top\"><img src=\""+photoSrc(c, viewSlug)+"\" alt=\"\" /><div><h3>"+(c.player||"—")+" <span class=\"heart\">♥ "+(c.likes||0)+"</span></h3><div class=\"muted\">"+[c.team,c.year,c.set,c.number?"#"+c.number:""].filter(Boolean).join(" · ")+"</div></div></div>"+(pt?"<span class=\"tier-tag\">"+tierLabel(pt)+"</span>":"")+"</article>";
+  return "<article class=\"item"+grailCls(c)+(pt?" tier-"+pt:"")+"\" data-pub=\""+c.id+"\"><div class=\"item-top\"><img src=\""+photoSrc(c, viewSlug)+"\" alt=\"\" /><div><h3>"+(c.player||"—")+" <span class=\"heart\">♥ "+(c.likes||0)+"</span></h3><div class=\"muted\">"+[c.team,c.year,c.set,c.number?"#"+c.number:""].filter(Boolean).join(" · ")+"</div></div></div>"+(pt?"<span class=\"tier-tag "+pt+"\">"+tierLabel(pt)+"</span>":"")+"</article>";
 }
 function renderPubList(){
   const box = $("pubList");
@@ -3231,7 +3313,7 @@ function renderFeed(){
   box.innerHTML = rows.length ? rows.map(c => {
     const line = [c.team,c.year,c.set,c.number?"#"+c.number:""].filter(Boolean).join(" · ");
     const ft = tierFromCad(publicCad(c));
-    return "<article class=\"item"+grailCls(c)+(ft?" tier-"+ft:"")+"\" data-feed-slug=\""+c.slug+"\" data-feed-card=\""+c.id+"\"><div class=\"item-top\"><img src=\""+photoSrc(c, c.slug)+"\" alt=\"\" /><div><h3>"+(c.player||"—")+"</h3><div class=\"muted\">"+line+"</div><div class=\"muted\">"+(c.display||"Collector")+" · "+timeAgo(c.added)+"</div><div class=\"muted\">"+money(publicCad(c) || c.comp)+"</div></div></div>"+(ft?"<span class=\"tier-tag\">"+tierLabel(ft)+"</span>":"")+"</article>";
+    return "<article class=\"item"+grailCls(c)+(ft?" tier-"+ft:"")+"\" data-feed-slug=\""+c.slug+"\" data-feed-card=\""+c.id+"\"><div class=\"item-top\"><img src=\""+photoSrc(c, c.slug)+"\" alt=\"\" /><div><h3>"+(c.player||"—")+"</h3><div class=\"muted\">"+line+"</div><div class=\"muted\">"+(c.display||"Collector")+" · "+timeAgo(c.added)+"</div><div class=\"muted\">"+money(publicCad(c) || c.comp)+"</div></div></div>"+(ft?"<span class=\"tier-tag "+ft+"\">"+tierLabel(ft)+"</span>":"")+"</article>";
   }).join("") : "<p class=\"muted\">No new cards yet.</p>";
 }
 $("feedSort") && ($("feedSort").onchange = renderFeed);
