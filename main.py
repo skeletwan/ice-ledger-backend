@@ -138,6 +138,11 @@ Autos:
 - Sticker vs on-card: if a sticker or certification label is obvious, parallel can say "Sticker Auto"; if ink is on the photo, "On-Card Auto".
 - Ink on the slab label only (grader notes) is not an auto.
 
+Memorabilia:
+- If you see fabric, a jersey swatch, a patch, logo patch, prime patch, laundry tag, or relic window, set mem=true.
+- Put the type in insert or parallel: Jersey, Patch, Prime Patch, Relic, Stick, Logo Patch. Keep /n and Autograph if present.
+- Do not call a memorabilia card Base.
+
 If a field is not readable, use null. Never invent a rare parallel.
 {
   "hockey": boolean,
@@ -150,6 +155,7 @@ If a field is not readable, use null. Never invent a rare parallel.
   "insert": string|null,
   "auto": boolean,
   "serial": string|null,
+  "mem": boolean,
   "team": string|null,
   "grader": "Raw"|"PSA"|"BGS"|"SGC"|"CGC"|"SMA"|null,
   "grade": string|null,
@@ -370,6 +376,17 @@ async def identify(
         if run.lower() not in par.lower():
             data["parallel"] = (par + " " + run).strip() if par and par.lower() not in ("base", "null", "none") else run
             par = data["parallel"]
+    mem_hit = bool(data.get("mem")) or re.search(r"\b(patch|jersey|relic|memorabilia|swatch|prime patch|logo patch|laundry)\b", blob)
+    if mem_hit:
+        data["mem"] = True
+        mix = (par + " " + ins).lower()
+        kind = "Patch" if "patch" in blob else ("Jersey" if "jersey" in blob or "swatch" in blob else ("Relic" if "relic" in blob else "Memorabilia"))
+        if "patch" not in mix and "jersey" not in mix and "relic" not in mix and "memorabilia" not in mix:
+            if not ins or ins.lower() in ("base", "null", "none"):
+                data["insert"] = kind
+            elif kind.lower() not in (par or "").lower():
+                data["parallel"] = ((par + " " + kind).strip() if par and par.lower() not in ("base","null","none") else kind)
+                par = data["parallel"]
     auto_hit = bool(data.get("auto")) or re.search(r"\b(auto|autograph|on-card|sticker auto|signed)\b", blob)
     if auto_hit:
         data["auto"] = True
@@ -412,8 +429,8 @@ async def identify(
 
 
 COMP_MODEL = os.environ.get("COMP_MODEL", "grok-4-1-fast-non-reasoning")
-COMP_PROMPT = """You may use AT MOST ONE web_search. Do not search again for other grades.
-Search recent SOLD / completed hockey card sales for THIS copy only (grader/grade on the card).
+COMP_PROMPT = """You may use AT MOST ONE web_search. Put the Card line below in that search as-is (add "sold" if needed). Do not change it to a different grade or drop patch/auto/parallel.
+Search recent SOLD / completed hockey card sales for THAT exact copy only.
 Prefer public sold results and Fanatics Collect auction history. Do not scrape eBay. Do not use 130point.
 Card: {card}
 Return ONLY JSON, no markdown:
@@ -430,6 +447,7 @@ Return ONLY JSON, no markdown:
   "sources": [string]
 }}
 suggested_cad is the median sold CAD for this exact copy (same player/set/number/parallel/insert/grade).
+If the card is PSA 10, suggested_cad MUST be a PSA 10 sold, not raw. If BGS 9.5 / SGC 10, same rule. Include grader and grade in the one search query.
 Only use sold sale prices. Never use the card number, year, print run, or cert as a price.
 Convert USD to CAD at 1.35.
 """
@@ -493,7 +511,17 @@ async def comp(
                     return cached
             except Exception:
                 pass
-    label = ", ".join(f"{k}={v}" for k,v in card.items() if v)
+    def run_only(v):
+        return re.sub(r"\b\d+\s*/\s*(\d+)\b", r"/\1", str(v or ""))
+    bits = [
+        card.get("year"), card.get("player"), card.get("set"),
+        ("#"+str(card.get("number"))) if card.get("number") else None,
+        run_only(card.get("insert")), run_only(card.get("parallel")),
+        None if not card.get("grader") or card.get("grader")=="Raw" else str(card.get("grader"))+" "+str(card.get("grade") or ""),
+        "raw" if (not card.get("grader") or card.get("grader")=="Raw") else None,
+        "hockey card sold",
+    ]
+    label = " ".join(str(x) for x in bits if x)
     headers = {"Authorization": f"Bearer {XAI_API_KEY}", "Content-Type": "application/json"}
     prompt = COMP_PROMPT.format(card=label)
     text = ""
@@ -1024,7 +1052,7 @@ def add_note(con, user_id, slug, body, card_id=""):
         return
     con.execute(
         "INSERT INTO notes(user_id,slug,body,created,read,card_id) VALUES(?,?,?,?,0,?)",
-        (user_id, slug or "", body[:180], time.strftime("%Y-%m-%dT%H:%M:%SZ"), card_id or ""),
+        (user_id, slug or "", body[:500], time.strftime("%Y-%m-%dT%H:%M:%SZ"), card_id or ""),
     )
 
 def notify_activity(con, owner_id, slug, body, card_id="", actor_id=None):
@@ -2569,6 +2597,98 @@ def _find_user(con, payload: dict):
     if not row and slug:
         row = con.execute("SELECT id,email,slug FROM users WHERE slug=?", (slug,)).fetchone()
     return row
+
+@app.post("/admin/mail")
+async def admin_mail(payload: dict, request: Request, x_token: str | None = Header(default=None)):
+    require_operator(request, x_token)
+    subject = str(payload.get("subject") or "").strip()[:200]
+    body = str(payload.get("body") or "").strip()[:8000]
+    if not subject or not body:
+        raise HTTPException(400, "subject and message required")
+    to = str(payload.get("to") or "").strip().lower()
+    if "@" not in to:
+        con = db()
+        row = _find_user(con, {"email": to, "slug": to} if to else payload)
+        con.close()
+        if not row:
+            raise HTTPException(404, "no user")
+        to = row["email"]
+    ok = send_mail(subject, body, to)
+    if not ok:
+        raise HTTPException(502, MAIL_LAST_ERROR or "mail failed")
+    return {"ok": True, "to": to}
+
+@app.post("/admin/announce")
+async def admin_announce(payload: dict, request: Request, x_token: str | None = Header(default=None)):
+    require_operator(request, x_token)
+    raw = str(payload.get("body") or "").strip()
+    if not raw:
+        raise HTTPException(400, "message required")
+    text = "Ice Ledger Management: " + raw
+    text = text[:500]
+    who = str(payload.get("to") or "").strip()
+    con = db()
+    if who:
+        row = _find_user(con, {"email": who, "slug": who})
+        if not row:
+            con.close()
+            raise HTTPException(404, "no user")
+        add_note(con, row["id"], row["slug"] if "slug" in row.keys() else "", text)
+        n = 1
+    else:
+        ids = con.execute("SELECT id, slug FROM users").fetchall()
+        for u in ids:
+            add_note(con, u["id"], u["slug"] if "slug" in u.keys() else "", text)
+        n = len(ids)
+    con.commit()
+    con.close()
+    return {"ok": True, "sent": n}
+
+@app.post("/admin/mail-all")
+async def admin_mail_all(payload: dict, request: Request, x_token: str | None = Header(default=None)):
+    require_operator(request, x_token)
+    subject = str(payload.get("subject") or "").strip()[:200]
+    body = str(payload.get("body") or "").strip()[:8000]
+    if not subject or not body:
+        raise HTTPException(400, "subject and message required")
+    con = db()
+    rows = con.execute("SELECT email FROM users WHERE email IS NOT NULL AND email != ''").fetchall()
+    con.close()
+    sent = 0
+    fail = 0
+    for r in rows:
+        em = (r["email"] or "").strip().lower()
+        if "@" not in em:
+            continue
+        if send_mail(subject, body, em):
+            sent += 1
+        else:
+            fail += 1
+    return {"ok": True, "sent": sent, "fail": fail}
+
+@app.post("/admin/plan")
+async def admin_plan(payload: dict, request: Request, x_token: str | None = Header(default=None)):
+    require_operator(request, x_token)
+    want = "plus" if str(payload.get("plan") or "").lower() in ("plus", "on", "1", "true") else "free"
+    con = db()
+    row = _find_user(con, payload)
+    if not row:
+        con.close()
+        raise HTTPException(404, "no user with that email or slug")
+    if want == "plus":
+        until = now_utc() + timedelta(days=30)
+        mark = until.strftime("%Y-%m-%dT%H:%M:%SZ")
+        start = now_utc().strftime("%Y-%m-%dT%H:%M:%SZ")
+        con.execute(
+            "UPDATE users SET plan='plus', plus_until=?, cycle_start=? WHERE id=?",
+            (mark, start, row["id"]),
+        )
+    else:
+        con.execute("UPDATE users SET plan='free', plus_until=NULL WHERE id=?", (row["id"],))
+    con.commit()
+    con.close()
+    send_mail("Ice Ledger plan "+want, f"{row['email']} / {row['slug'] if 'slug' in row.keys() else ''}")
+    return {"ok": True, "email": row["email"], "slug": row["slug"], "plan": want}
 
 @app.post("/admin/suspend")
 async def admin_suspend(payload: dict, request: Request, x_token: str | None = Header(default=None)):

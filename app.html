@@ -482,6 +482,7 @@
     <button class="ghost" id="noteCatGrail">Grails</button>
     <button class="ghost" id="noteCatLike">Likes</button>
     <button class="ghost" id="noteCatComment">Comments</button>
+    <button class="ghost" id="noteCatMgmt">Ice Ledger</button>
   </section>
   <section class="page" id="notesCatPage">
     <button class="ghost" id="backNotesHub">All alerts</button>
@@ -718,11 +719,38 @@
     </div>
     <button class="ghost" id="modClearBanner">Remove banner</button>
     <div class="row2">
+      <button class="ghost" id="modPlusOn">Give Ice+</button>
+      <button class="ghost" id="modPlusOff">Remove Ice+</button>
+    </div>
+    <div class="row2">
       <button class="ghost" id="modSuspend">Suspend</button>
       <button class="ghost" id="modUnsuspend">Unsuspend</button>
     </div>
     <button class="danger" id="modDeleteUser">Delete account</button>
     <p class="muted" id="modUserNote"></p>
+    <h3 style="font-size:15px;margin:16px 0 8px">Email users</h3>
+    <p class="muted">Sends from your Resend address. Email all asks first.</p>
+    <label>To (email or slug)</label>
+    <input id="modMailTo" placeholder="user@email or slug" />
+    <label>Subject</label>
+    <input id="modMailSub" placeholder="Ice Ledger" />
+    <label>Message</label>
+    <textarea id="modMailBody" rows="5" placeholder="Keep it short."></textarea>
+    <div class="row2">
+      <button class="ghost" id="modMailOne">Send to this address</button>
+      <button class="ghost" id="modMailLookup">Send to looked-up user</button>
+    </div>
+    <button class="ghost" id="modMailAll">Email everyone</button>
+    <p class="muted" id="modMailNote"></p>
+    <h3 style="font-size:15px;margin:16px 0 8px">In-app message</h3>
+    <p class="muted">Shows under Alerts as Ice Ledger Management. Can also email.</p>
+    <label>In-app text</label>
+    <textarea id="modPushBody" rows="4" placeholder="Short notice from Ice Ledger Management"></textarea>
+    <div class="row2">
+      <button class="ghost" id="modPushOne">Message looked-up user</button>
+      <button class="ghost" id="modPushAll">Message everyone in-app</button>
+    </div>
+    <p class="muted" id="modPushNote"></p>
   </section>
   <section class="page" id="helpPage">
     <button class="ghost" id="backYou">Back to You</button>
@@ -1746,6 +1774,9 @@ $("go").onclick = async () => {
     if (d.serial && $("f_parallel") && $("f_parallel").value.indexOf("/")<0) {
       $("f_parallel").value = (($("f_parallel").value||"")+" "+d.serial).trim();
     }
+    if (d.mem && $("f_insert") && !/(patch|jersey|relic|memorabilia)/i.test(($("f_insert").value||"")+($("f_parallel").value||""))) {
+      if (!($("f_insert").value||"").trim()) $("f_insert").value = "Patch";
+    }
     if (d.auto && !/auto/i.test($("f_parallel").value||"")) {
       $("f_parallel").value = (($("f_parallel").value||"").trim() + " Autograph").trim();
     }
@@ -1852,12 +1883,12 @@ function soldForCopy(c){
   const g = ($("f_grader") && $("f_grader").value) || "Raw";
   const gr = String(($("f_grade") && $("f_grade").value) || "").trim();
   if (g === "Raw" || !gr) return c.raw_cad != null ? c.raw_cad : c.suggested_cad;
-  if (g === "PSA" && /^10/.test(gr)) return c.psa10_cad;
-  if (g === "PSA" && /^9/.test(gr)) return c.psa9_cad;
-  if (g === "PSA" && /^8/.test(gr)) return c.psa8_cad;
-  if (g === "BGS" && /found|pristine|^10(\b|\.0)/i.test(gr)) return c.bgs10_cad;
-  if (g === "BGS" && /9\.5/.test(gr)) return c.bgs95_cad;
-  if (g === "SGC" && /(^|\s)10(\b|\.0)|gem/i.test(gr)) return c.sgc10_cad;
+  if (g === "PSA" && /^10/.test(gr)) return c.psa10_cad != null ? c.psa10_cad : c.suggested_cad;
+  if (g === "PSA" && /^9/.test(gr)) return c.psa9_cad != null ? c.psa9_cad : c.suggested_cad;
+  if (g === "PSA" && /^8/.test(gr)) return c.psa8_cad != null ? c.psa8_cad : c.suggested_cad;
+  if (g === "BGS" && /found|pristine|^10(\b|\.0)/i.test(gr)) return c.bgs10_cad != null ? c.bgs10_cad : c.suggested_cad;
+  if (g === "BGS" && /9\.5/.test(gr)) return c.bgs95_cad != null ? c.bgs95_cad : c.suggested_cad;
+  if (g === "SGC" && /(^|\s)10(\b|\.0)|gem/i.test(gr)) return c.sgc10_cad != null ? c.sgc10_cad : c.suggested_cad;
   if (g && g !== "Raw") return c.suggested_cad;
   return null;
 }
@@ -2509,6 +2540,7 @@ async function maybeAutoBook(){
 }
 function noteKind(n){
   const b = (n.body||"").toLowerCase();
+  if (b.indexOf("ice ledger management")>=0) return "mgmt";
   if (b.indexOf("grail")>=0) return "grail";
   if (b.indexOf("liked")>=0) return "like";
   if (b.indexOf("comment")>=0 || b.indexOf("replied")>=0) return "comment";
@@ -2609,7 +2641,7 @@ $("modLoad") && ($("modLoad").onclick = async () => {
     const hide = kind==="comment"
       ? "<button class=\"ghost\" data-hide-comment=\""+(x.comment_id||"")+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Hide</button><button class=\"ghost\" data-restore-comment=\""+(x.comment_id||"")+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Unhide</button>"
       : "<button class=\"ghost\" data-hide-photo=\""+(x.slug||"")+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Hide</button><button class=\"ghost\" data-restore-photo=\""+(x.slug||"")+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Unhide</button>";
-    return "<div class=\"item\" data-review-kind=\""+kind+"\" data-review-slug=\""+(x.slug||"")+"\" data-review-card=\""+(x.card_id||"")+"\"><b>"+label+" · "+(x.slug||"")+hidden+"</b> <span class=\"muted\">"+(x.created||"").slice(0,16)+" · "+(x.report_n||1)+" report(s)</span><p style=\"margin:6px 0 0\"><b>Why: </b>"+why+"</p><p class=\"muted\" style=\"margin:4px 0 0\">From "+who+"</p><p style=\"margin:6px 0 0\">"+prev+"</p><button class=\"ghost\" data-open-report=\"1\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Review</button>"+hide+"<button class=\"ghost\" data-dismiss-report=\""+x.id+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Dismiss</button></div>";
+    return "<div class=\"item\" data-review-kind=\""+kind+"\" data-review-slug=\""+(x.slug||"")+"\" data-review-card=\""+(x.card_id||"")+"\"><b>"+label+" · "+(x.slug||"")+hidden+"</b> <span class=\"muted\">"+(x.created||"").slice(0,16)+" · "+(x.report_n||1)+" report(s)</span><p style=\"margin:6px 0 0\"><b>Why: </b>"+why+"</p><p class=\"muted\" style=\"margin:4px 0 0\">From "+who+"</p><p style=\"margin:6px 0 0\">"+prev+"</p><button class=\"ghost\" data-open-report=\"1\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Review</button>"+hide+"<button class=\"ghost\" data-dismiss-report=\""+x.id+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Dismiss</button>"+(x.reporter_email?"<button class=\"ghost\" data-mail-to=\""+String(x.reporter_email).replace(/"/g,"")+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Email reporter</button>":"")+"<button class=\"ghost\" data-mail-slug=\""+(x.slug||"")+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Email reported</button></div>";
   }).join("") || "<p class=\"muted\">No reports yet.</p>";
   const photos = (d.hidden_photos||[]).map(x =>
     "<div class=\"item\" data-review-kind=\"photo\" data-review-slug=\""+x.slug+"\"><b>Photo · "+(x.display||x.slug)+"</b><button class=\"ghost\" data-open-report=\"1\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Review</button><button class=\"ghost\" data-restore-photo=\""+x.slug+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Restore photo</button></div>"
@@ -2620,6 +2652,20 @@ $("modLoad") && ($("modLoad").onclick = async () => {
   box.innerHTML = "<h3 style=\"font-size:14px\">Inbox</h3>"+reports+"<h3 style=\"font-size:14px;margin-top:14px\">Removed</h3>"+photos+comments;
 });
 $("modList") && ($("modList").onclick = async ev => {
+  const mailTo = ev.target.closest("[data-mail-to]");
+  if (mailTo) {
+    if ($("modMailTo")) $("modMailTo").value = mailTo.getAttribute("data-mail-to") || "";
+    if ($("modMailNote")) $("modMailNote").textContent = "To filled. Write subject + message, then Send.";
+    $("modMailSub") && $("modMailSub").scrollIntoView({ behavior:"smooth", block:"center" });
+    return;
+  }
+  const mailSlug = ev.target.closest("[data-mail-slug]");
+  if (mailSlug) {
+    if ($("modMailTo")) $("modMailTo").value = mailSlug.getAttribute("data-mail-slug") || "";
+    if ($("modMailNote")) $("modMailNote").textContent = "Reported user filled. Write subject + message, then Send.";
+    $("modMailSub") && $("modMailSub").scrollIntoView({ behavior:"smooth", block:"center" });
+    return;
+  }
   const open = ev.target.closest("[data-open-report]");
   if (open) {
     const row = open.closest("[data-review-kind]");
@@ -2793,6 +2839,56 @@ $("modSuspend") && ($("modSuspend").onclick = async () => {
 $("modUnsuspend") && ($("modUnsuspend").onclick = async () => {
   try { const d = await modAccount("/admin/suspend", { on:false }); $("modUserNote").textContent = "Restored "+(d.email||d.slug); }
   catch(e){ $("modUserNote").textContent = e.message; }
+});
+$("modPlusOn") && ($("modPlusOn").onclick = async () => {
+  try { const d = await modAccount("/admin/plan", { plan:"plus" }); $("modUserNote").textContent = "Ice+ on for "+(d.email||d.slug)+" (30 days)"; $("modLookup") && $("modLookup").click(); }
+  catch(e){ $("modUserNote").textContent = e.message; }
+});
+$("modPlusOff") && ($("modPlusOff").onclick = async () => {
+  try { const d = await modAccount("/admin/plan", { plan:"free" }); $("modUserNote").textContent = "Ice+ off for "+(d.email||d.slug); $("modLookup") && $("modLookup").click(); }
+  catch(e){ $("modUserNote").textContent = e.message; }
+});
+$("modMailOne") && ($("modMailOne").onclick = async () => {
+  try {
+    const d = await authPost("/admin/mail", {
+      to: ($("modMailTo")&&$("modMailTo").value)||"",
+      subject: ($("modMailSub")&&$("modMailSub").value)||"",
+      body: ($("modMailBody")&&$("modMailBody").value)||""
+    });
+    if ($("modMailNote")) $("modMailNote").textContent = "Sent to "+d.to;
+  } catch(e) { if ($("modMailNote")) $("modMailNote").textContent = e.message; }
+});
+$("modMailLookup") && ($("modMailLookup").onclick = async () => {
+  try {
+    const d = await authPost("/admin/mail", {
+      to: ($("modUser")&&$("modUser").value)||"",
+      subject: ($("modMailSub")&&$("modMailSub").value)||"",
+      body: ($("modMailBody")&&$("modMailBody").value)||""
+    });
+    if ($("modMailNote")) $("modMailNote").textContent = "Sent to "+d.to;
+  } catch(e) { if ($("modMailNote")) $("modMailNote").textContent = e.message; }
+});
+async function sendAnnounce(all){
+  const body = ($("modPushBody")&&$("modPushBody").value)||"";
+  const d = await authPost("/admin/announce", all ? { body } : { body, to: ($("modUser")&&$("modUser").value)||"" });
+  if ($("modPushNote")) $("modPushNote").textContent = "In-app sent to "+d.sent;
+}
+$("modPushOne") && ($("modPushOne").onclick = async () => {
+  try { await sendAnnounce(false); } catch(e) { if ($("modPushNote")) $("modPushNote").textContent = e.message; }
+});
+$("modPushAll") && ($("modPushAll").onclick = async () => {
+  if (!window.confirm("Send an in-app Ice Ledger Management message to every account?")) return;
+  try { await sendAnnounce(true); } catch(e) { if ($("modPushNote")) $("modPushNote").textContent = e.message; }
+});
+$("modMailAll") && ($("modMailAll").onclick = async () => {
+  if (!window.confirm("Email every account on Ice Ledger?")) return;
+  try {
+    const d = await authPost("/admin/mail-all", {
+      subject: ($("modMailSub")&&$("modMailSub").value)||"",
+      body: ($("modMailBody")&&$("modMailBody").value)||""
+    });
+    if ($("modMailNote")) $("modMailNote").textContent = "Sent "+d.sent+(d.fail?(" · "+d.fail+" failed"):"");
+  } catch(e) { if ($("modMailNote")) $("modMailNote").textContent = e.message; }
 });
 $("modDeleteUser") && ($("modDeleteUser").onclick = async () => {
   if (!confirm("Permanently delete this account and their binder?")) return;
@@ -3525,8 +3621,8 @@ $("feedList") && ($("feedList").onclick = ev => {
   openPublic(art.getAttribute("data-feed-slug"), art.getAttribute("data-feed-card"));
 });
 $("backNotesHub") && ($("backNotesHub").onclick = () => { show("notes"); paintNotesHub(); });
-["noteCatCard","noteCatGrail","noteCatLike","noteCatComment"].forEach(id => {
-  $(id) && ($(id).onclick = () => openNoteCat(id==="noteCatLike"?"like":id==="noteCatComment"?"comment":id==="noteCatGrail"?"grail":"card"));
+["noteCatCard","noteCatGrail","noteCatLike","noteCatComment","noteCatMgmt"].forEach(id => {
+  $(id) && ($(id).onclick = () => openNoteCat(id==="noteCatLike"?"like":id==="noteCatComment"?"comment":id==="noteCatGrail"?"grail":id==="noteCatMgmt"?"mgmt":"card"));
 });
 function paintFollow(){
   if (!$("followBtn") || !viewSlug) return;
@@ -3560,14 +3656,19 @@ async function refreshNotesBadge(){
       $("openNotes").textContent = "Alerts";
       $("openNotes").classList.toggle("ping", n > 0);
     }
+    const mgmt = (d.notes||[]).some(x => !x.read && /ice ledger management/i.test(x.body||""));
+    if ($("tabSet")) $("tabSet").classList.toggle("ping", mgmt || n > 0);
+    document.querySelectorAll("[data-you=youAlerts]").forEach(el => el.classList.toggle("ping", mgmt || n > 0));
     const last = +(localStorage.getItem("ice-note-unread")||0);
     const fresh = (d.notes||[]).filter(x => !x.read);
     const msg = (fresh[0] && fresh[0].body) || "";
-    const allow = (msg.indexOf("liked")>=0 && alertOn("ice-like-alerts"))
+    const allow = (msg.toLowerCase().indexOf("ice ledger management")>=0)
+      || (msg.indexOf("liked")>=0 && alertOn("ice-like-alerts"))
       || (((msg.indexOf("commented")>=0)||(msg.indexOf("replied")>=0)) && alertOn("ice-comment-alerts"))
       || (msg.indexOf("added")>=0 && alertOn("ice-follow-alerts"));
     if (allow && n > last && "Notification" in window && Notification.permission === "granted") {
-      try { new Notification("Ice Ledger", { body: msg || "New activity in Community" }); } catch(e){}
+      const title = msg.toLowerCase().indexOf("ice ledger management")>=0 ? "Ice Ledger Management" : "Ice Ledger";
+      try { new Notification(title, { body: msg || "New activity in Community" }); } catch(e){}
     }
     localStorage.setItem("ice-note-unread", String(n));
   } catch(e){}
@@ -3595,9 +3696,10 @@ async function paintNotesHub(){
   label("noteCatGrail", "Grails", "grail");
   label("noteCatLike", "Likes", "like");
   label("noteCatComment", "Comments", "comment");
+  label("noteCatMgmt", "Ice Ledger", "mgmt");
 }
 async function openNoteCat(kind){
-  const titles = { card:"New cards", grail:"Grails", like:"Likes", comment:"Comments" };
+  const titles = { card:"New cards", grail:"Grails", like:"Likes", comment:"Comments", mgmt:"Ice Ledger Management" };
   if ($("notesList")) $("notesList").innerHTML = "";
   if ($("notesCatTitle")) $("notesCatTitle").textContent = titles[kind] || "Alerts";
   show("notesCat");
