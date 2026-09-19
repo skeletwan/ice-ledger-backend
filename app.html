@@ -381,19 +381,13 @@
         <div><label>Paid CAD</label><input id="cost" type="number" step="0.01" placeholder="What you paid" /></div>
         <div><label>Your copy (sold)</label><input id="comp" type="number" step="0.01" placeholder="This copy’s market" /></div>
       </div>
-      <div class="row2">
-        <div><label>Raw sold CAD</label><input id="rawComp" type="number" step="0.01" /></div>
-        <div><label>PSA 9 sold CAD</label><input id="psa9Comp" type="number" step="0.01" /></div>
-      </div>
-      <div class="row2">
-        <div><label>PSA 8 sold CAD</label><input id="psa8Comp" type="number" step="0.01" /></div>
-        <div><label>PSA 10 sold CAD</label><input id="psa10Comp" type="number" step="0.01" /></div>
-      </div>
-      <div class="row2">
-        <div><label>BGS 10 sold CAD</label><input id="bgs10Comp" type="number" step="0.01" /></div>
-        <div><label>SGC 10 sold CAD</label><input id="sgc10Comp" type="number" step="0.01" /></div>
-      </div>
+      <input id="rawComp" type="hidden" />
+      <input id="psa8Comp" type="hidden" />
+      <input id="psa9Comp" type="hidden" />
+      <input id="psa10Comp" type="hidden" />
       <input id="bgs95Comp" type="hidden" />
+      <input id="bgs10Comp" type="hidden" />
+      <input id="sgc10Comp" type="hidden" />
       <p class="muted" id="compNote"></p>
       <label>Notes</label>
       <textarea id="notes" rows="2"></textarea>
@@ -1721,6 +1715,12 @@ $("go").onclick = async () => {
     $("f_set").value = d.set || "";
     $("f_number").value = d.number || "";
     $("f_parallel").value = d.parallel || "";
+    if (d.serial && $("f_parallel") && $("f_parallel").value.indexOf("/")<0) {
+      $("f_parallel").value = (($("f_parallel").value||"")+" "+d.serial).trim();
+    }
+    if (d.auto && !/auto/i.test($("f_parallel").value||"")) {
+      $("f_parallel").value = (($("f_parallel").value||"").trim() + " Autograph").trim();
+    }
     $("f_insert").value = d.insert || "";
     $("f_team").value = d.team || "";
     $("f_grader").value = d.grader || "Raw";

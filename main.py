@@ -115,7 +115,9 @@ Upper Deck hockey rules (2015–2026 especially):
 - Copy set name from the back: Series 1, Series 2, Extended, SP Authentic, SP Game Used, The Cup, Stature, Premier, Allure, Synergy, Metal Universe, Chronology, Trilogy, O-Pee-Chee, Parkhurst, Choice, Fleer Ultra, Skybox Impact.
 - Vintage 1990s: never return only "Ultra" or only "Impact". Set must include the brand: Fleer Ultra, Skybox Impact, Score, Pinnacle, Donruss, Leaf, Topps, OPC, Stadium Club, Be A Player. Rookie / RC on those cards is insert "Rookie", not the set.
 - Parallel examples: Silver Foil, Gold /100, Exclusives /100, High Gloss /10, Clear Cut, Outburst Gold, Rainbow, Black /1. If no /n and no foil name, parallel is null or Base.
-- Numbered print runs (23/25, /99, /10, SN25) belong in parallel together with the foil name: "Gold /25", "Emerald /99", "Black /1". Never put 23/25 or /25 in "number".
+- READ THE PHOTO FOR SERIALS. Look at every corner, the foil stamp, under the player, and the back. If you see digits with a slash (12/25, 003/100, 1/1) or SN25 / #'d /250, set serial to that exact text (keep the slash).
+- Numbered print runs belong in parallel with the foil name: "Gold /25". Never put 12/25 in "number". number is checklist # only (#201).
+- If serial is present, parallel must include it. Do not return serial=null when 12/25 is readable.
 - "number" is only the checklist # on the back or bottom (e.g. 201, 144). Jersey number is not the card number unless no checklist # exists.
 - If the front/back shows both a checklist # and a serial (12/25), number=checklist, parallel includes /25.
 - Do not invent a numbered parallel because the photo is shiny.
@@ -129,6 +131,12 @@ Foil / color (required look):
 - If foil_color is a named color and parallel is empty or Base, set parallel to that color.
 - If foil_text includes RESERVE with Choice, parallel or insert is Reserve.
 
+Autos:
+- If you see a handwritten signature on the card or slab, or printed AUTO / AU / AUTograph / On-Card / Sticker Auto, set auto=true.
+- Put "Autograph" in parallel (keep foil name too: "Gold /99 Autograph"). Do not call a signed card Base.
+- Sticker vs on-card: if a sticker or certification label is obvious, parallel can say "Sticker Auto"; if ink is on the photo, "On-Card Auto".
+- Ink on the slab label only (grader notes) is not an auto.
+
 If a field is not readable, use null. Never invent a rare parallel.
 {
   "hockey": boolean,
@@ -139,6 +147,8 @@ If a field is not readable, use null. Never invent a rare parallel.
   "number": string|null,
   "parallel": string|null,
   "insert": string|null,
+  "auto": boolean,
+  "serial": string|null,
   "team": string|null,
   "grader": "Raw"|"PSA"|"BGS"|"SGC"|"CGC"|"SMA"|null,
   "grade": string|null,
@@ -330,6 +340,16 @@ async def identify(
         if not ins or ins.lower() in ("base", "null", "none"):
             if "rookie" not in st_l:
                 data["insert"] = "Rookie"
+    serial = str(data.get("serial") or "").strip()
+    num = str(data.get("number") or "").strip()
+    ser = re.search(r"(\d{1,4}\s*/\s*\d{1,4}|/\s*\d{1,4}|\bSN\s*\d{1,4})", serial + " " + num + " " + par, flags=re.I)
+    if ser:
+        run = re.sub(r"\s+", "", ser.group(0).upper().replace("SN", "/")) if ser.group(0).upper().startswith("SN") else ser.group(0).replace(" ", "")
+        if run.lower() not in (par or "").lower():
+            data["parallel"] = ((par + " " + run).strip() if par and par.lower() not in ("base", "null", "none") else run)
+            par = data["parallel"]
+        if re.search(r"\d+\s*/\s*\d+", num):
+            data["number"] = re.sub(r"\s*\d{1,4}\s*/\s*\d{1,4}\b", "", num).strip(" -#") or None
     num = str(data.get("number") or "").strip()
     serial = re.search(r"(\d{1,3})\s*/\s*(\d{1,3})\b", num) or re.search(r"/\s*(\d{1,3})\b", num)
     if serial:
@@ -337,6 +357,13 @@ async def identify(
         data["number"] = re.sub(r"\s*\d{1,3}\s*/\s*\d{1,3}\b", "", num).strip(" -#") or None
         if run.lower() not in par.lower():
             data["parallel"] = (par + " " + run).strip() if par and par.lower() not in ("base", "null", "none") else run
+            par = data["parallel"]
+    auto_hit = bool(data.get("auto")) or re.search(r"\b(auto|autograph|on-card|sticker auto|signed)\b", blob)
+    if auto_hit:
+        data["auto"] = True
+        mix = (par + " " + ins).lower()
+        if "auto" not in mix and "autograph" not in mix:
+            data["parallel"] = ((par + " Autograph").strip() if par and par.lower() not in ("base", "null", "none") else "Autograph")
             par = data["parallel"]
     if "splendor" in blob:
         if "splendor" not in st.lower():
@@ -373,20 +400,14 @@ async def identify(
 
 
 COMP_MODEL = os.environ.get("COMP_MODEL", "grok-4-1-fast-non-reasoning")
-COMP_PROMPT = """Search recent SOLD / completed hockey card sales for this exact card (not asking prices).
+COMP_PROMPT = """You may use AT MOST ONE web_search. Do not search again for other grades.
+Search recent SOLD / completed hockey card sales for THIS copy only (grader/grade on the card).
 Prefer public sold results and Fanatics Collect auction history. Do not scrape eBay. Do not use 130point.
 Card: {card}
 Return ONLY JSON, no markdown:
 {{
   "suggested_cad": number|null,
   "suggested_usd": number|null,
-  "raw_cad": number|null,
-  "psa8_cad": number|null,
-  "psa9_cad": number|null,
-  "psa10_cad": number|null,
-  "bgs95_cad": number|null,
-  "bgs10_cad": number|null,
-  "sgc10_cad": number|null,
   "low": number|null,
   "high": number|null,
   "currency": "CAD"|"USD"|null,
@@ -396,11 +417,8 @@ Return ONLY JSON, no markdown:
   "summary": string,
   "sources": [string]
 }}
-Search separately for RAW solds, PSA 8, PSA 9, PSA 10, BGS 9.5, BGS 10 / Found 10 / Pristine, and SGC 10 of this same player/set/number/parallel.
-Fill each *_cad field you can. suggested_cad is the price for THIS copy's grader/grade. If this copy is Raw, suggested_cad MUST equal raw_cad.
-Only use sold sale prices (money). Never use the card number, year, print run, or cert as a price.
-Use the median of matching solds for each grade. Do not pick a random sale. Same card should return the same numbers.
-If you cannot find a sold price for a grade, leave that field null. Do not copy one grade into another.
+suggested_cad is the median sold CAD for this exact copy (same player/set/number/parallel/insert/grade).
+Only use sold sale prices. Never use the card number, year, print run, or cert as a price.
 Convert USD to CAD at 1.35.
 """
 
@@ -455,7 +473,7 @@ async def comp(
         con = db()
         row = con.execute("SELECT data, t FROM comp_cache WHERE k=?", (ck,)).fetchone()
         con.close()
-        if row and (time.time() - float(row["t"])) < 12 * 3600:
+        if row and (time.time() - float(row["t"])) < 24 * 3600:
             try:
                 cached = json.loads(row["data"])
                 if isinstance(cached, dict):
@@ -571,9 +589,35 @@ async def comp(
             )
             con.commit()
             con.close()
+            sug = data.get("suggested_cad") or data.get("suggested_usd")
+            if sug is not None:
+                spread_comp(ck, float(sug))
         except Exception:
             pass
     return data
+
+def _card_ck(c: dict) -> str:
+    def n(v):
+        return str(v or "").strip().lower()
+    return "|".join(n(c.get(k)) for k in ("player","year","set","number","parallel","insert","grader","grade"))
+
+def spread_comp(ck: str, sug: float):
+    con = db()
+    rows = con.execute("SELECT id, data FROM cards").fetchall()
+    for r in rows:
+        try:
+            c = json.loads(r["data"])
+        except Exception:
+            continue
+        if _card_ck(c) != ck:
+            continue
+        c["sysComp"] = sug
+        old = c.get("comp")
+        if old in (None, ""):
+            c["comp"] = sug
+        con.execute("UPDATE cards SET data=? WHERE id=?", (json.dumps(c), r["id"]))
+    con.commit()
+    con.close()
 
 
 PHOTO_PROMPT = """Find current eBay listing photos of this exact hockey card.
@@ -1218,6 +1262,18 @@ async def usage(request: Request, x_token: str | None = Header(default=None)):
 @app.post("/book-refresh")
 async def book_refresh(payload: dict, request: Request, x_token: str | None = Header(default=None)):
     uid = require_user(request, x_token)
+    card = {k: payload.get(k) for k in ("player","year","set","number","parallel","insert","team","grader","grade","cert")}
+    ck = "|".join(str(card.get(k) or "").strip().lower() for k in ("player","year","set","number","parallel","insert","grader","grade"))
+    con = db()
+    row = con.execute("SELECT data, t FROM comp_cache WHERE k=?", (ck,)).fetchone()
+    con.close()
+    if row and (time.time() - float(row["t"])) < 24 * 3600:
+        try:
+            cached = json.loads(row["data"])
+            cached["cached"] = True
+            return cached
+        except Exception:
+            pass
     u = usage_of(uid)
     if u["book_left"] <= 0:
         raise HTTPException(402, "book refresh cap reached — upgrade")
