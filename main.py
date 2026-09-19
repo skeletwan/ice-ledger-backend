@@ -111,6 +111,7 @@ Upper Deck hockey rules (2015–2026 especially):
 - Flagship UD Series 1/2/Extended rainbow (base AND Young Guns): Outburst Silver, Clear Cut, Deluxe /250, UD Exclusives /100, Outburst Red /25, High Gloss /10, Outburst Gold 1/1, Printing Plates 1/1.
 - Common UD inserts (not parallels): UD Canvas, UD Canvas Young Guns, UD Portraits, Dazzlers (Blue/Pink/Green/Gold), Encore, Population Count, Sizzle Reel, Young Guns Renewed, Holotypes, OPC Glossy, French.
 - SP Authentic: Future Watch, Auto Patch. The Cup: Rookie Auto Patch. Stature / Premier / Allure / Synergy / Metal Universe / Chronology / Trilogy have their own numbered color rainbows — copy the name on the card.
+- Upper Deck Splendor: set is Splendor. Almost always numbered. Visible 12/49, /99, /25, /10, 1/1 must go in parallel. Number is checklist only. Do not return a Splendor as Base.
 - Copy set name from the back: Series 1, Series 2, Extended, SP Authentic, SP Game Used, The Cup, Stature, Premier, Allure, Synergy, Metal Universe, Chronology, Trilogy, O-Pee-Chee, Parkhurst, Choice, Fleer Ultra, Skybox Impact.
 - Vintage 1990s: never return only "Ultra" or only "Impact". Set must include the brand: Fleer Ultra, Skybox Impact, Score, Pinnacle, Donruss, Leaf, Topps, OPC, Stadium Club, Be A Player. Rookie / RC on those cards is insert "Rookie", not the set.
 - Parallel examples: Silver Foil, Gold /100, Exclusives /100, High Gloss /10, Clear Cut, Outburst Gold, Rainbow, Black /1. If no /n and no foil name, parallel is null or Base.
@@ -337,6 +338,14 @@ async def identify(
         if run.lower() not in par.lower():
             data["parallel"] = (par + " " + run).strip() if par and par.lower() not in ("base", "null", "none") else run
             par = data["parallel"]
+    if "splendor" in blob:
+        if "splendor" not in st.lower():
+            data["set"] = ((st + " Splendor").strip() if st and "upper deck" in st.lower() else "Splendor")
+        if not re.search(r"/\s*\d+", par or ""):
+            m = re.search(r"(\d{1,3}\s*/\s*\d{1,3}|/\s*\d{1,3})", str(data.get("number") or "") + " " + str(data.get("notes") or ""))
+            if m:
+                data["parallel"] = ((par + " " + m.group(0).replace(" ","")).strip() if par and par.lower() not in ("base","null","none") else m.group(0).replace(" ",""))
+                par = data["parallel"]
     if "deluxe" in blob:
         if "young gun" in blob or " yg" in blob:
             if not ins or ins.lower() in ("base", "null", "none"):

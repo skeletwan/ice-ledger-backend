@@ -348,6 +348,7 @@
       <div class="preview hidden" id="backBox"><h3>Back</h3><img id="backImg" alt="" /></div>
     </div>
     <button id="go" disabled>Identify card</button>
+    <button class="ghost hidden" id="resumeId">Resume this card</button>
     <p class="status" id="status"></p>
   </section>
   <section class="page" id="resultPage">
@@ -389,10 +390,10 @@
         <div><label>PSA 10 sold CAD</label><input id="psa10Comp" type="number" step="0.01" /></div>
       </div>
       <div class="row2">
-        <div><label>BGS 9.5 sold CAD</label><input id="bgs95Comp" type="number" step="0.01" /></div>
-        <div><label>BGS 10 / Found 10 sold CAD</label><input id="bgs10Comp" type="number" step="0.01" /></div>
+        <div><label>BGS 10 sold CAD</label><input id="bgs10Comp" type="number" step="0.01" /></div>
         <div><label>SGC 10 sold CAD</label><input id="sgc10Comp" type="number" step="0.01" /></div>
       </div>
+      <input id="bgs95Comp" type="hidden" />
       <p class="muted" id="compNote"></p>
       <label>Notes</label>
       <textarea id="notes" rows="2"></textarea>
@@ -1188,12 +1189,25 @@ function show(id){
   document.body.classList.toggle("dock-on", true);
   document.body.classList.toggle("chart-on", id==="bind" && document.body.classList.contains("chart-open"));
   ["tabScan","tabBind","tabFind","tabSet"].forEach(tid => {
-    if ($(tid)) $(tid).classList.toggle("on", (tid==="tabScan"&&id==="scan")||(tid==="tabBind"&&(id==="bind"||id==="detail"||id==="edit"||id==="search"))||(tid==="tabFind"&&(id==="find"||id==="pub"||id==="pubDetail"||id==="notes"||id==="notesCat"||id==="feed"))||(tid==="tabSet"&&(id==="set"||id==="ops"||id==="help")));
+    if ($(tid)) $(tid).classList.toggle("on", (tid==="tabScan"&&(id==="scan"||id==="result"))||(tid==="tabBind"&&(id==="bind"||id==="detail"||id==="edit"||id==="search"))||(tid==="tabFind"&&(id==="find"||id==="pub"||id==="pubDetail"||id==="notes"||id==="notesCat"||id==="feed"))||(tid==="tabSet"&&(id==="set"||id==="ops"||id==="help")));
   });
   window.scrollTo(0,0);
 }
-$("tabScan").onclick = () => show("scan");
-$("backScan").onclick = () => show("scan");
+function paintResume(){
+  const on = !!window.idPending;
+  if ($("resumeId")) $("resumeId").classList.toggle("hidden", !on);
+}
+$("tabScan").onclick = () => {
+  if (window.idPending) show("result");
+  else show("scan");
+};
+$("backScan").onclick = () => {
+  if (window.idPending && !window.confirm("Start a new scan? This ID stays used. Resume from Scan if you only meant to leave.")) return;
+  window.idPending = false;
+  paintResume();
+  show("scan");
+};
+$("resumeId") && ($("resumeId").onclick = () => { if (window.idPending) show("result"); });
 $("tabBind").onclick = () => show("bind");
 $("tabFind").onclick = () => show("find");
 $("tabSet").onclick = () => { loadNotePrefs(); loadMe(); show("set"); };
@@ -1719,6 +1733,8 @@ $("go").onclick = async () => {
       $("status").className = "status warn";
       lockSave(true, "Save to binder");
       $("result").classList.remove("hidden");
+      window.idPending = true;
+      paintResume();
       show("result");
       setCompBanner("bad", "Hockey only for now. Other sports / Pokemon will get their own binders later.");
       return;
@@ -1737,6 +1753,8 @@ $("go").onclick = async () => {
     else $("psa").classList.add("hidden");
     $("result").classList.remove("hidden");
     setCompBanner("wait", "Card IDed. Searching sold comps…");
+    window.idPending = true;
+    paintResume();
     show("result");
     clearCompFields();
     $("compNote").textContent = "";
@@ -1975,6 +1993,8 @@ async function saveToBinder(ev){
   $("scanImg").removeAttribute("src");
   $("backImg").removeAttribute("src");
   saveNote("");
+  window.idPending = false;
+  paintResume();
   show("bind");
   return false;
   } catch(e) {
