@@ -123,6 +123,7 @@ Upper Deck hockey rules (2015–2026 especially):
 - Do not invent a numbered parallel because the photo is shiny.
 - 1990s Pinnacle / Score / Donruss / Leaf: Starquest, Artist's Proofs, Rink Collection, Ice Breakers. Starquest color versions are parallels — Green, Red, Blue, Gold, Purple, Black. If the card face or foil is clearly green, parallel is "Green" (not Base). Same for other named colors.
 - Set name Starquest (Pinnacle) is the set, not an insert, when the front says STARQUEST. Player still from the photo (e.g. Eric Lindros).
+- Starquest Red is a red/maroon foil face — parallel MUST be Red. Green/Blue/Gold/Purple/Black same rule. Never Base when the plate is a color.
 - Upper Deck Choice (1998–99 Choice, 1999–00 Choice, etc.): if the card says Choice Reserve, set is "Choice" (or the full year + Choice from the back) and parallel/insert is "Reserve" — do not call it Series 1 or a generic Upper Deck base. Choice Preview, Choice Reserve Mini, Choice StarQuest-style names stay as printed. Joe Thornton Choice Reserve is player Thornton, set Choice, parallel or insert Reserve.
 
 Foil / color (required look):
@@ -328,6 +329,17 @@ async def identify(
     if named and (not par or par.lower() in ("base", "null", "none", "raw")):
         data["parallel"] = named
         par = named
+    if "starquest" in blob or "star quest" in blob:
+        if "starquest" not in st.lower() and "star quest" not in st.lower():
+            data["set"] = "Starquest"
+            st = "Starquest"
+        if named and named.lower() not in (par or "").lower():
+            data["parallel"] = named
+            par = named
+        elif re.search(r"\b(red|green|blue|gold|purple|black)\b", blob) and (not par or par.lower() in ("base","null","none")):
+            col = re.search(r"\b(red|green|blue|gold|purple|black)\b", blob)
+            data["parallel"] = col.group(1).title()
+            par = data["parallel"]
     set_fix = {
         "ultra": "Fleer Ultra",
         "impact": "Skybox Impact",
@@ -473,7 +485,7 @@ async def comp(
         con = db()
         row = con.execute("SELECT data, t FROM comp_cache WHERE k=?", (ck,)).fetchone()
         con.close()
-        if row and (time.time() - float(row["t"])) < 24 * 3600:
+        if row and (time.time() - float(row["t"])) < 7 * 86400:
             try:
                 cached = json.loads(row["data"])
                 if isinstance(cached, dict):
@@ -1267,7 +1279,7 @@ async def book_refresh(payload: dict, request: Request, x_token: str | None = He
     con = db()
     row = con.execute("SELECT data, t FROM comp_cache WHERE k=?", (ck,)).fetchone()
     con.close()
-    if row and (time.time() - float(row["t"])) < 24 * 3600:
+    if row and (time.time() - float(row["t"])) < 7 * 86400:
         try:
             cached = json.loads(row["data"])
             cached["cached"] = True
