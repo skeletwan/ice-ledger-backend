@@ -107,6 +107,10 @@ Upper Deck hockey rules (2015–2026 especially):
 - Young Guns = insert "Young Guns" (not a parallel). Canvas Young Guns = insert "Young Guns Canvas".
 - Exclusives, High Gloss, Clear Cut, Outburst, Traxx are parallels or separate inserts — never label a plain YG as those.
 - "C" or Young Guns badge on silver UD Series 1/2 rookies is usually Young Guns, not SP Authentic.
+- Young Guns Deluxe / DELUXE on a UD rookie: insert stays Young Guns. Parallel is Deluxe /250 (or the printed serial). Set is Series 1, Series 2, or Extended from the back.
+- Flagship UD Series 1/2/Extended rainbow (base AND Young Guns): Outburst Silver, Clear Cut, Deluxe /250, UD Exclusives /100, Outburst Red /25, High Gloss /10, Outburst Gold 1/1, Printing Plates 1/1.
+- Common UD inserts (not parallels): UD Canvas, UD Canvas Young Guns, UD Portraits, Dazzlers (Blue/Pink/Green/Gold), Encore, Population Count, Sizzle Reel, Young Guns Renewed, Holotypes, OPC Glossy, French.
+- SP Authentic: Future Watch, Auto Patch. The Cup: Rookie Auto Patch. Stature / Premier / Allure / Synergy / Metal Universe / Chronology / Trilogy have their own numbered color rainbows — copy the name on the card.
 - Copy set name from the back: Series 1, Series 2, Extended, SP Authentic, SP Game Used, The Cup, Stature, Premier, Allure, Synergy, Metal Universe, Chronology, Trilogy, O-Pee-Chee, Parkhurst, Choice, Fleer Ultra, Skybox Impact.
 - Vintage 1990s: never return only "Ultra" or only "Impact". Set must include the brand: Fleer Ultra, Skybox Impact, Score, Pinnacle, Donruss, Leaf, Topps, OPC, Stadium Club, Be A Player. Rookie / RC on those cards is insert "Rookie", not the set.
 - Parallel examples: Silver Foil, Gold /100, Exclusives /100, High Gloss /10, Clear Cut, Outburst Gold, Rainbow, Black /1. If no /n and no foil name, parallel is null or Base.
@@ -333,6 +337,19 @@ async def identify(
         if run.lower() not in par.lower():
             data["parallel"] = (par + " " + run).strip() if par and par.lower() not in ("base", "null", "none") else run
             par = data["parallel"]
+    if "deluxe" in blob:
+        if "young gun" in blob or " yg" in blob:
+            if not ins or ins.lower() in ("base", "null", "none"):
+                data["insert"] = "Young Guns"
+        if "deluxe" not in (par or "").lower():
+            run = "/250"
+            m = re.search(r"/\s*(\d{1,3})", par or "") or re.search(r"/\s*(\d{1,3})", str(data.get("number") or ""))
+            if m:
+                run = "/" + m.group(1)
+            data["parallel"] = ("Deluxe " + run).strip()
+            par = data["parallel"]
+        if not par or par.lower() in ("base", "null", "none", "young guns", "yg"):
+            data["parallel"] = par if par and "/" in par else (data.get("parallel") or par)
     if "choice" in blob and "reserve" in blob:
         if "choice" not in st.lower():
             data["set"] = (st + " Choice").strip() if st else "Choice"

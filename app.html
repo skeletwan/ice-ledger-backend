@@ -120,6 +120,7 @@
     .tier-tag.diamond { color:#bfefff; font-family:Georgia,"Times New Roman",serif; font-weight:600; letter-spacing:.18em; font-size:10px; font-style:italic; }
     .item-top { display:grid; grid-template-columns:72px 1fr; gap:10px; }
     .item img { width:72px; height:72px; object-fit:contain; background:#000; border-radius:8px; }
+    .qty-pill { position:absolute; left:8px; bottom:8px; min-width:28px; text-align:center; font-size:11px; font-weight:800; letter-spacing:.04em; padding:2px 6px; border-radius:8px; background:#0b1116; color:var(--ice); border:1px solid var(--ice); z-index:2; }
     .item h3 { margin:0 0 2px; font-size:15px; }
     .px { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin-top:8px; }
     .px label { margin-top:0; }
@@ -440,6 +441,12 @@
     <button class="ghost" id="backBindFromSearch">Back to binder</button>
     <input id="q" placeholder="Player, team, set, number…" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search" />
     <div id="searchList"></div>
+  </section>
+  <section class="page" id="copiesPage">
+    <button class="ghost" id="backCopies">Back</button>
+    <h2 id="copiesTitle" style="font-size:18px;margin:12px 0 8px">Copies</h2>
+    <p class="muted" id="copiesNote"></p>
+    <div id="copiesList"></div>
   </section>
   <section class="page" id="findPage">
     <div class="row2">
@@ -1165,6 +1172,7 @@ function show(id){
   if (id==="feed") loadFeed();
   if ($("helpPage")) $("helpPage").classList.toggle("on", id==="help");
   if ($("searchPage")) $("searchPage").classList.toggle("on", id==="search");
+  if ($("copiesPage")) $("copiesPage").classList.toggle("on", id==="copies");
   if ($("notesPage")) $("notesPage").classList.toggle("on", id==="notes");
   if ($("notesCatPage")) $("notesCatPage").classList.toggle("on", id==="notesCat");
   if (id==="scan" && $("status")) $("status").textContent = "";
@@ -1913,6 +1921,9 @@ async function saveToBinder(ev){
   const rec = readCard();
   if (!rec.player) { saveNote("Player is required.", "err"); return false; }
   const cards = load();
+  const incoming = cardKey(rec);
+  const have = cards.filter(c => cardKey(c)===incoming).length;
+  if (have && !window.confirm("You already have this card (×"+have+"). Are you sure about that?")) return false;
   const comp = numOrNull("comp");
   const row = {
     id: "c"+Date.now(),
@@ -2120,18 +2131,44 @@ function grailCls(c){
   if (cardLooksGrail(c)) return " grail";
   return "";
 }
-function cardRowHtml(c){
+function normPart(v){
+  return String(v||"").trim().toLowerCase().replace(/\s+/g," ").replace(/^(base|none|null)$/,"");
+}
+function cardKey(c){
+  return [normPart(c.player),normPart(c.year),normPart(c.set),normPart(c.number),normPart(c.parallel),normPart(c.insert)].join("|");
+}
+function copyValue(c){
+  const n = binderCad(c);
+  return n==null ? -1 : n;
+}
+function groupByCard(cards){
+  const map = {};
+  (cards||[]).forEach(c => {
+    const k = cardKey(c);
+    if (!map[k]) map[k] = [];
+    map[k].push(c);
+  });
+  return Object.keys(map).map(k => {
+    const copies = map[k].slice().sort((a,b)=> copyValue(b)-copyValue(a));
+    return { key:k, copies:copies, face:copies[0], qty:copies.length };
+  });
+}
+function cardRowHtml(c, qty, key){
   try {
+  qty = qty || 1;
   const img = photoSrc(c);
   const line = [c.team,c.year,c.set,c.number?"#"+c.number:""].filter(Boolean).join(" · ");
   const grade = (!c.grader||c.grader==="Raw")?"Raw":[c.grader,c.grade].filter(Boolean).join(" ");
   const chips = "<div>"+(c.insert?"<span class=\"chip\">"+c.insert+"</span>":"")+(c.parallel?"<span class=\"chip\">"+c.parallel+"</span>":(!c.insert?"<span class=\"chip dim\">Base</span>":""))+"<span class=\"chip dim\">"+grade+"</span></div>";
   const tier = tierFromCad(binderCad(c));
-  return "<article class=\"item"+grailCls(c)+(tier?" tier-"+tier:"")+"\" data-open=\""+c.id+"\">"+
+  const open = qty>1 ? " data-copies=\""+String(key||cardKey(c)).replace(/"/g,"")+"\"" : " data-open=\""+c.id+"\"";
+  return "<article class=\"item"+grailCls(c)+(tier?" tier-"+tier:"")+"\""+open+">"+
     "<div class=\"item-top\"><img src=\""+img+"\" alt=\"\" onerror=\"this.style.opacity=0\" /><div><h3>"+dash(c.player)+"</h3>"+
     "<div class=\"muted\">"+dash(line)+"</div>"+chips+
     "<div class=\"muted\" style=\"margin-top:4px\">"+money(c.comp)+" market · "+money(c.cost)+" paid</div>"+
-    "<button class=\"ghost\" data-edit=\""+c.id+"\" style=\"width:auto;margin-top:8px;padding:6px 12px\">Edit</button></div></div>"+
+    (qty>1?"":"<button class=\"ghost\" data-edit=\""+c.id+"\" style=\"width:auto;margin-top:8px;padding:6px 12px\">Edit</button>")+
+    "</div></div>"+
+    (qty>1?"<span class=\"qty-pill\">×"+qty+"</span>":"")+
     (tier?"<span class=\"tier-tag "+tier+"\">"+tierLabel(tier)+"</span>":"")+
     "</article>";
   } catch(e) {
@@ -2175,25 +2212,26 @@ function renderBinder(){
     }
     return true;
   });
-  if (sort==="team") rows.sort((a,b)=> teamName(a).localeCompare(teamName(b)) || (a.player||"").localeCompare(b.player||""));
-  else if (sort==="player") rows.sort((a,b)=> lastName(a.player).localeCompare(lastName(b.player)));
-  else if (sort==="value") rows.sort((a,b)=> (+b.comp||0)-(+a.comp||0));
+  let groups = groupByCard(rows);
+  if (sort==="team") groups.sort((a,b)=> teamName(a.face).localeCompare(teamName(b.face)) || (a.face.player||"").localeCompare(b.face.player||""));
+  else if (sort==="player") groups.sort((a,b)=> lastName(a.face.player).localeCompare(lastName(b.face.player)));
+  else if (sort==="value") groups.sort((a,b)=> copyValue(b.face)-copyValue(a.face));
   const t = totals();
   $("valueNote").textContent = "";
-  if (!rows.length) { $("list").innerHTML = "<p class=\"muted\">No cards match.</p>"; return; }
+  if (!groups.length) { $("list").innerHTML = "<p class=\"muted\">No cards match.</p>"; return; }
   if (sort==="team" && !teamF) {
     let html = "", last = "";
-    rows.forEach(c => {
-      const tm = teamName(c);
+    groups.forEach(g => {
+      const tm = teamName(g.face);
       if (tm !== last) {
         html += "<p class=\"muted\" style=\"margin:14px 0 6px;font-weight:700;letter-spacing:.04em;text-transform:uppercase\">"+tm+"</p>";
         last = tm;
       }
-      html += cardRowHtml(c);
+      html += cardRowHtml(g.face, g.qty, g.key);
     });
     $("list").innerHTML = html;
   } else {
-    $("list").innerHTML = rows.map(cardRowHtml).join("");
+    $("list").innerHTML = groups.map(g => cardRowHtml(g.face, g.qty, g.key)).join("");
   }
 }
 function renderSearch(){
@@ -2205,12 +2243,48 @@ function renderSearch(){
     const hay = [c.player,c.team,c.set,c.year,c.number,c.insert,c.parallel,c.cert].join(" ").toLowerCase();
     return hay.includes(q);
   });
-  box.innerHTML = rows.length ? rows.map(cardRowHtml).join("") : "<p class=\"muted\">No cards match.</p>";
+  const groups = groupByCard(rows);
+  box.innerHTML = groups.length ? groups.map(g => cardRowHtml(g.face, g.qty, g.key)).join("") : "<p class=\"muted\">No cards match.</p>";
 }
 $("openSearch") && ($("openSearch").onclick = () => { if ($("q")) $("q").value = ""; show("search"); setTimeout(() => $("q") && $("q").focus(), 200); });
 $("backBindFromSearch") && ($("backBindFromSearch").onclick = () => show("bind"));
 $("q") && ($("q").oninput = renderSearch);
+function openCopies(key, from, slug){
+  window.copiesKey = key;
+  window.copiesFrom = from || "bind";
+  window.copiesSlug = slug || "";
+  const pool = from==="pub" ? pubCards : load();
+  const copies = pool.filter(c => cardKey(c)===key).sort((a,b)=> copyValue(b)-copyValue(a));
+  const face = copies[0];
+  if ($("copiesTitle")) $("copiesTitle").textContent = dash(face && face.player)+" · "+copies.length+" copies";
+  if ($("copiesNote")) $("copiesNote").textContent = "Same card, different copies (raw and slabs count together).";
+  const box = $("copiesList");
+  if (box) {
+    if (from==="pub") box.innerHTML = copies.map(c => pubCardHtml(c)).join("");
+    else box.innerHTML = copies.map(c => cardRowHtml(c, 1)).join("");
+  }
+  show("copies");
+}
+$("backCopies") && ($("backCopies").onclick = () => {
+  if (window.copiesFrom==="pub") show("pub");
+  else if (window.copiesFrom==="search") show("search");
+  else show("bind");
+});
+$("copiesList") && ($("copiesList").onclick = e => {
+  const ed = e.target.closest("[data-edit]");
+  if (ed) { openId = ed.getAttribute("data-edit"); fillEdit(); show("edit"); return; }
+  const pub = e.target.closest("[data-pub]");
+  if (pub) {
+    const c = pubCards.find(x => x.id === pub.getAttribute("data-pub"));
+    if (c) openPubCard(c);
+    return;
+  }
+  const art = e.target.closest("[data-open]");
+  if (art) openDetail(art.getAttribute("data-open"));
+});
 $("searchList") && ($("searchList").onclick = e => {
+  const stack = e.target.closest("[data-copies]");
+  if (stack) { openCopies(stack.getAttribute("data-copies"), "search"); return; }
   const art = e.target.closest("[data-open]");
   if (art) openDetail(art.getAttribute("data-open"));
 });
@@ -2227,6 +2301,8 @@ $("list").onclick = e => {
     show("edit");
     return;
   }
+  const stack = e.target.closest("[data-copies]");
+  if (stack) { openCopies(stack.getAttribute("data-copies"), "bind"); return; }
   const art = e.target.closest("[data-open]");
   if (art) openDetail(art.getAttribute("data-open"));
 };
@@ -2773,9 +2849,11 @@ let myAvatar = "";
 let viewSlug = "";
 let viewCard = null;
 let pubCards = [];
-function pubCardHtml(c){
+function pubCardHtml(c, qty, key){
   const pt = tierFromCad(publicCad(c) || (viewSlug===mySlug ? binderCad(c) : null));
-  return "<article class=\"item"+grailCls(c)+(pt?" tier-"+pt:"")+"\" data-pub=\""+c.id+"\"><div class=\"item-top\"><img src=\""+photoSrc(c, viewSlug)+"\" alt=\"\" /><div><h3>"+(c.player||"—")+" <span class=\"heart\">♥ "+(c.likes||0)+"</span></h3><div class=\"muted\">"+[c.team,c.year,c.set,c.number?"#"+c.number:""].filter(Boolean).join(" · ")+"</div></div></div>"+(pt?"<span class=\"tier-tag "+pt+"\">"+tierLabel(pt)+"</span>":"")+"</article>";
+  qty = qty || 1;
+  const open = qty>1 ? " data-copies=\""+String(key||cardKey(c)).replace(/"/g,"")+"\"" : " data-pub=\""+c.id+"\"";
+  return "<article class=\"item"+grailCls(c)+(pt?" tier-"+pt:"")+"\""+open+"><div class=\"item-top\"><img src=\""+photoSrc(c, viewSlug)+"\" alt=\"\" /><div><h3>"+(c.player||"—")+" <span class=\"heart\">♥ "+(c.likes||0)+"</span></h3><div class=\"muted\">"+[c.team,c.year,c.set,c.number?"#"+c.number:""].filter(Boolean).join(" · ")+"</div></div></div>"+(qty>1?"<span class=\"qty-pill\">×"+qty+"</span>":"")+(pt?"<span class=\"tier-tag "+pt+"\">"+tierLabel(pt)+"</span>":"")+"</article>";
 }
 function renderPubList(){
   const box = $("pubList");
@@ -2816,23 +2894,24 @@ function renderPubList(){
     if (setF && ((c.set||"").trim() || "No set")!==setF) return false;
     return true;
   });
-  if (sort==="team") rows.sort((a,b)=> teamName(a).localeCompare(teamName(b)) || lastName(a.player).localeCompare(lastName(b.player)));
-  else if (sort==="player") rows.sort((a,b)=> lastName(a.player).localeCompare(lastName(b.player)));
-  else if (sort==="value") rows.sort((a,b)=> (+b.comp||0)-(+a.comp||0));
-  else rows.sort((a,b)=> String(b.added||b.id||"").localeCompare(String(a.added||a.id||"")));
-  if (!rows.length) { box.innerHTML = "<p class=\"muted\">No cards match.</p>"; return; }
+  let groups = groupByCard(rows);
+  if (sort==="team") groups.sort((a,b)=> teamName(a.face).localeCompare(teamName(b.face)) || lastName(a.face.player).localeCompare(lastName(b.face.player)));
+  else if (sort==="player") groups.sort((a,b)=> lastName(a.face.player).localeCompare(lastName(b.face.player)));
+  else if (sort==="value") groups.sort((a,b)=> copyValue(b.face)-copyValue(a.face));
+  else groups.sort((a,b)=> String(b.face.added||b.face.id||"").localeCompare(String(a.face.added||a.face.id||"")));
+  if (!groups.length) { box.innerHTML = "<p class=\"muted\">No cards match.</p>"; return; }
   if (sort==="team" && !teamF) {
     let html = "", last = "";
-    rows.forEach(c => {
-      const tm = teamName(c);
+    groups.forEach(g => {
+      const tm = teamName(g.face);
       if (tm !== last) {
         html += "<p class=\"muted\" style=\"margin:14px 0 6px;font-weight:700;letter-spacing:.04em;text-transform:uppercase\">"+tm+"</p>";
         last = tm;
       }
-      html += pubCardHtml(c);
+      html += pubCardHtml(g.face, g.qty, g.key);
     });
     box.innerHTML = html;
-  } else box.innerHTML = rows.map(pubCardHtml).join("");
+  } else box.innerHTML = groups.map(g => pubCardHtml(g.face, g.qty, g.key)).join("");
 }
 if ($("pubSort")) $("pubSort").onchange = renderPubList;
 if ($("pubTeam")) $("pubTeam").onchange = renderPubList;
@@ -3603,6 +3682,8 @@ async function openPublic(slug, cardId){
   }
 }
 $("pubList") && ($("pubList").onclick = e => {
+  const stack = e.target.closest("[data-copies]");
+  if (stack) { openCopies(stack.getAttribute("data-copies"), "pub", viewSlug); return; }
   const art = e.target.closest("[data-pub]");
   if (!art) return;
   const c = pubCards.find(x => x.id === art.getAttribute("data-pub"));
