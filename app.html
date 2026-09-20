@@ -160,11 +160,13 @@
     .bookbar b { font-size:22px; }
     .book-pulse, .book-pulse b, .book-pulse .qs b { animation: bookPulse 1s ease-in-out infinite; }
     @keyframes bookPulse { 50% { opacity:.4; } }
-    .dock { position:fixed; left:0; right:0; bottom:0; z-index:20; display:none; grid-template-columns:repeat(4,1fr); gap:0; background:#0c141b; border-top:1px solid var(--line); padding:6px 4px calc(6px + env(safe-area-inset-bottom)); }
+    .dock { position:fixed; left:0; right:0; bottom:0; z-index:20; display:none; grid-template-columns:repeat(4,1fr); gap:0; background:#0c141b; border-top:1px solid var(--line); padding:8px 6px calc(8px + env(safe-area-inset-bottom)); }
     body.dock-on .dock { display:grid; }
-    .dock button { width:auto; margin:0; padding:10px 4px; font-size:12px; background:transparent; color:var(--muted); border:0; border-radius:0; }
-    .dock button.on { color:var(--ice); }
-    .dock button.ping, button.ghost.ping { color:#7ef0d2; font-weight:800; box-shadow:inset 0 0 0 2px #7ef0d2; border-radius:10px; }
+    .dock button { width:auto; margin:0; padding:6px 4px 4px; font-size:10px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; background:transparent; color:#6d8494; border:0; border-radius:12px; }
+    .dock button.on { color:var(--ice); background:rgba(143,212,238,.08); }
+    .dock button.ping { color:#7ef0d2; box-shadow:inset 0 0 0 1.5px #7ef0d2; }
+    button.ghost.ping { color:#7ef0d2; font-weight:800; box-shadow:inset 0 0 0 2px #7ef0d2; border-radius:10px; }
+    .dock svg { width:20px; height:20px; stroke:currentColor; fill:none; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
     #tabFind.grail-new, #openGrails.grail-new {
       animation: grail-burn 1.15s ease-in-out infinite;
       color:#ffb0a0;
@@ -247,8 +249,7 @@
     .item.comment, .thread .item { padding:8px 10px; margin-bottom:6px; }
     .item.reply { margin-left:14px; padding:8px 10px; }
     .board-post { border-width:1px; padding:10px 12px; }
-    .dock button { display:flex; flex-direction:column; align-items:center; gap:3px; font-size:10px; letter-spacing:.02em; }
-    .dock button .ico { font-size:16px; line-height:1; }
+    .dock button { display:flex; flex-direction:column; align-items:center; gap:4px; }
     header { background:var(--bg); }
     .dock { background:var(--ink); }
     .fxbar, .yf, .ticker { background:var(--ink); }
@@ -637,7 +638,7 @@
     <div id="youHub">
       <div class="you-group">
         <button class="ghost" data-you="youProfile">Profile</button>
-        <button class="ghost" data-you="youAlerts">Alerts</button>
+        <button class="ghost" data-you="youAlerts">Inbox</button>
         <button class="ghost" data-you="youBill">Ice+ / Rip Night!</button>
       </div>
       <div class="you-group">
@@ -722,7 +723,10 @@
     </div>
     <div id="youAlerts" class="hidden">
     <button class="ghost" data-you="youHub">Back</button>
-    <h3 style="font-size:15px;margin:16px 0 8px">Follow alerts</h3>
+    <h3 style="font-size:15px;margin:16px 0 8px">Inbox</h3>
+    <p class="muted">Notes from Ice Ledger Management.</p>
+    <div id="youInbox"></div>
+    <h3 style="font-size:15px;margin:20px 0 8px">Follow alerts</h3>
     <p class="muted">Ping when a binder you follow adds a card. Works with the app open or on the Home Screen.</p>
     <label><input id="followAlertOn" type="checkbox" style="width:auto;margin-right:8px" /> New cards on binders I follow</label>
     <label><input id="grailAlertOn" type="checkbox" style="width:auto;margin-right:8px" /> New grails (1/1s)</label>
@@ -938,10 +942,10 @@
     <p class="muted" id="editNote"></p>
   </section>
   <nav class="dock" id="dock">
-    <button id="tabScan"><span class="ico">▣</span>Scan</button>
-    <button id="tabBind"><span class="ico">☰</span>Binder</button>
-    <button id="tabFind"><span class="ico">◉</span>Community</button>
-    <button id="tabSet"><span class="ico">○</span>You</button>
+    <button id="tabScan"><svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" rx="2"/><circle cx="12" cy="12" r="3"/></svg>Scan</button>
+    <button id="tabBind"><svg viewBox="0 0 24 24"><path d="M6 4h11a2 2 0 0 1 2 2v14H8a2 2 0 0 1-2-2V4z"/><path d="M6 18a2 2 0 0 1 2-2h13"/><path d="M9 8h8M9 12h6"/></svg>Binder</button>
+    <button id="tabFind"><svg viewBox="0 0 24 24"><circle cx="9" cy="9" r="3"/><circle cx="16" cy="10" r="2.4"/><path d="M4.5 19c.6-2.4 2.6-4 4.5-4s3.9 1.6 4.5 4M13.2 19c.3-1.6 1.5-2.8 2.8-2.8 1.2 0 2.3.9 2.7 2.3"/></svg>Community</button>
+    <button id="tabSet"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.2"/><path d="M5.5 19c.8-3.2 3.2-5 6.5-5s5.7 1.8 6.5 5"/></svg>You</button>
   </nav>
   </div>
 <div class="ava-full" id="likersFull">
@@ -1251,6 +1255,20 @@ function youShow(which){
   });
   if (which==="youBill") refreshUsage();
   if (which==="youComm") loadCommunity();
+  if (which==="youAlerts") paintYouInbox();
+}
+async function paintYouInbox(){
+  const box = $("youInbox");
+  if (!box) return;
+  const rows = (await fetchNotes()).filter(n => noteKind(n)==="mgmt");
+  box.innerHTML = rows.length ? rows.map(n =>
+    "<article class=\"item\" style=\"cursor:default\"><b>"+String(n.body||"").replace(/[<>]/g,"")+"</b><div class=\"muted\">"+timeAgo(n.created)+(n.read?"":" · new")+"</div></article>"
+  ).join("") : "<p class=\"muted\">No messages yet.</p>";
+  const ids = rows.filter(n => !n.read).map(n => n.id);
+  if (ids.length) {
+    await fetch("/notes/read", { method:"POST", headers:{ "Content-Type":"application/json", "x-token": token() }, body: JSON.stringify({ ids }) });
+    refreshNotesBadge();
+  }
 }
 document.addEventListener("click", ev => {
   const b = ev.target.closest("[data-you]");
@@ -1774,14 +1792,39 @@ function stopLive(){
   liveStream = null;
   if ($("liveCam")) $("liveCam").classList.add("hidden");
 }
+function phoneIsLandscape(){
+  const t = (screen.orientation && screen.orientation.type) || "";
+  if (/landscape/i.test(t)) return true;
+  if (typeof window.orientation === "number" && Math.abs(window.orientation) === 90) return true;
+  return window.innerWidth > window.innerHeight;
+}
+function snapFrame(vid){
+  const bw = vid.videoWidth || 1, bh = vid.videoHeight || 1;
+  const visLand = (vid.clientWidth || 1) >= (vid.clientHeight || 1);
+  const bufLand = bw >= bh;
+  const wantLand = phoneIsLandscape() || visLand;
+  const c = document.createElement("canvas");
+  const ctx = c.getContext("2d");
+  if (wantLand && !bufLand) {
+    c.width = bh; c.height = bw;
+    ctx.translate(c.width, 0);
+    ctx.rotate(Math.PI / 2);
+    ctx.drawImage(vid, 0, 0);
+  } else if (!wantLand && bufLand) {
+    c.width = bh; c.height = bw;
+    ctx.translate(0, c.height);
+    ctx.rotate(-Math.PI / 2);
+    ctx.drawImage(vid, 0, 0);
+  } else {
+    c.width = bw; c.height = bh;
+    ctx.drawImage(vid, 0, 0);
+  }
+  return c.toDataURL("image/jpeg", 0.86);
+}
 async function snapLive(){
   const vid = $("liveVid");
   if (!vid || !vid.videoWidth) return;
-  const c = document.createElement("canvas");
-  c.width = vid.videoWidth;
-  c.height = vid.videoHeight;
-  c.getContext("2d").drawImage(vid, 0, 0);
-  const data = c.toDataURL("image/jpeg", 0.86);
+  const data = snapFrame(vid);
   const file = await dataToFile(data, liveTarget+".jpg");
   stopLive();
   if (liveTarget === "back") {
@@ -3806,17 +3849,12 @@ async function refreshNotesBadge(){
     const n = d.unread || 0;
     const b = $("noteBadge");
     if (b) b.textContent = n ? ("("+n+")") : "";
-    if ($("tabFind")) {
-      $("tabFind").textContent = "Community";
-      $("tabFind").classList.toggle("ping", n > 0);
-    }
-    if ($("openNotes")) {
-      $("openNotes").textContent = "Alerts";
-      $("openNotes").classList.toggle("ping", n > 0);
-    }
     const mgmt = (d.notes||[]).some(x => !x.read && /ice ledger management/i.test(x.body||""));
-    if ($("tabSet")) $("tabSet").classList.toggle("ping", mgmt || n > 0);
-    document.querySelectorAll("[data-you=youAlerts]").forEach(el => el.classList.toggle("ping", mgmt || n > 0));
+    const social = (d.notes||[]).some(x => !x.read && !/ice ledger management/i.test(x.body||""));
+    if ($("tabFind")) $("tabFind").classList.toggle("ping", social);
+    if ($("openNotes")) $("openNotes").classList.toggle("ping", n > 0);
+    if ($("tabSet")) $("tabSet").classList.toggle("ping", mgmt);
+    document.querySelectorAll("[data-you=youAlerts]").forEach(el => el.classList.toggle("ping", mgmt));
     const last = +(localStorage.getItem("ice-note-unread")||0);
     const fresh = (d.notes||[]).filter(x => !x.read);
     const msg = (fresh[0] && fresh[0].body) || "";
