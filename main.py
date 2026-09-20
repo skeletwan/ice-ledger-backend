@@ -447,7 +447,7 @@ Return ONLY JSON, no markdown:
   "sources": [string]
 }}
 suggested_cad is the median sold CAD for this exact copy (same player/set/number/parallel/insert/grade).
-If the card is PSA 10, suggested_cad MUST be a PSA 10 sold, not raw. If BGS 9.5 / SGC 10, same rule. Include grader and grade in the one search query.
+If the card is PSA 10, suggested_cad MUST be a PSA 10 sold, not raw. PSA 10 should not come in below a PSA 9 of the same card. If BGS 9.5 / SGC 10, same rule. Include grader and grade in the one search query.
 Only use sold sale prices. Never use the card number, year, print run, or cert as a price.
 Convert USD to CAD at 1.35.
 """
@@ -620,6 +620,40 @@ async def comp(
         data["error"] = err
         data["needs_review"] = True
         data["summary"] = data.get("summary") or "Could not read solds automatically."
+    grader = str(card.get("grader") or "").upper()
+    grade = str(card.get("grade") or "")
+    sug = data.get("suggested_cad")
+    if sug and grader == "PSA" and re.match(r"^10", grade):
+        base = "|".join(str(card.get(k) or "").strip().lower() for k in ("player","year","set","number","parallel","insert"))
+        try:
+            con = db()
+            floor = 0.0
+            for g in ("psa|9", "psa|9.0", "bgs|9.5"):
+                row = con.execute("SELECT data FROM comp_cache WHERE k=?", (base+"|"+g,)).fetchone()
+                if not row:
+                    continue
+                try:
+                    old = json.loads(row["data"])
+                    v = old.get("suggested_cad") or old.get("psa9_cad") or old.get("bgs95_cad")
+                    if v:
+                        floor = max(floor, float(v))
+                except Exception:
+                    pass
+            # also any PSA 9 key suffix
+            for row in con.execute("SELECT k,data FROM comp_cache WHERE k LIKE ?", (base+"|psa|9%",)).fetchall():
+                try:
+                    old = json.loads(row["data"])
+                    v = old.get("suggested_cad")
+                    if v:
+                        floor = max(floor, float(v))
+                except Exception:
+                    pass
+            con.close()
+            if floor and float(sug) < floor:
+                data["suggested_cad"] = round(floor, 2)
+                data["summary"] = (data.get("summary") or "") + " PSA 10 floored to stored PSA 9."
+        except Exception:
+            pass
     if ck.strip("|") and (data.get("suggested_cad") or data.get("raw_cad") or data.get("psa10_cad")):
         try:
             con = db()
@@ -2027,6 +2061,15 @@ async def save_profile(payload: dict, request: Request, x_token: str | None = He
     if not display:
         raise HTTPException(400, "pick a screen name")
     con = db()
+    taken = None
+    if display.lower() != "collector":
+        taken = con.execute(
+            "SELECT id FROM users WHERE id!=? AND lower(trim(IFNULL(display,'')))=lower(trim(?))",
+            (uid, display),
+        ).fetchone()
+    if taken:
+        con.close()
+        raise HTTPException(409, "that screen name is taken")
     con.execute(
         "UPDATE users SET display=?, hue=?, bio=?, avatar=?, cropx=?, cropy=?, cropz=?, socials=? WHERE id=?",
         (display, hue, bio, avatar, cropx, cropy, cropz, json.dumps(socials), uid),
@@ -2034,6 +2077,44 @@ async def save_profile(payload: dict, request: Request, x_token: str | None = He
     con.commit()
     con.close()
     return {"ok": True, "display": display, "hue": hue, "bio": bio, "avatar": avatar, "socials": socials}
+
+@app.get("/ledgerz")
+async def ledgerz(q: str = "", request: Request = None):
+    qn = re.sub(r"\s+", " ", (q or "").strip().lower())
+    if len(qn) < 2:
+        return {"cards": []}
+    con = db()
+    users = {r["id"]: r for r in con.execute("SELECT id,slug,display,IFNULL(suspended,0) AS suspended FROM users").fetchall()}
+    rows = con.execute("SELECT user_id, data FROM cards ORDER BY id DESC LIMIT 4000").fetchall()
+    con.close()
+    out = []
+    for r in rows:
+        u = users.get(r["user_id"])
+        if not u or int(u["suspended"] or 0):
+            continue
+        try:
+            c = json.loads(r["data"])
+        except Exception:
+            continue
+        hay = " ".join(str(c.get(k) or "") for k in ("player","team","set","year","number","insert","parallel")).lower()
+        if qn not in hay and not all(p in hay for p in qn.split()):
+            continue
+        out.append({
+            "id": c.get("id"),
+            "player": c.get("player"),
+            "team": c.get("team"),
+            "year": c.get("year"),
+            "set": c.get("set"),
+            "number": c.get("number"),
+            "grader": c.get("grader"),
+            "grade": c.get("grade"),
+            "comp": c.get("sysComp") or c.get("comp"),
+            "slug": u["slug"],
+            "display": u["display"] or "Collector",
+        })
+        if len(out) >= 80:
+            break
+    return {"cards": out}
 
 @app.get("/u/{slug}")
 async def public_binder(slug: str, request: Request, x_token: str | None = Header(default=None)):

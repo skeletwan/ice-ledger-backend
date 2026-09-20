@@ -119,7 +119,11 @@
     .tier-tag.platinum { color:#dce8f4; font-family:Georgia,"Times New Roman",serif; font-weight:600; letter-spacing:.16em; font-size:10px; text-shadow:0 0 8px rgba(180,210,255,.7); }
     .tier-tag.diamond { color:#bfefff; font-family:Georgia,"Times New Roman",serif; font-weight:600; letter-spacing:.18em; font-size:10px; font-style:italic; }
     .item-top { display:grid; grid-template-columns:72px 1fr; gap:10px; }
-    .item img { width:auto; height:88px; max-width:150px; object-fit:contain; background:#000; border-radius:8px; }
+    .item img { width:auto; height:64px; max-width:72px; object-fit:contain; background:#000; border-radius:8px; }
+    .row-chg { font-size:11px; font-weight:700; margin-top:2px; }
+    .row-chg.up { color:#3dd68c; }
+    .row-chg.dn { color:#ff6b6b; }
+    .row-spark { display:inline-block; width:42px; height:16px; vertical-align:middle; margin-left:6px; }
     .qty-pill { position:absolute; left:8px; bottom:8px; min-width:28px; text-align:center; font-size:11px; font-weight:800; letter-spacing:.04em; padding:2px 6px; border-radius:8px; background:#0b1116; color:var(--ice); border:1px solid var(--ice); z-index:2; }
     .item h3 { margin:0 0 2px; font-size:15px; }
     .px { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin-top:8px; }
@@ -334,18 +338,19 @@
       </ul>
     </div>
     <div class="row2" style="margin-top:14px">
-      <label class="shot-wrap" id="shotFront" for="file">
-        <input class="shot-file" id="file" type="file" accept="image/*" />
-        <div class="shot-ui">Front</div>
-      </label>
-      <label class="shot-wrap" id="shotBack" for="fileBack">
-        <input class="shot-file" id="fileBack" type="file" accept="image/*" />
-        <div class="shot-ui">Back</div>
-      </label>
+      <button type="button" class="shot-wrap" id="shotFront"><div class="shot-ui">Front</div></button>
+      <button type="button" class="shot-wrap" id="shotBack"><div class="shot-ui">Back</div></button>
+    </div>
+    <div id="liveCam" class="hidden" style="margin-top:10px">
+      <video id="liveVid" autoplay playsinline style="width:100%;border-radius:12px;background:#000"></video>
+      <div class="row2">
+        <button type="button" id="liveSnap">Take photo</button>
+        <button type="button" class="ghost" id="liveCancel">Cancel</button>
+      </div>
     </div>
     <div class="row2">
-      <div class="preview hidden" id="scanBox"><h3>Front</h3><img id="scanImg" alt="" /><button type="button" class="ghost" id="rotFront" style="width:auto;margin-top:8px;padding:6px 12px">Rotate</button></div>
-      <div class="preview hidden" id="backBox"><h3>Back</h3><img id="backImg" alt="" /><button type="button" class="ghost" id="rotBack" style="width:auto;margin-top:8px;padding:6px 12px">Rotate</button></div>
+      <div class="preview hidden" id="scanBox"><h3>Front</h3><img id="scanImg" alt="" /></div>
+      <div class="preview hidden" id="backBox"><h3>Back</h3><img id="backImg" alt="" /></div>
     </div>
     <button id="go" disabled>Identify card</button>
     <button class="ghost hidden" id="resumeId">Resume this card</button>
@@ -410,6 +415,8 @@
         <option value="team">Team</option>
         <option value="player">Player (last name)</option>
         <option value="value">Highest book</option>
+        <option value="movers">Big movers</option>
+        <option value="losers">Big losers</option>
       </select>
       <select id="teamFilter">
         <option value="">All teams</option>
@@ -443,11 +450,19 @@
     <p class="muted" id="copiesNote"></p>
     <div id="copiesList"></div>
   </section>
+  <section class="page" id="ledgerzPage">
+    <button class="ghost" id="backLedgerz">Back to community</button>
+    <h2 style="font-size:18px;margin:12px 0 8px">Search Ledgerz</h2>
+    <p class="muted">Player or team across every public binder.</p>
+    <input id="ledgerzQ" placeholder="Matthews, Leafs…" autocomplete="off" />
+    <div id="ledgerzList"></div>
+  </section>
   <section class="page" id="findPage">
     <div class="row2">
       <button class="ghost" id="openFollowing">Following</button>
       <button class="ghost" id="openFeed">Just added</button>
       <button class="ghost" id="openGrails">Grails</button>
+      <button class="ghost" id="openLedgerz">Search Ledgerz</button>
       <button class="ghost" id="openNotes">Alerts</button>
     </div>
     <input id="findQ" placeholder="Screen name or player…" />
@@ -512,6 +527,8 @@
         <option value="team">Team</option>
         <option value="player">Player (last name)</option>
         <option value="value">Highest book</option>
+        <option value="movers">Big movers</option>
+        <option value="losers">Big losers</option>
       </select>
       <select id="pubTeam">
         <option value="">All teams</option>
@@ -1196,6 +1213,7 @@ function show(id){
   if ($("helpPage")) $("helpPage").classList.toggle("on", id==="help");
   if ($("searchPage")) $("searchPage").classList.toggle("on", id==="search");
   if ($("copiesPage")) $("copiesPage").classList.toggle("on", id==="copies");
+  if ($("ledgerzPage")) $("ledgerzPage").classList.toggle("on", id==="ledgerz");
   if ($("notesPage")) $("notesPage").classList.toggle("on", id==="notes");
   if ($("notesCatPage")) $("notesCatPage").classList.toggle("on", id==="notesCat");
   if (id==="scan" && $("status")) $("status").textContent = "";
@@ -1211,7 +1229,7 @@ function show(id){
   document.body.classList.toggle("dock-on", true);
   document.body.classList.toggle("chart-on", id==="bind" && document.body.classList.contains("chart-open"));
   ["tabScan","tabBind","tabFind","tabSet"].forEach(tid => {
-    if ($(tid)) $(tid).classList.toggle("on", (tid==="tabScan"&&(id==="scan"||id==="result"))||(tid==="tabBind"&&(id==="bind"||id==="detail"||id==="edit"||id==="search"))||(tid==="tabFind"&&(id==="find"||id==="pub"||id==="pubDetail"||id==="notes"||id==="notesCat"||id==="feed"))||(tid==="tabSet"&&(id==="set"||id==="ops"||id==="help")));
+    if ($(tid)) $(tid).classList.toggle("on", (tid==="tabScan"&&(id==="scan"||id==="result"))||(tid==="tabBind"&&(id==="bind"||id==="detail"||id==="edit"||id==="search"))||(tid==="tabFind"&&(id==="find"||id==="pub"||id==="pubDetail"||id==="notes"||id==="notesCat"||id==="feed"||id==="ledgerz"))||(tid==="tabSet"&&(id==="set"||id==="ops"||id==="help")));
   });
   window.scrollTo(0,0);
 }
@@ -1666,38 +1684,66 @@ function clearIdFields(){
   $("compNote").textContent = "";
   $("result").classList.add("hidden");
 }
-$("file").onchange = async () => {
-  const f = $("file").files[0];
-  if (!f) return;
-  frontFile = f;
-  clearIdFields();
-  bindData = null;
-  if ($("bindBox")) $("bindBox").classList.add("hidden");
-  scanData = await toJpeg(f, 900);
-  $("scanImg").src = scanData || URL.createObjectURL(f);
-  $("scanBox").classList.remove("hidden");
-  if ($("shotFront")) $("shotFront").classList.add("on");
-  lockIdentify();
-  $("status").textContent = backFile
-    ? "New front loaded. Back is still attached. Identify when ready."
-    : "Front loaded. Add the back on raws, then Identify.";
-  requestAnimationFrame(() => {
-    const btn = $("go");
-    if (btn) btn.scrollIntoView({ behavior: "smooth", block: "center" });
-  });
-};
-$("fileBack").onchange = async () => {
-  const f = $("fileBack").files[0];
-  if (!f) return;
-  backFile = f;
-  window.backData = await toJpeg(f, 900);
-  $("backImg").src = window.backData || URL.createObjectURL(f);
-  $("backBox").classList.remove("hidden");
-  if ($("shotBack")) $("shotBack").classList.add("on");
-  $("status").textContent = frontFile
-    ? "Back loaded. Front is still attached. Identify when ready."
-    : "Back loaded. Add the front, then Identify.";
-};
+let liveTarget = "front";
+let liveStream = null;
+async function openLive(which){
+  liveTarget = which;
+  const box = $("liveCam");
+  const vid = $("liveVid");
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    $("status").textContent = "Camera only. This browser has no live camera.";
+    $("status").className = "status err";
+    return;
+  }
+  try {
+    if (liveStream) liveStream.getTracks().forEach(t => t.stop());
+    liveStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
+    vid.srcObject = liveStream;
+    box.classList.remove("hidden");
+    $("status").textContent = "Line up the card, then Take photo.";
+  } catch(e) {
+    $("status").textContent = "Camera blocked. Allow camera for Ice Ledger.";
+    $("status").className = "status err";
+  }
+}
+function stopLive(){
+  if (liveStream) liveStream.getTracks().forEach(t => t.stop());
+  liveStream = null;
+  if ($("liveCam")) $("liveCam").classList.add("hidden");
+}
+async function snapLive(){
+  const vid = $("liveVid");
+  if (!vid || !vid.videoWidth) return;
+  const c = document.createElement("canvas");
+  c.width = vid.videoWidth;
+  c.height = vid.videoHeight;
+  c.getContext("2d").drawImage(vid, 0, 0);
+  const data = c.toDataURL("image/jpeg", 0.86);
+  const file = await dataToFile(data, liveTarget+".jpg");
+  stopLive();
+  if (liveTarget === "back") {
+    backFile = file;
+    window.backData = data;
+    $("backImg").src = data;
+    $("backBox").classList.remove("hidden");
+    if ($("shotBack")) $("shotBack").classList.add("on");
+    $("status").textContent = frontFile ? "Back loaded. Identify when ready." : "Back loaded. Add the front.";
+  } else {
+    frontFile = file;
+    scanData = data;
+    clearIdFields();
+    $("scanImg").src = data;
+    $("scanBox").classList.remove("hidden");
+    if ($("shotFront")) $("shotFront").classList.add("on");
+    lockIdentify();
+    $("status").textContent = backFile ? "Front loaded. Identify when ready." : "Front loaded. Add the back on raws.";
+    requestAnimationFrame(() => { const btn = $("go"); if (btn) btn.scrollIntoView({ behavior:"smooth", block:"center" }); });
+  }
+}
+$("shotFront") && ($("shotFront").onclick = () => openLive("front"));
+$("shotBack") && ($("shotBack").onclick = () => openLive("back"));
+$("liveSnap") && ($("liveSnap").onclick = snapLive);
+$("liveCancel") && ($("liveCancel").onclick = stopLive);
 function blobJpegUrl(file, max){
   return new Promise(resolve => {
     const img = new Image();
@@ -2220,6 +2266,25 @@ function copyValue(c){
   const n = binderCad(c);
   return n==null ? -1 : n;
 }
+function cardMove(c){
+  const h = (c && c.hist) || [];
+  if (h.length < 2) return null;
+  const a = +h[h.length-2].v, b = +h[h.length-1].v;
+  if (!(a>0) || isNaN(b)) return null;
+  return { pct: ((b-a)/a)*100, pts: h.slice(-8).map(p => +p.v).filter(n => !isNaN(n)) };
+}
+function miniSpark(pts, up){
+  if (!pts || pts.length<2) return "";
+  const mn = Math.min.apply(null, pts), mx = Math.max.apply(null, pts);
+  const w=42,h=16;
+  const d = pts.map((v,i) => {
+    const x = i/(pts.length-1)*w;
+    const y = mx===mn ? h/2 : h-2-((v-mn)/(mx-mn))*(h-4);
+    return (i?"L":"M")+x.toFixed(1)+" "+y.toFixed(1);
+  }).join(" ");
+  const col = up ? "#3dd68c" : "#ff6b6b";
+  return "<svg class=\"row-spark\" viewBox=\"0 0 "+w+" "+h+"\" aria-hidden=\"true\"><path d=\""+d+"\" fill=\"none\" stroke=\""+col+"\" stroke-width=\"1.6\"/></svg>";
+}
 function groupByCard(cards){
   const map = {};
   (cards||[]).forEach(c => {
@@ -2245,6 +2310,7 @@ function cardRowHtml(c, qty, key){
     "<div class=\"item-top\"><img src=\""+img+"\" alt=\"\" onerror=\"this.style.opacity=0\" /><div><h3>"+dash(c.player)+"</h3>"+
     "<div class=\"muted\">"+dash(line)+"</div>"+chips+
     "<div class=\"muted\" style=\"margin-top:4px\">"+money(c.comp)+" market · "+money(c.cost)+" paid</div>"+
+    (function(){ const m=cardMove(c); if(!m) return ""; const up=m.pct>=0; return "<div class=\"row-chg "+(up?"up":"dn")+"\">"+(up?"+":"")+m.pct.toFixed(1)+"% "+miniSpark(m.pts,up)+"</div>"; })()+
     (qty>1?"":"<button class=\"ghost\" data-edit=\""+c.id+"\" style=\"width:auto;margin-top:8px;padding:6px 12px\">Edit</button>")+
     "</div></div>"+
     (qty>1?"<span class=\"qty-pill\">×"+qty+"</span>":"")+
@@ -2295,6 +2361,8 @@ function renderBinder(){
   if (sort==="team") groups.sort((a,b)=> teamName(a.face).localeCompare(teamName(b.face)) || (a.face.player||"").localeCompare(b.face.player||""));
   else if (sort==="player") groups.sort((a,b)=> lastName(a.face.player).localeCompare(lastName(b.face.player)));
   else if (sort==="value") groups.sort((a,b)=> copyValue(b.face)-copyValue(a.face));
+  else if (sort==="movers") groups.sort((a,b)=> ((cardMove(b.face)||{}).pct||-999)-((cardMove(a.face)||{}).pct||-999));
+  else if (sort==="losers") groups.sort((a,b)=> ((cardMove(a.face)||{}).pct||999)-((cardMove(b.face)||{}).pct||999));
   const t = totals();
   $("valueNote").textContent = "";
   if (!groups.length) { $("list").innerHTML = "<p class=\"muted\">No cards match.</p>"; return; }
@@ -2478,14 +2546,17 @@ async function refreshBookNow(){
     note.textContent = "Nothing stale enough (needs ~1 day since last comp).";
     btn.dataset.busy = "0"; btn.disabled = false; return;
   }
-  note.textContent = "Updating book…";
+  note.textContent = "Refreshing book";
   document.body.classList.add("book-pulse");
   $("bookBar") && $("bookBar").classList.add("book-pulse");
   $("quotes") && $("quotes").classList.add("book-pulse");
-  btn.textContent = "Updating…";
+  if (btn) btn.textContent = "Updating…";
   let ok = 0;
+  let i = 0;
   for (const row of batch) {
     const card = row.c;
+    i++;
+    if (note) note.textContent = "Refreshing book";
     try {
       let r = await fetch("/book-refresh", {
         method:"POST",
@@ -2535,7 +2606,7 @@ async function maybeAutoBook(){
   if (window.lastPlan !== "plus") return;
   if (localStorage.getItem("ice-book-day") === localDay()) return;
   if (!load().length) return;
-  if ($("bookNote")) $("bookNote").textContent = "Ice+ daily book update…";
+  if ($("bookNote")) $("bookNote").textContent = "Refreshing book";
   await refreshBookNow();
 }
 function noteKind(n){
@@ -3042,6 +3113,8 @@ function renderPubList(){
   if (sort==="team") groups.sort((a,b)=> teamName(a.face).localeCompare(teamName(b.face)) || lastName(a.face.player).localeCompare(lastName(b.face.player)));
   else if (sort==="player") groups.sort((a,b)=> lastName(a.face.player).localeCompare(lastName(b.face.player)));
   else if (sort==="value") groups.sort((a,b)=> copyValue(b.face)-copyValue(a.face));
+  else if (sort==="movers") groups.sort((a,b)=> ((cardMove(b.face)||{}).pct||-999)-((cardMove(a.face)||{}).pct||-999));
+  else if (sort==="losers") groups.sort((a,b)=> ((cardMove(a.face)||{}).pct||999)-((cardMove(b.face)||{}).pct||999));
   else groups.sort((a,b)=> String(b.face.added||b.face.id||"").localeCompare(String(a.face.added||a.face.id||"")));
   if (!groups.length) { box.innerHTML = "<p class=\"muted\">No cards match.</p>"; return; }
   if (sort==="team" && !teamF) {
@@ -3556,6 +3629,29 @@ $("backFindNotes") && ($("backFindNotes").onclick = () => show("find"));
 $("openNotes") && ($("openNotes").onclick = () => { show("notes"); paintNotesHub(); });
 $("openFeed") && ($("openFeed").onclick = () => { window.feedGrailMode = false; show("feed"); });
 $("openGrails") && ($("openGrails").onclick = () => { window.feedGrailMode = true; show("feed"); });
+$("openLedgerz") && ($("openLedgerz").onclick = () => { show("ledgerz"); if ($("ledgerzQ")) $("ledgerzQ").focus(); });
+$("backLedgerz") && ($("backLedgerz").onclick = () => show("find"));
+let ledgerzT = 0;
+async function runLedgerz(){
+  const q = (($("ledgerzQ")&&$("ledgerzQ").value)||"").trim();
+  const box = $("ledgerzList");
+  if (!box) return;
+  if (q.length<2) { box.innerHTML = "<p class=\"muted\">Type a player or team.</p>"; return; }
+  box.innerHTML = "<p class=\"muted\">Searching…</p>";
+  try {
+    const r = await fetch("/ledgerz?q="+encodeURIComponent(q));
+    const d = await r.json();
+    const rows = d.cards || [];
+    box.innerHTML = rows.length ? rows.map(c =>
+      "<article class=\"item\" data-lz-slug=\""+(c.slug||"")+"\" data-lz-card=\""+(c.id||"")+"\"><h3>"+dash(c.player)+"</h3><div class=\"muted\">"+[c.team,c.year,c.set,c.number?"#"+c.number:"",(!c.grader||c.grader==="Raw")?"Raw":[c.grader,c.grade].filter(Boolean).join(" ")].filter(Boolean).join(" · ")+"</div><div class=\"muted\">"+dash(c.display)+" · "+money(c.comp)+"</div></article>"
+    ).join("") : "<p class=\"muted\">Nothing in Ledgerz for that.</p>";
+  } catch(e) { box.innerHTML = "<p class=\"muted\">Search failed.</p>"; }
+}
+$("ledgerzQ") && ($("ledgerzQ").oninput = () => { clearTimeout(ledgerzT); ledgerzT = setTimeout(runLedgerz, 280); });
+$("ledgerzList") && ($("ledgerzList").onclick = e => {
+  const art = e.target.closest("[data-lz-slug]");
+  if (art) openPublic(art.getAttribute("data-lz-slug"), art.getAttribute("data-lz-card")||null);
+});
 $("backFindFeed") && ($("backFindFeed").onclick = () => show("find"));
 let feedCache = [];
 async function loadFeed(){
@@ -3783,7 +3879,7 @@ async function openPublic(slug, cardId){
     $("pubBio").textContent = d.bio || "";
     $("pubBio").style.display = d.bio ? "block" : "none";
   }
-  $("pubHead").textContent = d.count+" cards"+(d.grails?" · "+d.grails+" grails":"")+" · book "+(d.book?money(d.book):"—");
+  $("pubHead").textContent = d.count+" cards"+(d.grails?" · "+d.grails+" grails":"")+" · "+(d.book?money(d.book):"—")+" book";
   const labs = { instagram:"Instagram", youtube:"YouTube", x:"X", ebay:"eBay", tiktok:"TikTok", site:"Site" };
   const so = d.socials || {};
   if ($("pubSocials")) {
