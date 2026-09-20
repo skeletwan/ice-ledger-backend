@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Ice Ledger</title>
   <style>
-:root { --bg:#071016; --card:#121c26; --line:#2a3d4d; --text:#eef6fb; --muted:#8aa3b5; --ice:#8fd4ee; --btn:#2f9ec4; --warn:#e6c07b; --bad:#f07178; --good:#6ee7a8; }
+:root { --bg:#081118; --card:#121c24; --line:#2a3b48; --text:#eef6fb; --muted:#8aa3b5; --ice:#8fd4ee; --btn:#2a9bbd; --warn:#e6c07b; --bad:#f07178; --good:#6ee7a8; --ink:#0c141b; }
     * { box-sizing: border-box; }
     body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:
       radial-gradient(1200px 500px at 10% -10%, #163445 0%, transparent 50%),
@@ -218,6 +218,48 @@
     .shot-wrap { position:relative; min-height:108px; border-radius:14px; overflow:hidden; background:linear-gradient(180deg,#182833,#101820); border:1px dashed #3d5a6a; }
     .shot-wrap.on { border-style:solid; border-color:var(--ice); background:#14303a; }
     .shot-ui { pointer-events:none; position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; font-weight:700; font-size:14px; text-align:center; padding:12px; }
+    .shot-ui small { font-size:11px; font-weight:600; color:var(--muted); }
+    .cam-ico { width:22px; height:22px; border:2px solid var(--ice); border-radius:6px; position:relative; }
+    .cam-ico:after { content:""; position:absolute; width:8px; height:8px; border:2px solid var(--ice); border-radius:50%; left:5px; top:5px; }
+    .live-overlay { position:fixed; inset:0; z-index:40; background:#000; display:flex; flex-direction:column; padding:12px 12px calc(18px + env(safe-area-inset-bottom)); }
+    .live-overlay.hidden { display:none; }
+    .live-overlay video { flex:1; width:100%; object-fit:contain; background:#000; border-radius:12px; }
+    .live-overlay .row2 { margin-top:12px; }
+    .quota-chip { display:inline-flex; align-items:center; gap:8px; font-size:12px; color:var(--muted); background:var(--card); border:1px solid var(--line); border-radius:999px; padding:6px 12px; margin:0 0 12px; }
+    .quota-chip.err { color:#ffd6d8; border-color:#6b2a30; background:#3a1b20; }
+    .quota-chip.warn { color:#ffe7b3; border-color:#6b5420; background:#3a3018; }
+    .quota-chip.ok { color:#cfeee0; }
+    .pay-mini { margin-top:22px; padding-top:8px; border-top:1px solid var(--line); }
+    .pay-mini .muted { margin:4px 0 0; font-size:12px; }
+    .id-more { margin-top:8px; }
+    .comm-row { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; margin-bottom:12px; }
+    .comm-row button { width:auto; margin:0; padding:10px 4px; font-size:11px; line-height:1.2; }
+    .you-group { margin:8px 0 16px; }
+    .you-group button { margin-top:8px; }
+    .you-quiet { opacity:.85; }
+    .filters { margin-top:8px; }
+    .sec-label { margin:16px 0 8px; font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+    .item-top { display:grid; grid-template-columns:56px 1fr auto; gap:10px; align-items:center; }
+    .item img { width:56px; height:56px; max-width:56px; object-fit:contain; background:#000; border-radius:8px; }
+    .item h3 { margin:0 0 2px; font-size:15px; font-weight:650; }
+    .item-meta { font-size:12px; color:var(--muted); line-height:1.3; }
+    .item-px { text-align:right; font-size:13px; font-weight:700; white-space:nowrap; }
+    .item.comment, .thread .item { padding:8px 10px; margin-bottom:6px; }
+    .item.reply { margin-left:14px; padding:8px 10px; }
+    .board-post { border-width:1px; padding:10px 12px; }
+    .dock button { display:flex; flex-direction:column; align-items:center; gap:3px; font-size:10px; letter-spacing:.02em; }
+    .dock button .ico { font-size:16px; line-height:1; }
+    header { background:var(--bg); }
+    .dock { background:var(--ink); }
+    .fxbar, .yf, .ticker { background:var(--ink); }
+    button.primary { background:var(--btn); }
+    #quotaBox.status { background:transparent; border:0; padding:0; margin:0 0 10px; }
+    #resultStatus:empty, #status:empty, #compNote:empty { display:none; }
+    #chartToggle { width:auto; margin:8px 0 0; padding:6px 12px; font-size:12px; }
+    body:not(.chart-open) .yf { display:none; }
+    .binder-hero { padding-right:48px; align-items:flex-start; }
+    .binder-hero .pava { width:72px; height:72px; border-radius:18px; }
+    #reportUserBtn { padding:4px 8px; font-size:11px; }
     .shot-ui span { font-size:11px; font-weight:600; color:var(--muted); }
     .shot-file { position:absolute; width:1px; height:1px; opacity:0; overflow:hidden; clip:rect(0,0,0,0); }
     #go { margin-top:16px; padding:16px; font-size:17px; letter-spacing:.02em; border-radius:14px; background:linear-gradient(180deg,#3db4d8,#2a86a8); box-shadow:0 8px 24px rgba(47,158,196,.28); }
@@ -293,7 +335,8 @@
     <button class="ghost fx" id="fxUSD" data-fx="USD">USD</button>
   </div>
   <div class="ticker" id="ticker"></div>
-  <div class="yf">
+  <button type="button" class="ghost" id="chartToggle">Tap for chart</button>
+  <div class="yf" id="chartPane">
   <svg id="spark" viewBox="0 0 360 200" class="spark" preserveAspectRatio="xMidYMid meet"></svg>
   <div class="ranges" id="ranges">
     <button data-r="7D">7D</button>
@@ -308,24 +351,8 @@
   </div>
 
   <section class="page on" id="scanPage">
-    <div class="status" id="quotaBox">Free: 10 IDs / 30 days. Ice+: 200 IDs / 30 days. Rip Night: 20 extra IDs / 30 days.</div>
+    <div class="quota-chip" id="quotaBox">10 IDs left</div>
     <p class="muted" id="resetLine"></p>
-    <div class="row2">
-      <div>
-        <button class="ghost" id="payBtn">Ice+</button>
-        <p class="muted">$8 / 30 days · 200 IDs + 30 book refreshes</p>
-      </div>
-      <div>
-        <button class="ghost" id="ripBtn">Rip Night!</button>
-        <p class="muted">$2.99 · 20 extra IDs for 30 days</p>
-      </div>
-    </div>
-    <label>Have a code?</label>
-    <div class="row2" style="align-items:end">
-      <input id="ripCode" placeholder="RIP-XXXXXX" autocomplete="off" />
-      <button class="ghost" id="ripRedeem" style="margin-top:4px">Redeem</button>
-    </div>
-    <p class="muted" id="ripNote"></p>
     <input id="secret" type="hidden" value="" />
     <div class="tips" id="photoTips">
       <button type="button" id="photoTipsBtn" class="ghost">Photo tips</button>
@@ -338,13 +365,13 @@
       </ul>
     </div>
     <div class="row2" style="margin-top:14px">
-      <button type="button" class="shot-wrap" id="shotFront"><div class="shot-ui">Front</div></button>
-      <button type="button" class="shot-wrap" id="shotBack"><div class="shot-ui">Back</div></button>
+      <button type="button" class="shot-wrap" id="shotFront"><div class="shot-ui"><span class="cam-ico"></span>Front<small>Tap to shoot</small></div></button>
+      <button type="button" class="shot-wrap" id="shotBack"><div class="shot-ui"><span class="cam-ico"></span>Back<small>Tap to shoot</small></div></button>
     </div>
-    <div id="liveCam" class="hidden" style="margin-top:10px">
-      <video id="liveVid" autoplay playsinline style="width:100%;border-radius:12px;background:#000"></video>
+    <div id="liveCam" class="live-overlay hidden">
+      <video id="liveVid" autoplay playsinline></video>
       <div class="row2">
-        <button type="button" id="liveSnap">Take photo</button>
+        <button type="button" class="primary" id="liveSnap">Take photo</button>
         <button type="button" class="ghost" id="liveCancel">Cancel</button>
       </div>
     </div>
@@ -352,9 +379,27 @@
       <div class="preview hidden" id="scanBox"><h3>Front</h3><img id="scanImg" alt="" /></div>
       <div class="preview hidden" id="backBox"><h3>Back</h3><img id="backImg" alt="" /></div>
     </div>
-    <button id="go" disabled>Identify card</button>
+    <button id="go" class="primary" disabled>Identify card</button>
     <button class="ghost hidden" id="resumeId">Resume this card</button>
     <p class="status" id="status"></p>
+    <div class="pay-mini">
+      <div class="row2">
+        <div>
+          <button class="ghost" id="payBtn">Ice+</button>
+          <p class="muted">$8 / 30 days · 200 IDs</p>
+        </div>
+        <div>
+          <button class="ghost" id="ripBtn">Rip Night!</button>
+          <p class="muted">$2.99 · 20 IDs</p>
+        </div>
+      </div>
+      <label>Have a code?</label>
+      <div class="row2" style="align-items:end">
+        <input id="ripCode" placeholder="RIP-XXXXXX" autocomplete="off" />
+        <button class="ghost" id="ripRedeem" style="margin-top:4px">Redeem</button>
+      </div>
+      <p class="muted" id="ripNote"></p>
+    </div>
   </section>
   <section class="page" id="resultPage">
     <button class="ghost" id="backScan">New scan</button>
@@ -374,17 +419,20 @@
           <select id="f_grader"><option>Raw</option><option>PSA</option><option>BGS</option><option>SGC</option><option>CGC</option><option>SMA</option></select>
         </div>
         <div class="field"><label>Grade</label><input id="f_grade" /></div>
-        <div class="field" style="grid-column:1/-1"><label>Cert</label><input id="f_cert" /></div>
       </div>
-      <div class="row2">
-        <a class="ghost btn" id="gImg" target="_blank" rel="noopener">Google Images</a>
-        <a class="ghost btn" id="ebay" target="_blank" rel="noopener">eBay sold</a>
-      </div>
-      <a class="ghost btn" id="pt130" target="_blank" rel="noopener">Fanatics sold</a>
-      <a class="ghost btn hidden" id="psa" target="_blank" rel="noopener">PSA cert</a>
       <div class="row2">
         <div><label>Paid CAD</label><input id="cost" type="number" step="0.01" placeholder="What you paid" /></div>
         <div><label>Your copy (sold)</label><input id="comp" type="number" step="0.01" placeholder="This copy’s market" /></div>
+      </div>
+      <button type="button" class="ghost" id="idMoreBtn">More details</button>
+      <div class="id-more hidden" id="idMore">
+        <div class="field"><label>Cert</label><input id="f_cert" /></div>
+        <div class="row2">
+          <a class="ghost btn" id="gImg" target="_blank" rel="noopener">Google Images</a>
+          <a class="ghost btn" id="ebay" target="_blank" rel="noopener">eBay sold</a>
+        </div>
+        <a class="ghost btn" id="pt130" target="_blank" rel="noopener">Fanatics sold</a>
+        <a class="ghost btn hidden" id="psa" target="_blank" rel="noopener">PSA cert</a>
       </div>
       <input id="rawComp" type="hidden" />
       <input id="psa8Comp" type="hidden" />
@@ -397,7 +445,7 @@
       <label>Notes</label>
       <textarea id="notes" rows="2"></textarea>
       <div class="banner" id="compBanner">Looking up solds…</div>
-      <button type="button" id="saveBtn" onclick="return saveToBinder(event)" disabled>Save to binder</button>
+      <button type="button" class="primary" id="saveBtn" onclick="return saveToBinder(event)" disabled>Save to binder</button>
     </div>
   </section>
 
@@ -408,7 +456,11 @@
     </div>
     <p class="muted" id="bookNote"></p>
     <p class="muted" id="valueNote"></p>
-    <button class="ghost" id="openSearch">Search binder</button>
+    <div class="row2">
+      <button class="ghost" id="openSearch">Search</button>
+      <button class="ghost" id="filterBtn">Filter</button>
+    </div>
+    <div class="filters hidden" id="bindFilters">
     <div class="row2">
       <select id="sortBy">
         <option value="new">Newest</option>
@@ -434,6 +486,7 @@
       <option value="diamond">Diamond</option>
       <option value="none">Unpriced</option>
     </select>
+    </div>
     <div id="list"></div>
     <button class="ghost" id="shareBtn">Share binder</button>
     <button class="ghost" id="viewPublicBtn">Open my public binder</button>
@@ -458,11 +511,11 @@
     <div id="ledgerzList"></div>
   </section>
   <section class="page" id="findPage">
-    <div class="row2">
+    <div class="comm-row">
       <button class="ghost" id="openFollowing">Following</button>
-      <button class="ghost" id="openFeed">Just added</button>
+      <button class="ghost" id="openFeed">Added</button>
       <button class="ghost" id="openGrails">Grails</button>
-      <button class="ghost" id="openLedgerz">Search Ledgerz</button>
+      <button class="ghost" id="openLedgerz">Search</button>
       <button class="ghost" id="openNotes">Alerts</button>
     </div>
     <input id="findQ" placeholder="Screen name or player…" />
@@ -582,15 +635,20 @@
   <section class="page" id="setPage">
     <h2 style="font-size:18px;margin:0 0 8px">You</h2>
     <div id="youHub">
-      <p class="muted">Profile and account.</p>
-      <button class="ghost" data-you="youProfile">Profile</button>
-      <button class="ghost" data-you="youComm">Community</button>
-      <button class="ghost" data-you="youAlerts">Alerts</button>
-      <button class="ghost" data-you="youBill">Ice+ / Rip Night!</button>
-      <button class="ghost" id="tabHelp">Support / feedback</button>
-      <button class="ghost hidden" id="ownerToolsBtn">Owner tools</button>
-      <button class="ghost" id="logoutBtn">Get out</button>
-      <button class="ghost" data-you="youGone" style="margin-top:18px">Delete account</button>
+      <div class="you-group">
+        <button class="ghost" data-you="youProfile">Profile</button>
+        <button class="ghost" data-you="youAlerts">Alerts</button>
+        <button class="ghost" data-you="youBill">Ice+ / Rip Night!</button>
+      </div>
+      <div class="you-group">
+        <button class="ghost" data-you="youComm">Community</button>
+        <button class="ghost" id="tabHelp">Support / feedback</button>
+        <button class="ghost hidden" id="ownerToolsBtn">Owner tools</button>
+      </div>
+      <div class="you-group you-quiet">
+        <button class="ghost" id="logoutBtn">Get out</button>
+        <button class="ghost" data-you="youGone">Delete account</button>
+      </div>
     </div>
     <div id="youProfile" class="hidden">
     <button class="ghost" data-you="youHub">Back</button>
@@ -634,7 +692,8 @@
       <button class="ghost" id="pClearPhoto">Remove photo</button>
       <p class="muted" id="pNote"></p>
     </div>
-    <div class="card" style="margin-top:12px">
+    <button class="ghost" type="button" id="banToggle">Binder banner</button>
+    <div class="card hidden" id="banCard" style="margin-top:12px">
       <h3 style="margin:0 0 6px;font-size:16px">Binder banner</h3>
       <p class="muted">One banner on your public binder. Edit it, then save. A new save replaces the old one.</p>
       <div id="banPreview"></div>
@@ -879,10 +938,10 @@
     <p class="muted" id="editNote"></p>
   </section>
   <nav class="dock" id="dock">
-    <button id="tabScan">Scan</button>
-    <button id="tabBind">Binder</button>
-    <button id="tabFind">Community</button>
-    <button id="tabSet">You</button>
+    <button id="tabScan"><span class="ico">▣</span>Scan</button>
+    <button id="tabBind"><span class="ico">☰</span>Binder</button>
+    <button id="tabFind"><span class="ico">◉</span>Community</button>
+    <button id="tabSet"><span class="ico">○</span>You</button>
   </nav>
   </div>
 <div class="ava-full" id="likersFull">
@@ -1257,6 +1316,14 @@ $("ownerToolsBtn") && ($("ownerToolsBtn").onclick = () => { show("ops"); loadRip
 $("backYouOps") && ($("backYouOps").onclick = () => show("set"));
 $("fxCAD").onclick = () => setFx("CAD");
 $("fxUSD").onclick = () => setFx("USD");
+$("chartToggle") && ($("chartToggle").onclick = () => {
+  document.body.classList.toggle("chart-open");
+  $("chartToggle").textContent = document.body.classList.contains("chart-open") ? "Hide chart" : "Tap for chart";
+  paintTicker();
+});
+$("filterBtn") && ($("filterBtn").onclick = () => { if ($("bindFilters")) $("bindFilters").classList.toggle("hidden"); });
+$("idMoreBtn") && ($("idMoreBtn").onclick = () => { if ($("idMore")) $("idMore").classList.toggle("hidden"); });
+$("banToggle") && ($("banToggle").onclick = () => { if ($("banCard")) $("banCard").classList.toggle("hidden"); });
 $("ranges").onclick = e => {
   const b = e.target.closest("[data-r]");
   if (!b) return;
@@ -1294,13 +1361,9 @@ function paintTicker(){
   const last = t.mktN ? money(t.mkt) : "—";
   $("ticker").innerHTML =
     "<div class=\"quote\"><div class=\"quote-last "+(chCls)+"\">"+last+"</div>"+
-    "<div class=\"quote-chg "+chCls+"\">"+chTxt+"</div></div>";
-  if ($("bookStats")) $("bookStats").innerHTML =
-    "<div class=\"quote-stats\">"+
-    "<div class=\"qs\"><b>"+(t.mktN?money(t.mkt):"—")+"</b><span>Book · "+t.mktN+"/"+t.cards+"</span></div>"+
-    "<div class=\"qs\"><b>"+(t.paidN?money(t.paid):"—")+"</b><span>Paid · "+t.paidN+"/"+t.cards+"</span></div>"+
-    "<div class=\"qs\"><b class=\""+plCls+"\">"+(t.pl==null?"—":((t.pl>=0?"+":"")+money(Math.abs(t.pl))))+"</b><span>Up / down</span></div>"+
-    "</div>";
+    "<div class=\"quote-chg "+chCls+"\">"+chTxt+"</div></div>"+
+    "<div class=\"quote-meta\">"+(t.paidN?("Paid "+money(t.paid)): "Paid —")+" · "+(t.pl==null?"P/L —":((t.pl>=0?"+":"")+money(Math.abs(t.pl))))+" · "+t.mktN+"/"+t.cards+" priced</div>";
+  if ($("bookStats")) $("bookStats").innerHTML = "";
   if ($("bookBar")) $("bookBar").innerHTML = "";
   if ($("fxCAD")) {
     $("fxCAD").classList.toggle("on", fx()==="CAD");
@@ -2273,7 +2336,7 @@ function cardMove(c){
   if (!(a>0) || isNaN(b)) return null;
   return { pct: ((b-a)/a)*100, pts: h.slice(-8).map(p => +p.v).filter(n => !isNaN(n)) };
 }
-function miniSpark(pts, up){
+function rowSpark(pts, up){
   if (!pts || pts.length<2) return "";
   const mn = Math.min.apply(null, pts), mx = Math.max.apply(null, pts);
   const w=42,h=16;
@@ -2306,13 +2369,12 @@ function cardRowHtml(c, qty, key){
   const chips = "<div>"+(c.insert?"<span class=\"chip\">"+c.insert+"</span>":"")+(c.parallel?"<span class=\"chip\">"+c.parallel+"</span>":(!c.insert?"<span class=\"chip dim\">Base</span>":""))+"<span class=\"chip dim\">"+grade+"</span></div>";
   const tier = tierFromCad(binderCad(c));
   const open = qty>1 ? " data-copies=\""+String(key||cardKey(c)).replace(/"/g,"")+"\"" : " data-open=\""+c.id+"\"";
+  const mv = cardMove(c);
+  const up = mv && mv.pct>=0;
   return "<article class=\"item"+grailCls(c)+(tier?" tier-"+tier:"")+"\""+open+">"+
     "<div class=\"item-top\"><img src=\""+img+"\" alt=\"\" onerror=\"this.style.opacity=0\" /><div><h3>"+dash(c.player)+"</h3>"+
-    "<div class=\"muted\">"+dash(line)+"</div>"+chips+
-    "<div class=\"muted\" style=\"margin-top:4px\">"+money(c.comp)+" market · "+money(c.cost)+" paid</div>"+
-    (function(){ const m=cardMove(c); if(!m) return ""; const up=m.pct>=0; return "<div class=\"row-chg "+(up?"up":"dn")+"\">"+(up?"+":"")+m.pct.toFixed(1)+"% "+miniSpark(m.pts,up)+"</div>"; })()+
-    (qty>1?"":"<button class=\"ghost\" data-edit=\""+c.id+"\" style=\"width:auto;margin-top:8px;padding:6px 12px\">Edit</button>")+
-    "</div></div>"+
+    "<div class=\"item-meta\">"+dash(line)+(c.parallel?" · "+c.parallel:"")+"</div></div>"+
+    "<div class=\"item-px\">"+money(c.comp)+(mv?("<div class=\"row-chg "+(up?"up":"dn")+"\">"+(up?"+":"")+mv.pct.toFixed(1)+"% "+rowSpark(mv.pts,up)+"</div>"):"")+"</div></div>"+
     (qty>1?"<span class=\"qty-pill\">×"+qty+"</span>":"")+
     (tier?"<span class=\"tier-tag "+tier+"\">"+tierLabel(tier)+"</span>":"")+
     "</article>";
@@ -2371,7 +2433,7 @@ function renderBinder(){
     groups.forEach(g => {
       const tm = teamName(g.face);
       if (tm !== last) {
-        html += "<p class=\"muted\" style=\"margin:14px 0 6px;font-weight:700;letter-spacing:.04em;text-transform:uppercase\">"+tm+"</p>";
+        html += "<p class=\"sec-label\">"+tm+"</p>";
         last = tm;
       }
       html += cardRowHtml(g.face, g.qty, g.key);
@@ -2673,7 +2735,7 @@ async function refreshUsage(){
   const line = (u.plan==="plus"?"Ice+":"Free")+" · "+u.left+" IDs left"+bonus+" · "+(u.book_left??"?")+" book refreshes";
   if ($("quotaBox")) {
     $("quotaBox").textContent = line;
-    $("quotaBox").className = "status " + (u.left<=0 ? "err" : (u.left<=3 ? "warn" : "ok"));
+    $("quotaBox").className = "quota-chip " + (u.left<=0 ? "err" : (u.left<=3 ? "warn" : "ok"));
   }
   if ($("resetLine")) $("resetLine").textContent = resetLabel(u.reset_at, u.month);
   if ($("youQuota")) $("youQuota").textContent = line;
@@ -2681,7 +2743,7 @@ async function refreshUsage(){
 function showPaywall(msg){
   if ($("quotaBox")) {
     $("quotaBox").textContent = msg || "Scan cap reached. Upgrade Ice+ ($8 / 30 days) for 200 IDs.";
-    $("quotaBox").className = "status err";
+    $("quotaBox").className = "quota-chip err";
   }
   show("scan");
 }
@@ -2691,7 +2753,7 @@ async function unlockPlus(){
   const p = await authPost("/plus", { secret, token: token() });
   await refreshUsage();
   if ($("plusNote")) $("plusNote").textContent = "Ice+ on. "+p.left+" IDs in this 30-day window.";
-  if ($("quotaBox")) { $("quotaBox").textContent = "Ice+ on. "+p.left+" IDs left in this 30-day window."; $("quotaBox").className = "status ok"; }
+  if ($("quotaBox")) { $("quotaBox").textContent = "Ice+ on. "+p.left+" IDs left in this 30-day window."; $("quotaBox").className = "quota-chip ok"; }
 }
 $("modLoad") && ($("modLoad").onclick = async () => {
   const box = $("modList");
@@ -2820,7 +2882,7 @@ $("payBtn").onclick = async () => {
     if (d.url) { location.href = d.url; return; }
     show("set");
     if ($("plusNote")) $("plusNote").textContent = "Stripe isn’t live yet.";
-  } catch(e) { $("quotaBox").textContent = e.message; $("quotaBox").className = "status err"; }
+  } catch(e) { $("quotaBox").textContent = e.message; $("quotaBox").className = "quota-chip err"; }
 };
 $("ripBtn") && ($("ripBtn").onclick = async () => {
   try {
@@ -3122,7 +3184,7 @@ function renderPubList(){
     groups.forEach(g => {
       const tm = teamName(g.face);
       if (tm !== last) {
-        html += "<p class=\"muted\" style=\"margin:14px 0 6px;font-weight:700;letter-spacing:.04em;text-transform:uppercase\">"+tm+"</p>";
+        html += "<p class=\"sec-label\">"+tm+"</p>";
         last = tm;
       }
       html += pubCardHtml(g.face, g.qty, g.key);
