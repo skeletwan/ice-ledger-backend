@@ -74,7 +74,9 @@
     .row2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
     .preview { margin-top:12px; background:var(--card); border:1px solid var(--line); border-radius:12px; overflow:hidden; }
     .preview h3 { margin:0; padding:8px 10px; font-size:11px; color:var(--muted); text-transform:uppercase; border-bottom:1px solid var(--line); }
-    .preview img { display:block; width:100%; max-height:220px; height:auto; object-fit:contain; background:#000; }
+    .preview img { display:block; width:100%; max-height:200px; height:auto; object-fit:contain; object-position:center; background:#000; }
+    .preview.land { grid-column:1/-1; }
+    .preview.land img { max-height:160px; width:100%; }
     .status { margin-top:12px; font-size:14px; padding:10px 12px; border-radius:10px; line-height:1.35; }
     #authStatus { display:none; }
     #authStatus.on { display:block; }
@@ -366,16 +368,16 @@
       </ul>
     </div>
     <div class="row2" style="margin-top:14px">
+      <div class="preview hidden" id="scanBox"><h3>Front</h3><img id="scanImg" alt="" /></div>
+      <div class="preview hidden" id="backBox"><h3>Back</h3><img id="backImg" alt="" /></div>
+    </div>
+    <div class="row2" style="margin-top:10px">
       <button type="button" class="shot-wrap" id="shotFront"><div class="shot-ui"><span class="cam-ico"></span>Front<small>Tap to shoot</small></div></button>
       <button type="button" class="shot-wrap" id="shotBack"><div class="shot-ui"><span class="cam-ico"></span>Back<small>Tap to shoot</small></div></button>
     </div>
     <div id="liveCam" class="live-overlay hidden">
       <video id="liveVid" autoplay playsinline></video>
       <button type="button" class="primary" id="liveSnap">Take photo</button>
-    </div>
-    <div class="row2">
-      <div class="preview hidden" id="scanBox"><h3>Front</h3><img id="scanImg" alt="" /></div>
-      <div class="preview hidden" id="backBox"><h3>Back</h3><img id="backImg" alt="" /></div>
     </div>
     <button id="go" class="primary" disabled>Identify card</button>
     <button class="ghost hidden" id="resumeId">Resume this card</button>
@@ -1798,26 +1800,31 @@ function phoneIsLandscape(){
 }
 function snapFrame(vid){
   const bw = vid.videoWidth || 1, bh = vid.videoHeight || 1;
-  const visLand = (vid.clientWidth || 1) >= (vid.clientHeight || 1);
-  const bufLand = bw >= bh;
-  const wantLand = phoneIsLandscape() || visLand;
   const c = document.createElement("canvas");
   const ctx = c.getContext("2d");
-  if (wantLand && !bufLand) {
+  if (bw >= bh) {
+    c.width = bw; c.height = bh;
+    ctx.drawImage(vid, 0, 0);
+  } else if (phoneIsLandscape()) {
     c.width = bh; c.height = bw;
     ctx.translate(c.width, 0);
     ctx.rotate(Math.PI / 2);
-    ctx.drawImage(vid, 0, 0);
-  } else if (!wantLand && bufLand) {
-    c.width = bh; c.height = bw;
-    ctx.translate(0, c.height);
-    ctx.rotate(-Math.PI / 2);
     ctx.drawImage(vid, 0, 0);
   } else {
     c.width = bw; c.height = bh;
     ctx.drawImage(vid, 0, 0);
   }
   return c.toDataURL("image/jpeg", 0.86);
+}
+function markLand(img){
+  if (!img) return;
+  const box = img.closest(".preview");
+  const go = () => {
+    if (img.naturalWidth > img.naturalHeight) box && box.classList.add("land");
+    else box && box.classList.remove("land");
+  };
+  if (img.complete && img.naturalWidth) go();
+  else img.onload = go;
 }
 async function snapLive(){
   const vid = $("liveVid");
@@ -1828,7 +1835,7 @@ async function snapLive(){
   if (liveTarget === "back") {
     backFile = file;
     window.backData = data;
-    $("backImg").src = data;
+    $("backImg").src = data; markLand($("backImg"));
     $("backBox").classList.remove("hidden");
     if ($("shotBack")) $("shotBack").classList.add("on");
     $("status").textContent = frontFile ? "Back loaded. Identify when ready." : "Back loaded. Add the front.";
@@ -1836,7 +1843,7 @@ async function snapLive(){
     frontFile = file;
     scanData = data;
     clearIdFields();
-    $("scanImg").src = data;
+    $("scanImg").src = data; markLand($("scanImg"));
     $("scanBox").classList.remove("hidden");
     if ($("shotFront")) $("shotFront").classList.add("on");
     lockIdentify();
