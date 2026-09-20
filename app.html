@@ -371,10 +371,7 @@
     </div>
     <div id="liveCam" class="live-overlay hidden">
       <video id="liveVid" autoplay playsinline></video>
-      <div class="row2">
-        <button type="button" class="primary" id="liveSnap">Take photo</button>
-        <button type="button" class="ghost" id="liveCancel">Cancel</button>
-      </div>
+      <button type="button" class="primary" id="liveSnap">Take photo</button>
     </div>
     <div class="row2">
       <div class="preview hidden" id="scanBox"><h3>Front</h3><img id="scanImg" alt="" /></div>
@@ -1302,6 +1299,7 @@ function show(id){
   if (id==="find" || id==="pub" || id==="notes" || id==="notesCat" || id==="feed") refreshNotesBadge();
   if (id==="feed") loadFeed();
   if (id==="find") loadFind();
+  if (id!=="scan" && typeof stopLive === "function") try { stopLive(); } catch(e) {}
   document.body.classList.toggle("bind-on", id==="bind");
   document.body.classList.toggle("dock-on", true);
   document.body.classList.toggle("chart-on", id==="bind" && document.body.classList.contains("chart-open"));
@@ -1849,7 +1847,6 @@ async function snapLive(){
 $("shotFront") && ($("shotFront").onclick = () => openLive("front"));
 $("shotBack") && ($("shotBack").onclick = () => openLive("back"));
 $("liveSnap") && ($("liveSnap").onclick = snapLive);
-$("liveCancel") && ($("liveCancel").onclick = stopLive);
 function blobJpegUrl(file, max){
   return new Promise(resolve => {
     const img = new Image();

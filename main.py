@@ -446,8 +446,10 @@ Return ONLY JSON, no markdown:
   "summary": string,
   "sources": [string]
 }}
-suggested_cad is the median sold CAD for this exact copy (same player/set/number/parallel/insert/grade).
-If the card is PSA 10, suggested_cad MUST be a PSA 10 sold, not raw. PSA 10 should not come in below a PSA 9 of the same card. If BGS 9.5 / SGC 10, same rule. Include grader and grade in the one search query.
+suggested_cad is the median sold CAD for this exact copy (same player AND year AND set AND card number AND parallel/insert AND grade).
+If the search hits a different player, set, number, or parallel, set suggested_cad to null and needs_review true. Do not invent a number from a cousin card (other year, other insert, raw vs slab, base vs patch).
+Ignore lots, team sets, wax, digital, and asking prices.
+If the card is PSA 10, suggested_cad MUST be a PSA 10 sold, not raw. PSA 10 should not come in below a PSA 9 of the same card. If BGS 9.5 / SGC 10, same rule.
 Only use sold sale prices. Never use the card number, year, print run, or cert as a price.
 Convert USD to CAD at 1.35.
 """
