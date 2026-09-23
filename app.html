@@ -242,8 +242,12 @@
     .id-more { margin-top:8px; }
     .comm-row { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; margin-bottom:12px; }
     .comm-row button { width:auto; margin:0; padding:10px 4px; font-size:11px; line-height:1.2; }
-    .you-group { margin:8px 0 16px; }
-    .you-group button { margin-top:8px; }
+    .you-group { display:flex; flex-direction:column; gap:6px; margin:0 0 18px; }
+    .you-group button, .you-group a.btn { margin:0; padding:11px 12px; }
+    .you-quiet { margin-top:8px; padding-top:12px; border-top:1px solid var(--line); }
+    body.result-on #saveBtn { position:fixed; left:12px; right:12px; bottom:calc(64px + env(safe-area-inset-bottom)); z-index:15; margin:0; }
+    body.result-on #resultPage { padding-bottom:180px; }
+    #likeBtn, #followBtn { width:auto; padding:8px 14px; }
     .you-quiet { opacity:.85; }
     .filters { margin-top:8px; }
     .sec-label { margin:16px 0 8px; font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
@@ -404,24 +408,6 @@
     <button id="go" class="primary" disabled>Identify card</button>
     <button class="ghost hidden" id="resumeId">Resume this card</button>
     <p class="status" id="status"></p>
-    <div class="pay-mini">
-      <div class="row2">
-        <div>
-          <button class="ghost" id="payBtn">Clappers+</button>
-          <p class="muted">$8 / 30 days · 200 IDs</p>
-        </div>
-        <div>
-          <button class="ghost" id="ripBtn">Rip Night!</button>
-          <p class="muted">$2.99 · 20 IDs</p>
-        </div>
-      </div>
-      <label>Have a code?</label>
-      <div class="row2" style="align-items:end">
-        <input id="ripCode" placeholder="RIP-XXXXXX" autocomplete="off" />
-        <button class="ghost" id="ripRedeem" style="margin-top:4px">Redeem</button>
-      </div>
-      <p class="muted" id="ripNote"></p>
-    </div>
   </section>
   <section class="page" id="resultPage">
     <button class="ghost" id="backScan">New scan</button>
@@ -533,6 +519,7 @@
     <div id="ledgerzList"></div>
   </section>
   <section class="page" id="findPage">
+    <h2 style="font-size:18px;margin:0 0 10px">Community</h2>
     <div class="comm-row">
       <button class="ghost" id="openFollowing">Following</button>
       <button class="ghost" id="openFeed">Added</button>
@@ -583,7 +570,7 @@
     <button class="ghost" id="backFind">Community</button>
     <div class="binder-hero" id="pubHeroHead">
       <button class="ghost" id="reportUserBtn" style="position:absolute;top:0;right:0;width:auto;padding:6px 10px;font-size:12px;margin:0">Report</button>
-      <div class="pava" id="pubAva">IL</div>
+      <div class="pava" id="pubAva">CP</div>
       <div>
         <h2 id="pubName">Binder</h2>
         <p class="bio" id="pubBio"></p>
@@ -668,23 +655,27 @@
     <div id="youHub">
       <div class="you-group">
         <button class="ghost" data-you="youProfile">Profile</button>
-        <button class="ghost" data-you="youAlerts">Inbox</button>
+        <button class="ghost" data-you="youBanner">Binder banner</button>
         <button class="ghost" data-you="youBill">Clappers+ / Rip Night!</button>
       </div>
       <div class="you-group">
-        <button class="ghost" data-you="youComm">Community</button>
+        <button class="ghost" data-you="youAlerts">From Clappers</button>
+        <button class="ghost" data-you="youPrefs">Notifications</button>
+        <button class="ghost" data-you="youComm">Followers & likes</button>
+      </div>
+      <div class="you-group">
         <button class="ghost" id="tabHelp">Support / feedback</button>
         <button class="ghost hidden" id="ownerToolsBtn">Owner tools</button>
       </div>
       <div class="you-group you-quiet">
         <button class="ghost" id="logoutBtn">Get out</button>
-        <button class="ghost" data-you="youGone">Delete account</button>
+        <button class="danger" data-you="youGone">Delete account</button>
       </div>
     </div>
     <div id="youProfile" class="hidden">
     <button class="ghost" data-you="youHub">Back</button>
     <div class="card" style="margin-top:12px">
-      <div class="pwid" id="pWid"><div class="pava" id="pAva">IL</div><div><b id="pName">Collector</b><div class="muted" id="pSlug"></div></div></div>
+      <div class="pwid" id="pWid"><div class="pava" id="pAva">CP</div><div><b id="pName">Collector</b><div class="muted" id="pSlug"></div></div></div>
       <label>Display name</label>
       <input id="pDisplay" maxlength="24" placeholder="Name on your public binder" />
       <div class="row2" style="margin-top:12px;align-items:end">
@@ -719,12 +710,14 @@
         <label>Website</label>
         <input id="s_site" placeholder="https://" />
       </div>
-      <button id="pSave">Save profile</button>
+      <button id="pSave">Save</button>
       <button class="ghost" id="pClearPhoto">Remove photo</button>
       <p class="muted" id="pNote"></p>
     </div>
-    <button class="ghost" type="button" id="banToggle">Binder banner</button>
-    <div class="card hidden" id="banCard" style="margin-top:12px">
+    </div>
+    <div id="youBanner" class="hidden">
+    <button class="ghost" data-you="youHub">Back</button>
+    <div class="card" id="banCard" style="margin-top:12px">
       <h3 style="margin:0 0 6px;font-size:16px">Binder banner</h3>
       <p class="muted">One banner on your public binder. Edit it, then save. A new save replaces the old one.</p>
       <div id="banPreview"></div>
@@ -737,7 +730,7 @@
       <label>Color</label>
       <input id="banColor" class="hue-swatch" type="color" value="#8fd4ee" />
       <button class="ghost" type="button" id="banFromHue" style="width:auto;padding:6px 10px;font-size:12px;margin-top:6px">Use profile colour</button>
-      <button id="banAdd">Save banner</button>
+      <button id="banAdd">Save</button>
       <button class="ghost" id="banClear">Remove banner</button>
       <p class="muted" id="banNote"></p>
       <div id="banList"></div>
@@ -745,7 +738,7 @@
     </div>
     <div id="youComm" class="hidden">
     <button class="ghost" data-you="youHub">Back</button>
-    <h3 style="font-size:15px;margin:16px 0 8px">Your community</h3>
+    <h3 style="font-size:15px;margin:16px 0 8px">Followers & likes</h3>
     <p class="muted" id="commStats"></p>
     <div id="commFollowers"></div>
     <div id="commBinder"></div>
@@ -753,16 +746,19 @@
     </div>
     <div id="youAlerts" class="hidden">
     <button class="ghost" data-you="youHub">Back</button>
-    <h3 style="font-size:15px;margin:16px 0 8px">Inbox</h3>
+    <h3 style="font-size:15px;margin:16px 0 8px">From Clappers</h3>
     <p class="muted">Notes from Clappers Management.</p>
     <div id="youInbox"></div>
-    <h3 style="font-size:15px;margin:20px 0 8px">Follow alerts</h3>
-    <p class="muted">Ping when a binder you follow adds a card. Works with the app open or on the Home Screen.</p>
+    </div>
+    <div id="youPrefs" class="hidden">
+    <button class="ghost" data-you="youHub">Back</button>
+    <h3 style="font-size:15px;margin:16px 0 8px">Notifications</h3>
+    <p class="muted">Choose what pings you.</p>
     <label><input id="followAlertOn" type="checkbox" style="width:auto;margin-right:8px" /> New cards and banner posts on binders I follow</label>
     <label><input id="grailAlertOn" type="checkbox" style="width:auto;margin-right:8px" /> New grails (1/1s)</label>
     <label><input id="likeAlertOn" type="checkbox" style="width:auto;margin-right:8px" /> Likes on my binder and cards</label>
     <label><input id="commentAlertOn" type="checkbox" style="width:auto;margin-right:8px" /> Comments and replies</label>
-    <button class="ghost" id="followAlertSave">Save alerts</button>
+    <button class="ghost" id="followAlertSave">Save</button>
     <p class="muted" id="followAlertNote"></p>
     </div>
     <div id="youBill" class="hidden">
@@ -930,8 +926,8 @@
     </div>
     <button class="ghost" id="shareCard">Copy public link</button>
     <p class="muted" id="shareCardNote"></p>
-    <button class="danger" id="dDel">Remove from binder</button>
     </div>
+    <button class="danger" id="dDel">Remove from binder</button>
   </section>
   <section class="page" id="editPage">
     <button class="ghost" id="backDetail">Back to card</button>
@@ -973,7 +969,7 @@
     </label>
     <p class="muted">Rotate if it’s sideways. This is the binder photo.</p>
     <label>Notes</label><textarea id="e_notes" rows="2"></textarea>
-    <button id="saveEdit">Save changes</button>
+    <button id="saveEdit">Save</button>
     <p class="muted" id="editNote"></p>
   </section>
   <nav class="dock" id="dock">
@@ -1286,7 +1282,7 @@ function saveAll(cards){
 let openId = null;
 let editPhoto = "";
 function youShow(which){
-  ["youHub","youProfile","youComm","youAlerts","youBill","youGone"].forEach(id => {
+  ["youHub","youProfile","youBanner","youComm","youAlerts","youPrefs","youBill","youGone"].forEach(id => {
     if ($(id)) $(id).classList.toggle("hidden", id !== which);
   });
   if (which==="youBill") refreshUsage();
@@ -1343,6 +1339,7 @@ function show(id){
   if (id==="feed") loadFeed();
   if (id==="find") loadFind();
   if (id!=="scan" && typeof stopLive === "function") try { stopLive(); } catch(e) {}
+  document.body.classList.toggle("result-on", id==="result");
   document.body.classList.toggle("bind-on", id==="bind");
   document.body.classList.toggle("dock-on", true);
   document.body.classList.toggle("chart-on", id==="bind" && document.body.classList.contains("chart-open"));
@@ -3047,7 +3044,7 @@ async function refreshUsage(){
 }
 function showPaywall(msg){
   if ($("quotaBox")) {
-    $("quotaBox").textContent = msg || "Scan cap reached. Upgrade Clappers+ ($8 / 30 days) for 200 IDs.";
+    $("quotaBox").textContent = msg || "No IDs left. Clappers+ is $8 / 30 days · 200 IDs.";
     $("quotaBox").className = "quota-chip err";
   }
   show("scan");
@@ -3058,7 +3055,7 @@ async function unlockPlus(){
   const p = await authPost("/plus", { secret, token: token() });
   await refreshUsage();
   if ($("plusNote")) $("plusNote").textContent = "Clappers+ on. "+p.left+" IDs in this 30-day window.";
-  if ($("quotaBox")) { $("quotaBox").textContent = "Clappers+ on. "+p.left+" IDs left in this 30-day window."; $("quotaBox").className = "quota-chip ok"; }
+  if ($("quotaBox")) { $("quotaBox").textContent = "Clappers+ · "+p.left+" IDs · 30 days"; $("quotaBox").className = "quota-chip ok"; }
 }
 $("modLoad") && ($("modLoad").onclick = async () => {
   const box = $("modList");
@@ -3564,7 +3561,7 @@ function cropStyle(){
   return "object-fit:cover;object-position:"+x+"% "+y+"%;transform:scale("+(z/100)+");transform-origin:"+x+"% "+y+"%";
 }
 function paintProfile(name, hue, avatar){
-  const ini = (name||"C").slice(0,2).toUpperCase();
+  const ini = (!name || name==="Collector") ? "CP" : (name.replace(/[^a-zA-Z0-9]/g,"").slice(0,2).toUpperCase() || "CP");
   if ($("pAva")) {
     $("pAva").style.borderColor = hue || "#8fd4ee";
     $("pAva").style.background = hue || "#8fd4ee";
