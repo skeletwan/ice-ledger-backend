@@ -60,14 +60,14 @@
     }
     header { padding:12px 16px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; }
     h1 { font-size:18px; margin:0; } h1 span { color:var(--ice); }
-    .brand { display:flex; align-items:center; gap:10px; }
-    .brand-stick { width:28px; height:28px; fill:var(--ice); flex:0 0 auto; }
-    .brand h1 { font-size:17px; font-weight:800; letter-spacing:.16em; text-transform:uppercase; line-height:1; }
-    .brand h1 span { font-size:11px; letter-spacing:.22em; font-weight:700; margin-left:8px; vertical-align:2px; }
-    .auth-card .brand { flex-direction:column; gap:14px; margin:8px 0 6px; }
-    .auth-card .brand-stick { width:42px; height:42px; }
-    .auth-card .brand h1 { font-size:26px; letter-spacing:.18em; }
-    .auth-card .brand h1 span { display:block; margin:8px 0 0; font-size:12px; letter-spacing:.28em; }
+    .brand { display:flex; align-items:flex-end; }
+    .brand h1 { font-size:18px; font-weight:800; font-style:italic; letter-spacing:.04em; text-transform:uppercase; line-height:1; display:flex; align-items:flex-end; gap:6px; }
+    .brand h1 span { font-style:italic; font-size:16px; letter-spacing:.02em; font-weight:800; margin:0; color:var(--ice); }
+    .brand .puck { width:20px; height:14px; flex:0 0 auto; margin:0 1px 1px; }
+    .auth-card .brand { justify-content:center; margin:10px 0 8px; }
+    .auth-card .brand h1 { font-size:28px; gap:8px; }
+    .auth-card .brand h1 span { font-size:24px; }
+    .auth-card .brand .puck { width:28px; height:20px; }
     nav { display:flex; gap:8px; }
     nav button { width:auto; margin:0; padding:8px 12px; }
     .page { display:none; padding:16px 16px 40px; }
@@ -235,7 +235,7 @@
     .cam-ico:after { content:""; position:absolute; width:8px; height:8px; border:2px solid var(--ice); border-radius:50%; left:5px; top:5px; }
     .live-overlay { position:fixed; inset:0; z-index:40; background:#000; display:flex; flex-direction:column; padding:12px 12px calc(18px + env(safe-area-inset-bottom)); }
     .live-overlay.hidden { display:none; }
-    .live-overlay video { flex:1; width:100%; object-fit:contain; background:#000; border-radius:12px; }
+    .live-overlay video, .live-overlay img#liveReview { flex:1; width:100%; object-fit:contain; background:#000; border-radius:12px; }
     .live-overlay .row2 { margin-top:12px; }
     .quota-chip { display:inline-flex; align-items:center; gap:8px; font-size:12px; color:var(--muted); background:var(--card); border:1px solid var(--line); border-radius:999px; padding:6px 12px; margin:0 0 12px; }
     .quota-chip.err { color:#ffd6d8; border-color:#6b2a30; background:#3a1b20; }
@@ -251,8 +251,9 @@
     .you-quiet { opacity:.85; }
     .filters { margin-top:8px; }
     .sec-label { margin:16px 0 8px; font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
-    .item-top { display:grid; grid-template-columns:76px 1fr auto; gap:10px; align-items:center; }
-    .thumb-well { width:76px; height:100px; border-radius:10px; background:radial-gradient(120% 80% at 50% 35%, #2c3542 0%, #0b0e12 72%); display:flex; align-items:center; justify-content:center; overflow:hidden; }
+    .item-top { display:grid; grid-template-columns:108px 1fr auto; gap:10px; align-items:center; }
+    .thumb-well { width:108px; height:142px; border-radius:10px; background:radial-gradient(120% 80% at 50% 35%, #2c3542 0%, #0b0e12 72%); display:flex; align-items:center; justify-content:center; overflow:hidden; }
+    .thumb-well.land { width:142px; height:96px; }
     .thumb-well img { width:auto; height:90%; max-width:90%; object-fit:contain; background:transparent; border-radius:0; }
     .thumb-miss { font-size:9px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#7d93a3; text-align:center; padding:8px; }
     .item img { width:auto; height:64px; max-width:72px; object-fit:contain; background:#000; border-radius:8px; }
@@ -296,8 +297,7 @@
     <div class="auth-wrap">
       <div class="auth-card" data-mode="signin">
         <div class="brand">
-          <svg class="brand-stick" viewBox="0 0 32 32" aria-hidden="true"><path d="M14.1 2.4c.4-.8 1.8-.8 2.2 0l1.1 18.8 9.8 3c1.5.5 1.5 2.5 0 3-2.6.9-7.6.1-11.2-1.2l-2.7-1.1L12.4 3c0-.4.3-.7.7-.7h1z"/></svg>
-          <h1>Clappers <span>PC</span></h1>
+          <h1>Clappers<svg class="puck" viewBox="0 0 28 18" aria-hidden="true"><ellipse cx="14" cy="6.2" rx="12" ry="5" fill="#8fd4ee"/><path d="M2 6.2v5.2c0 2.8 5.4 5 12 5s12-2.2 12-5V6.2" fill="#6bb8d4"/><ellipse cx="14" cy="6.2" rx="12" ry="5" fill="none" stroke="#c7eef8" stroke-width="1.2"/></svg><span>PC</span></h1>
         </div>
         <p class="muted" id="authLead">Sign in to your binder.</p>
         <label>Email</label>
@@ -349,8 +349,7 @@
   <div id="appShell" class="hidden">
   <header>
     <div class="brand">
-      <svg class="brand-stick" viewBox="0 0 32 32" aria-hidden="true"><path d="M14.1 2.4c.4-.8 1.8-.8 2.2 0l1.1 18.8 9.8 3c1.5.5 1.5 2.5 0 3-2.6.9-7.6.1-11.2-1.2l-2.7-1.1L12.4 3c0-.4.3-.7.7-.7h1z"/></svg>
-      <h1>Clappers <span>PC</span></h1>
+      <h1>Clappers<svg class="puck" viewBox="0 0 28 18" aria-hidden="true"><ellipse cx="14" cy="6.2" rx="12" ry="5" fill="#8fd4ee"/><path d="M2 6.2v5.2c0 2.8 5.4 5 12 5s12-2.2 12-5V6.2" fill="#6bb8d4"/><ellipse cx="14" cy="6.2" rx="12" ry="5" fill="none" stroke="#c7eef8" stroke-width="1.2"/></svg><span>PC</span></h1>
     </div>
   </header>
   <div class="quote-wrap" id="quoteWrap">
@@ -398,7 +397,12 @@
     </div>
     <div id="liveCam" class="live-overlay hidden">
       <video id="liveVid" autoplay playsinline></video>
+      <img id="liveReview" class="hidden" alt="" />
       <button type="button" class="primary" id="liveSnap">Take photo</button>
+      <div id="liveReviewBtns" class="row2 hidden" style="margin-top:8px">
+        <button type="button" class="ghost" id="liveRot">Rotate</button>
+        <button type="button" class="primary" id="liveUse">Use photo</button>
+      </div>
     </div>
     <button id="go" class="primary" disabled>Identify card</button>
     <button class="ghost hidden" id="resumeId">Resume this card</button>
@@ -647,6 +651,10 @@
       </select>
     </div>
     <div class="val" style="margin-top:8px"><b id="pubPick">—</b><span id="pubPickLbl">Pick grader + grade</span></div>
+    <div class="row2">
+      <a class="ghost btn" id="pubEbay" target="_blank" rel="noopener">eBay sold</a>
+      <a class="ghost btn" id="pubFan" target="_blank" rel="noopener">Fanatics</a>
+    </div>
     <h3 style="font-size:14px">Comments</h3>
     <div id="pubComments"></div>
     <textarea id="pubBody" rows="2" placeholder="Say something about this card (signed in)"></textarea>
@@ -1803,7 +1811,17 @@ async function openLive(which){
     if (liveStream) liveStream.getTracks().forEach(t => t.stop());
     liveStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
     vid.srcObject = liveStream;
+    vid.classList.remove("hidden");
+    if ($("liveReview")) { $("liveReview").classList.add("hidden"); $("liveReview").removeAttribute("src"); }
+    if ($("liveSnap")) $("liveSnap").classList.remove("hidden");
+    if ($("liveReviewBtns")) $("liveReviewBtns").classList.add("hidden");
+    reviewData = "";
     box.classList.remove("hidden");
+    const markLand = () => { window._liveLand = phoneIsLandscape(); };
+    markLand();
+    window.addEventListener("orientationchange", markLand);
+    window.addEventListener("resize", markLand);
+    window._landWatch = markLand;
     $("status").textContent = "Line up the card, then Take photo.";
   } catch(e) {
     $("status").textContent = "Camera blocked. Allow camera for Clappers PC.";
@@ -1814,24 +1832,33 @@ function stopLive(){
   if (liveStream) liveStream.getTracks().forEach(t => t.stop());
   liveStream = null;
   if ($("liveCam")) $("liveCam").classList.add("hidden");
+  if (window._landWatch) {
+    window.removeEventListener("orientationchange", window._landWatch);
+    window.removeEventListener("resize", window._landWatch);
+  }
 }
 function phoneIsLandscape(){
-  const t = (screen.orientation && screen.orientation.type) || "";
+  try { if (window.matchMedia && window.matchMedia("(orientation: landscape)").matches) return true; } catch(e){}
+  const t = (screen.orientation && (screen.orientation.type || "")) || "";
   if (/landscape/i.test(t)) return true;
+  const ang = screen.orientation && screen.orientation.angle;
+  if (ang === 90 || ang === -90 || ang === 270) return true;
   if (typeof window.orientation === "number" && Math.abs(window.orientation) === 90) return true;
-  return window.innerWidth > window.innerHeight;
+  if ((window.visualViewport && window.visualViewport.width || window.innerWidth) > (window.visualViewport && window.visualViewport.height || window.innerHeight) * 1.05) return true;
+  return !!window._liveLand;
 }
 function snapFrame(vid){
   const bw = vid.videoWidth || 1, bh = vid.videoHeight || 1;
+  const land = phoneIsLandscape() || window._liveLand;
   const c = document.createElement("canvas");
   const ctx = c.getContext("2d");
-  if (bw >= bh) {
-    c.width = bw; c.height = bh;
-    ctx.drawImage(vid, 0, 0);
-  } else if (phoneIsLandscape()) {
+  if (land && bh > bw) {
     c.width = bh; c.height = bw;
     ctx.translate(c.width, 0);
     ctx.rotate(Math.PI / 2);
+    ctx.drawImage(vid, 0, 0);
+  } else if (!land && bw > bh * 1.15) {
+    c.width = bw; c.height = bh;
     ctx.drawImage(vid, 0, 0);
   } else {
     c.width = bw; c.height = bh;
@@ -1887,10 +1914,40 @@ function markLand(img){
   if (img.complete && img.naturalWidth) go();
   else img.onload = go;
 }
+let reviewData = "";
+function rotateData(dataUrl){
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement("canvas");
+      c.width = img.naturalHeight;
+      c.height = img.naturalWidth;
+      const ctx = c.getContext("2d");
+      ctx.translate(c.width, 0);
+      ctx.rotate(Math.PI / 2);
+      ctx.drawImage(img, 0, 0);
+      resolve(c.toDataURL("image/jpeg", 0.86));
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
 async function snapLive(){
   const vid = $("liveVid");
   if (!vid || !vid.videoWidth) return;
-  const data = await trimMat(snapFrame(vid));
+  reviewData = await trimMat(snapFrame(vid));
+  if (liveStream) { liveStream.getTracks().forEach(t => t.stop()); liveStream = null; }
+  vid.classList.add("hidden");
+  const rev = $("liveReview");
+  rev.src = reviewData;
+  rev.classList.remove("hidden");
+  $("liveSnap").classList.add("hidden");
+  $("liveReviewBtns").classList.remove("hidden");
+  $("status").textContent = "Rotate until the card is right, then Use photo.";
+}
+async function useReview(){
+  if (!reviewData) return;
+  const data = reviewData;
   const file = await dataToFile(data, liveTarget+".jpg");
   stopLive();
   if (liveTarget === "back") {
@@ -1909,12 +1966,18 @@ async function snapLive(){
     if ($("shotFront")) $("shotFront").classList.add("on");
     lockIdentify();
     $("status").textContent = backFile ? "Front loaded. Identify when ready." : "Front loaded. Add the back on raws.";
-    /* stay put — Identify docks at the bottom */
   }
+  reviewData = "";
 }
 $("shotFront") && ($("shotFront").onclick = () => openLive("front"));
 $("shotBack") && ($("shotBack").onclick = () => openLive("back"));
 $("liveSnap") && ($("liveSnap").onclick = snapLive);
+$("liveRot") && ($("liveRot").onclick = async () => {
+  if (!reviewData) return;
+  reviewData = await rotateData(reviewData);
+  $("liveReview").src = reviewData;
+});
+$("liveUse") && ($("liveUse").onclick = useReview);
 function blobJpegUrl(file, max){
   return new Promise(resolve => {
     const img = new Image();
@@ -2319,6 +2382,43 @@ function paintPubGradePick(){
   $("pubPickLbl").textContent = svc==="Raw" ? "Raw sold" : (svc+" "+num+" sold");
   if ($("pgNum")) $("pgNum").style.visibility = svc==="Raw" ? "hidden" : "visible";
 }
+async function lookupSoldFor(c, noteId, after){
+  const note = $(noteId);
+  if (note) note.textContent = "Searching sold comps…";
+  try {
+    const r = await fetch("/comp", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json", "x-token": token() },
+      body: JSON.stringify({
+        player:c.player, year:c.year, set:c.set, number:c.number,
+        parallel:c.parallel, insert:c.insert, team:c.team,
+        grader:c.grader, grade:c.grade
+      })
+    });
+    const t = await r.text();
+    if (!r.ok) throw new Error(t.slice(0,160));
+    const d = JSON.parse(t);
+    const sug = d.suggested_cad != null ? +d.suggested_cad : null;
+    if (note) note.textContent = (d.cached ? "From cache · " : "") + (d.summary || (sug!=null ? ("Sold "+money(sug)) : "No sold match"));
+    if (after) after(d, sug);
+  } catch(e) {
+    if (note) note.textContent = "Lookup failed. " + ((e && e.message) || "");
+  }
+}
+function applyCompToCard(c, d, sug){
+  if (sug != null && !isNaN(sug)) {
+    c.comp = sug;
+    c.sysComp = sug;
+  }
+  if (d.raw_cad != null) c.rawComp = d.raw_cad;
+  c.book = c.book || {};
+  if (d.raw_cad != null) c.book.Raw = d.raw_cad;
+  if (d.psa10_cad != null) c.book["PSA|10"] = d.psa10_cad;
+  if (d.psa9_cad != null) c.book["PSA|9"] = d.psa9_cad;
+  if (d.psa8_cad != null) c.book["PSA|8"] = d.psa8_cad;
+  pushCardHist(c);
+  return c;
+}
 function openDetail(id){
   const c = load().find(x => x.id===id);
   if (!c) return;
@@ -2472,7 +2572,7 @@ function thumbHtml(c, slug){
   const src = photoSrc(c, slug);
   const missing = !src || c.has_photo === false;
   if (missing && !src) return "<div class=\"thumb-well\"><div class=\"thumb-miss\">No photo</div></div>";
-  return "<div class=\"thumb-well\"><img src=\""+src+"\" alt=\"\" onerror=\"this.parentNode.innerHTML='<div class=thumb-miss>No photo</div>'\" /></div>";
+  return "<div class=\"thumb-well\"><img src=\""+src+"\" alt=\"\" onload=\"if(this.naturalWidth>this.naturalHeight) this.parentNode.classList.add('land')\" onerror=\"this.parentNode.innerHTML='<div class=thumb-miss>No photo</div>'\" /></div>";
 }
 function priceCol(c, val){
   const mv = cardMove(c);
@@ -3642,6 +3742,9 @@ function openPubCard(c){
   paintCardSpark(c, "pubSpark", "pubTrendNote");
   loadComments(viewSlug, c.id, $("pubComments"));
   paintLike();
+  const qq = qstr(c);
+  if ($("pubEbay")) $("pubEbay").href = "https://www.ebay.ca/sch/i.html?_nkw="+qq+"&LH_Sold=1&LH_Complete=1";
+  if ($("pubFan")) $("pubFan").href = "https://sales-history.fanaticscollect.com/?q="+qq;
 }
 let findCache = [];
 let following = {};
