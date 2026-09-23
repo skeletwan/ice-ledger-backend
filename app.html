@@ -143,7 +143,7 @@
     #backPub, #backBind, #backFind, #backPub { margin-bottom:4px; }
     #pubList, #list { margin-top:14px; }
     #pubSet, #setFilter { margin-bottom:8px; }
-    .hero img { width:100%; max-height:420px; object-fit:contain; display:block; background:#000; }
+    .hero img { width:100%; max-height:280px; object-fit:contain; display:block; background:#000; }
     .vals { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:12px 0; }
     .val { background:#0e171e; border:1px solid var(--line); border-radius:12px; padding:10px; text-align:center; }
     .val b { display:block; font-size:18px; }
@@ -428,7 +428,7 @@
     <p class="status" id="resultStatus"></p>
     <div class="card" id="result">
       <div class="badge" id="badge"></div>
-      <p class="muted">Fix the name if it’s wrong, then save.</p>
+      <p class="muted">Fix anything that’s off, then save.</p>
       <div class="grid">
         <div class="field" style="grid-column:1/-1"><label>Player</label><input id="f_player" /></div>
         <div class="field"><label>Year</label><input id="f_year" /></div>
@@ -446,7 +446,7 @@
         <div><label>Paid CAD</label><input id="cost" type="number" step="0.01" placeholder="What you paid" /></div>
         <div><label>Your copy (sold)</label><input id="comp" type="number" step="0.01" placeholder="This copy’s market" /></div>
       </div>
-      <button type="button" class="ghost" id="idMoreBtn">More details</button>
+      <button type="button" class="ghost" id="idMoreBtn">Search comps</button>
       <div class="id-more hidden" id="idMore">
         <div class="field"><label>Cert</label><input id="f_cert" /></div>
         <div class="row2">
@@ -567,7 +567,7 @@
   <section class="page" id="notesPage">
     <button class="ghost" id="backFindNotes">Community</button>
     <h2 style="font-size:18px;margin:12px 0 8px">Alerts</h2>
-    <p class="muted">Pick a type.</p>
+    <p class="muted">Choose a category.</p>
     <button class="ghost" id="noteCatCard">New cards</button>
     <button class="ghost" id="noteCatGrail">Grails</button>
     <button class="ghost" id="noteCatLike">Likes</button>
@@ -617,10 +617,23 @@
   <section class="page" id="pubDetail">
     <button class="ghost" id="backPub">Back to binder</button>
     <div class="hero"><img id="pubHero" alt="" /></div>
-    <button class="ghost" id="likeBtn">Like · 0</button>
-    <button class="ghost hidden" id="cardLikers" style="width:auto;padding:6px 10px;font-size:12px;margin:8px 0 0"></button>
-    <h2 id="pubTitle"></h2>
+    <h2 id="pubTitle" style="margin:12px 0 4px"></h2>
     <p class="muted" id="pubLine"></p>
+    <div class="row2">
+      <button class="ghost" id="likeBtn">Like · 0</button>
+      <button class="ghost hidden" id="cardLikers" style="margin:0"></button>
+    </div>
+    <div class="vals">
+      <div class="val"><b id="pubHold">—</b><span>This copy</span></div>
+      <div class="val"><b id="pubRaw">—</b><span>Raw</span></div>
+    </div>
+    <h3 style="font-size:14px;margin:16px 0 8px">Comments</h3>
+    <div id="pubComments"></div>
+    <textarea id="pubBody" rows="2" placeholder="Comment"></textarea>
+    <button id="pubPost">Post</button>
+    <p class="status" id="pubCStatus"></p>
+    <button type="button" class="ghost" id="pubMktBtn">Market</button>
+    <div id="pubMarket" class="hidden">
     <div class="mini-trend">
       <div class="ranges" id="pubRanges">
         <button data-cr="7D">7D</button>
@@ -632,10 +645,6 @@
       </div>
       <div class="mini-trend-top"><span class="mini-last" id="pubTrendVal">—</span><span class="mini-chg flat" id="pubTrendNote"></span></div>
       <svg class="mini-spark" id="pubSpark" viewBox="0 0 300 86" preserveAspectRatio="none"></svg>
-    </div>
-    <div class="vals">
-      <div class="val"><b id="pubHold">—</b><span>This copy</span></div>
-      <div class="val"><b id="pubRaw">—</b><span>Raw</span></div>
     </div>
     <label>Look up another grade</label>
     <div class="row2">
@@ -652,11 +661,7 @@
       <a class="ghost btn" id="pubEbay" target="_blank" rel="noopener">eBay sold</a>
       <a class="ghost btn" id="pubFan" target="_blank" rel="noopener">Fanatics</a>
     </div>
-    <h3 style="font-size:14px">Comments</h3>
-    <div id="pubComments"></div>
-    <textarea id="pubBody" rows="2" placeholder="Say something about this card (signed in)"></textarea>
-    <button id="pubPost">Post comment</button>
-    <p class="status" id="pubCStatus"></p>
+    </div>
   </section>
   <section class="page" id="setPage">
     <h2 style="font-size:18px;margin:0 0 8px">You</h2>
@@ -864,7 +869,7 @@
     <div class="card">
       <h3 style="margin:0 0 8px;font-size:15px">Contact</h3>
       <p class="muted"><a href="mailto:hello@clapperspc.com" style="color:var(--ice)">hello@clapperspc.com</a></p>
-      <a class="btn" href="mailto:hello@clapperspc.com?subject=Ice%20Ledger%20feedback">Email support / feedback</a>
+      <a class="btn" href="mailto:hello@clapperspc.com?subject=Clappers%20PC%20feedback">Email support / feedback</a>
     </div>
     <div class="card" style="margin-top:12px">
       <h3 style="margin:0 0 8px;font-size:15px">Legal</h3>
@@ -883,6 +888,18 @@
     <h2 id="dPlayer" style="margin:14px 0 4px"></h2>
     <div id="dChips"></div>
     <p class="muted" id="dLine"></p>
+    <div class="vals">
+      <div class="val"><b id="vHold">—</b><span>This copy</span></div>
+      <div class="val"><b id="vRaw">—</b><span>Raw</span></div>
+      <div class="val"><b id="vPaid">—</b><span>Paid</span></div>
+    </div>
+    <h3 style="font-size:14px;margin:16px 0 8px">Comments</h3>
+    <div id="ownComments"></div>
+    <textarea id="ownBody" rows="2" placeholder="Comment"></textarea>
+    <button id="ownPost">Post</button>
+    <p class="muted" id="ownCNote"></p>
+    <button type="button" class="ghost" id="dMktBtn">Market</button>
+    <div id="dMarket" class="hidden">
     <div class="mini-trend">
       <div class="ranges" id="cardRanges">
         <button data-cr="7D">7D</button>
@@ -894,11 +911,6 @@
       </div>
       <div class="mini-trend-top"><span class="mini-last" id="cardTrendVal">—</span><span class="mini-chg flat" id="cardTrendNote"></span></div>
       <svg class="mini-spark" id="cardSpark" viewBox="0 0 300 86" preserveAspectRatio="none"></svg>
-    </div>
-    <div class="vals">
-      <div class="val"><b id="vHold">—</b><span>This copy</span></div>
-      <div class="val"><b id="vRaw">—</b><span>Raw</span></div>
-      <div class="val"><b id="vPaid">—</b><span>Paid</span></div>
     </div>
     <label>Look up another grade</label>
     <div class="row2">
@@ -916,18 +928,14 @@
       <a class="ghost btn" id="dEbay" target="_blank" rel="noopener">eBay sold</a>
       <a class="ghost btn" id="d130" target="_blank" rel="noopener">Fanatics</a>
     </div>
-    <button class="ghost" id="shareCard">Copy public link to this card</button>
+    <button class="ghost" id="shareCard">Copy public link</button>
     <p class="muted" id="shareCardNote"></p>
     <button class="danger" id="dDel">Remove from binder</button>
-    <h3 style="font-size:14px;margin-top:16px">Comments</h3>
-    <div id="ownComments"></div>
-    <textarea id="ownBody" rows="2" placeholder="Comment"></textarea>
-    <button id="ownPost">Post</button>
-    <p class="muted" id="ownCNote"></p>
+    </div>
   </section>
   <section class="page" id="editPage">
     <button class="ghost" id="backDetail">Back to card</button>
-    <p class="muted">Edit, then save.</p>
+    <p class="muted">Save when you’re done.</p>
     <label>Player</label><input id="e_player" />
     <div class="row2">
       <div><label>Year</label><input id="e_year" /></div>
@@ -963,7 +971,7 @@
       <input class="shot-file" id="e_photo" type="file" accept="image/*" />
       <div class="shot-ui">Replace photo</div>
     </label>
-    <p class="muted">Rotate if the card is sideways. This photo is what shows in your binder.</p>
+    <p class="muted">Rotate if it’s sideways. This is the binder photo.</p>
     <label>Notes</label><textarea id="e_notes" rows="2"></textarea>
     <button id="saveEdit">Save changes</button>
     <p class="muted" id="editNote"></p>
@@ -1370,7 +1378,11 @@ $("chartToggle") && ($("chartToggle").onclick = () => {
   paintTicker();
 });
 $("filterBtn") && ($("filterBtn").onclick = () => { if ($("bindFilters")) $("bindFilters").classList.toggle("hidden"); });
-$("idMoreBtn") && ($("idMoreBtn").onclick = () => { if ($("idMore")) $("idMore").classList.toggle("hidden"); });
+$("idMoreBtn") && ($("idMoreBtn").onclick = () => {
+  if (!$("idMore")) return;
+  $("idMore").classList.toggle("hidden");
+  $("idMoreBtn").textContent = $("idMore").classList.contains("hidden") ? "Search comps" : "Hide comps";
+});
 $("banToggle") && ($("banToggle").onclick = () => { if ($("banCard")) $("banCard").classList.toggle("hidden"); });
 $("ranges").onclick = e => {
   const b = e.target.closest("[data-r]");
@@ -2770,6 +2782,13 @@ $("pgSvc") && ($("pgSvc").onchange = paintPubGradePick);
 $("pgNum") && ($("pgNum").onchange = paintPubGradePick);
 $("backBind").onclick = () => show("bind");
 $("editCardBtn").onclick = () => { fillEdit(); show("edit"); };
+function togMkt(btn, box){
+  if (!$(box)) return;
+  $(box).classList.toggle("hidden");
+  if ($(btn)) $(btn).textContent = $(box).classList.contains("hidden") ? "Market" : "Hide market";
+}
+$("dMktBtn") && ($("dMktBtn").onclick = () => togMkt("dMktBtn","dMarket"));
+$("pubMktBtn") && ($("pubMktBtn").onclick = () => togMkt("pubMktBtn","pubMarket"));
 $("backDetail").onclick = () => openDetail(openId);
 $("e_photo") && ($("e_photo").onchange = async ev => {
   const f = ev.target.files && ev.target.files[0];
@@ -3985,7 +4004,7 @@ async function runLedgerz(){
     const rows = d.cards || [];
     box.innerHTML = rows.length ? rows.map(c =>
       "<article class=\"item\" data-lz-slug=\""+(c.slug||"")+"\" data-lz-card=\""+(c.id||"")+"\"><h3>"+dash(c.player)+"</h3><div class=\"muted\">"+[c.team,c.year,c.set,c.number?"#"+c.number:"",(!c.grader||c.grader==="Raw")?"Raw":[c.grader,c.grade].filter(Boolean).join(" ")].filter(Boolean).join(" · ")+"</div><div class=\"muted\">"+dash(c.display)+" · "+money(c.comp)+"</div></article>"
-    ).join("") : "<p class=\"muted\">Nothing in Ledgerz for that.</p>";
+    ).join("") : "<p class=\"muted\">No cards matched.</p>";
   } catch(e) { box.innerHTML = "<p class=\"muted\">Search failed.</p>"; }
 }
 $("ledgerzQ") && ($("ledgerzQ").oninput = () => { clearTimeout(ledgerzT); ledgerzT = setTimeout(runLedgerz, 280); });
