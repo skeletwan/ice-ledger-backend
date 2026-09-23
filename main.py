@@ -181,6 +181,57 @@ confidence is 0 to 1. Set needs_review true if any important field is under 0.7 
 
 ROOT = Path(__file__).parent
 DB_PATH = Path(os.environ.get("DB_PATH", str(ROOT / "ice.db")))
+PHOTO_DIR = Path(os.environ.get("PHOTO_DIR", str(DB_PATH.parent / "photos")))
+
+def photo_path(uid, cid: str) -> Path:
+    safe = re.sub(r"[^a-zA-Z0-9._-]", "", str(cid or ""))[:80] or "card"
+    return PHOTO_DIR / str(int(uid)) / (safe + ".jpg")
+
+def decode_data_url(blob: str) -> bytes | None:
+    if not isinstance(blob, str) or len(blob) < 80:
+        return None
+    raw = blob.split(",", 1)[-1] if blob.startswith("data:") else blob
+    raw = re.sub(r"\s+", "", raw)
+    try:
+        data = base64.b64decode(raw)
+    except Exception:
+        return None
+    return data if data and len(data) >= 32 else None
+
+def save_card_photo(uid, cid: str, blob: str) -> bool:
+    data = decode_data_url(blob)
+    if not data:
+        return False
+    path = photo_path(uid, cid)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+    return True
+
+def photo_file_exists(uid, cid: str) -> bool:
+    path = photo_path(uid, cid)
+    try:
+        return path.is_file() and path.stat().st_size >= 32
+    except Exception:
+        return False
+
+def read_card_photo_bytes(uid, cid: str, raw: dict | None = None) -> tuple[bytes, str] | None:
+    path = photo_path(uid, cid)
+    if path.is_file():
+        data = path.read_bytes()
+        if len(data) >= 32:
+            return data, "image/jpeg"
+    blob = ""
+    if raw:
+        blob = raw.get("photo") or raw.get("scan") or ""
+    data = decode_data_url(blob) if blob else None
+    if not data:
+        return None
+    try:
+        save_card_photo(uid, cid, blob)
+    except Exception:
+        pass
+    kind = "image/png" if isinstance(blob, str) and "png" in blob[:40] else "image/jpeg"
+    return data, kind
 
 def check_secret(secret: str | None):
     if APP_SECRET and secret != APP_SECRET:
@@ -797,6 +848,7 @@ async def img_proxy(url: str = ""):
 
 def db():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    PHOTO_DIR.mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(DB_PATH)
     con.row_factory = sqlite3.Row
     return con
@@ -1022,8 +1074,9 @@ def public_card(raw: dict) -> dict:
         "grader": c.get("grader"),
         "grade": c.get("grade"),
         "photo": "",
-        "has_photo": bool((c.get("photo") or c.get("scan") or "") and len(str(c.get("photo") or c.get("scan") or "")) > 80),
-        "comp": c.get("comp"),
+        "has_photo": bool((c.get("photo") or c.get("scan") or "") and len(str(c.get("photo") or c.get("scan") or "")) > 80) or bool(c.get("has_photo")),
+        "comp": card_market(c) or c.get("comp"),
+        "sysComp": card_market(c),
         "book": c.get("book") or {},
         "hist": (c.get("hist") or [])[-60:],
         "added": c.get("added"),
@@ -1564,6 +1617,7 @@ async def list_cards(request: Request, x_token: str | None = Header(default=None
         pc = public_card(raw)
         pc["cost"] = raw.get("cost")
         pc["notes"] = raw.get("notes")
+        pc["has_photo"] = photo_file_exists(uid, pc.get("id") or "") or pc.get("has_photo")
         out.append(pc)
     return {"cards": out}
 
@@ -1580,11 +1634,20 @@ async def upsert_card(payload: dict, request: Request, x_token: str | None = Hea
     card = payload.get("card") or payload
     cid = card.get("id") or ("c" + str(int(time.time()*1000)))
     card["id"] = cid
-    # do not store giant data-urls if huge
-    for k in ("scan", "photo"):
-        v = card.get(k)
-        if isinstance(v, str) and len(v) > 1800000:
-            card[k] = v[:1800000]
+    blob = card.get("photo") or card.get("scan") or ""
+    if save_card_photo(uid, cid, blob):
+        card["has_photo"] = True
+        card["photo"] = ""
+        card["scan"] = ""
+    elif photo_file_exists(uid, cid):
+        card["has_photo"] = True
+        card["photo"] = ""
+        card["scan"] = ""
+    else:
+        for k in ("scan", "photo"):
+            v = card.get(k)
+            if isinstance(v, str) and len(v) > 1800000:
+                card[k] = v[:1800000]
     con = db()
     existed = con.execute("SELECT id FROM cards WHERE id=? AND user_id=?", (cid, uid)).fetchone()
     con.execute(
@@ -1616,6 +1679,10 @@ async def delete_card(cid: str, request: Request, x_token: str | None = Header(d
     con.execute("DELETE FROM cards WHERE id=? AND user_id=?", (cid, uid))
     con.commit()
     con.close()
+    try:
+        photo_path(uid, cid).unlink(missing_ok=True)
+    except Exception:
+        pass
     return {"ok": True}
 
 @app.get("/binders")
@@ -1774,30 +1841,16 @@ async def card_photo(slug: str, cid: str):
         raise HTTPException(404, "no photo")
     row = con.execute("SELECT data FROM cards WHERE user_id=? AND id=?", (u["id"], cid)).fetchone()
     con.close()
-    if not row:
+    raw = {}
+    if row:
+        try:
+            raw = json.loads(row["data"])
+        except Exception:
+            raw = {}
+    got = read_card_photo_bytes(u["id"], cid, raw)
+    if not got:
         raise HTTPException(404, "no photo")
-    try:
-        raw = json.loads(row["data"])
-    except Exception:
-        raise HTTPException(404, "no photo")
-    blob = raw.get("photo") or raw.get("scan") or ""
-    if not isinstance(blob, str) or len(blob) < 80:
-        raise HTTPException(404, "no photo")
-    kind = "image/jpeg"
-    b64 = blob
-    if blob.startswith("data:"):
-        head, b64 = blob.split(",", 1) if "," in blob else (blob, "")
-        if "png" in head:
-            kind = "image/png"
-        elif "webp" in head:
-            kind = "image/webp"
-    b64 = re.sub(r"\s+", "", b64)
-    try:
-        data = base64.b64decode(b64)
-    except Exception:
-        raise HTTPException(404, "no photo")
-    if len(data) < 32:
-        raise HTTPException(404, "no photo")
+    data, kind = got
     return Response(data, media_type=kind, headers={"Cache-Control": "public, max-age=120"})
 
 @app.get("/u/{slug}/avatar")
@@ -2135,6 +2188,8 @@ async def public_binder(slug: str, request: Request, x_token: str | None = Heade
             pass
     cards = [public_card(x) for x in raws]
     for c in cards:
+        if photo_file_exists(u["id"], c.get("id") or ""):
+            c["has_photo"] = True
         n = con.execute(
             "SELECT COUNT(*) AS n FROM likes WHERE slug=? AND card_id=?",
             (slug, c.get("id")),

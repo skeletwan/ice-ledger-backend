@@ -61,9 +61,9 @@
     header { padding:12px 16px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; }
     h1 { font-size:18px; margin:0; } h1 span { color:var(--ice); }
     h1.wordmark { display:flex; align-items:flex-end; gap:0; letter-spacing:.02em; font-weight:800; }
-    h1.wordmark .stick-l { width:13px; height:20px; margin:0 1px -1px; fill:var(--ice); }
+    h1.wordmark .stick-l { width:16px; height:22px; margin:0 1px -2px; fill:var(--ice); overflow:visible; }
     .auth-card h1.wordmark { font-size:28px; }
-    .auth-card h1.wordmark .stick-l { width:20px; height:30px; }
+    .auth-card h1.wordmark .stick-l { width:24px; height:34px; }
     nav { display:flex; gap:8px; }
     nav button { width:auto; margin:0; padding:8px 12px; }
     .page { display:none; padding:16px 16px 40px; }
@@ -247,8 +247,13 @@
     .you-quiet { opacity:.85; }
     .filters { margin-top:8px; }
     .sec-label { margin:16px 0 8px; font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
-    .item-top { display:grid; grid-template-columns:56px 1fr auto; gap:10px; align-items:center; }
-    .item img { width:56px; height:56px; max-width:56px; object-fit:contain; background:#000; border-radius:8px; }
+    .item-top { display:grid; grid-template-columns:76px 1fr auto; gap:10px; align-items:center; }
+    .thumb-well { width:76px; height:100px; border-radius:10px; background:radial-gradient(120% 80% at 50% 35%, #2c3542 0%, #0b0e12 72%); display:flex; align-items:center; justify-content:center; overflow:hidden; }
+    .thumb-well img { width:auto; height:90%; max-width:90%; object-fit:contain; background:transparent; border-radius:0; }
+    .thumb-miss { font-size:9px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#7d93a3; text-align:center; padding:8px; }
+    .item img { width:auto; height:64px; max-width:72px; object-fit:contain; background:#000; border-radius:8px; }
+    .item-px { padding-bottom:2px; min-width:72px; }
+    .tier-tag { position:static; display:inline-block; margin-top:4px; right:auto; bottom:auto; }
     .item h3 { margin:0 0 2px; font-size:15px; font-weight:650; }
     .item-meta { font-size:12px; color:var(--muted); line-height:1.3; }
     .item-px { text-align:right; font-size:13px; font-weight:700; white-space:nowrap; }
@@ -286,7 +291,7 @@
     <div class="auth-wrap">
       <div class="auth-card" data-mode="signin">
         <div class="mark"></div>
-        <h1 class="wordmark">C<svg class="stick-l" viewBox="0 0 18 28" aria-hidden="true"><path d="M7 2v16l-4 8h3l3.2-8H14V2z"/></svg>appers <span>PC</span></h1>
+        <h1 class="wordmark">C<svg class="stick-l" viewBox="0 0 24 36" aria-hidden="true"><path d="M9.2 1.6c.5-1 2.4-1 2.9 0l.6 21.2 10.2 3.1c1.6.5 1.7 2.6.1 3.2-2.5 1-7.4.2-11.2-1.1L8.8 26.4 9.2 1.6z"/></svg>appers <span>PC</span></h1>
         <p class="muted" id="authLead">Sign in to your binder.</p>
         <label>Email</label>
         <input id="email" type="email" autocomplete="username" />
@@ -336,7 +341,7 @@
   </section>
   <div id="appShell" class="hidden">
   <header>
-    <h1 class="wordmark">C<svg class="stick-l" viewBox="0 0 18 28" aria-hidden="true"><path d="M7 2v16l-4 8h3l3.2-8H14V2z"/></svg>appers <span>PC</span></h1>
+    <h1 class="wordmark">C<svg class="stick-l" viewBox="0 0 24 36" aria-hidden="true"><path d="M9.2 1.6c.5-1 2.4-1 2.9 0l.6 21.2 10.2 3.1c1.6.5 1.7 2.6.1 3.2-2.5 1-7.4.2-11.2-1.1L8.8 26.4 9.2 1.6z"/></svg>appers <span>PC</span></h1>
   </header>
   <div class="quote-wrap" id="quoteWrap">
   <div class="fxbar">
@@ -1824,6 +1829,44 @@ function snapFrame(vid){
   }
   return c.toDataURL("image/jpeg", 0.86);
 }
+function trimMat(dataUrl){
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const w = img.naturalWidth, h = img.naturalHeight;
+        if (w < 80 || h < 80) return resolve(dataUrl);
+        const c = document.createElement("canvas");
+        c.width = w; c.height = h;
+        const ctx = c.getContext("2d");
+        ctx.drawImage(img, 0, 0);
+        const d = ctx.getImageData(0, 0, w, h).data;
+        const blank = i => {
+          const r = d[i], g = d[i+1], b = d[i+2];
+          const mx = Math.max(r,g,b), mn = Math.min(r,g,b);
+          return mx < 26 || (mn > 232 && mx - mn < 16);
+        };
+        let top = 0, bot = h - 1, left = 0, right = w - 1;
+        scan: for (; top < h; top++) for (let x = 0; x < w; x++) if (!blank((top * w + x) * 4)) break scan;
+        scan2: for (; bot > top; bot--) for (let x = 0; x < w; x++) if (!blank((bot * w + x) * 4)) break scan2;
+        scan3: for (; left < w; left++) for (let y = top; y <= bot; y++) if (!blank((y * w + left) * 4)) break scan3;
+        scan4: for (; right > left; right--) for (let y = top; y <= bot; y++) if (!blank((y * w + right) * 4)) break scan4;
+        const pad = 6;
+        top = Math.max(0, top - pad); left = Math.max(0, left - pad);
+        bot = Math.min(h - 1, bot + pad); right = Math.min(w - 1, right + pad);
+        const cw = right - left + 1, ch = bot - top + 1;
+        if (cw < w * 0.55 || ch < h * 0.55 || cw < 40 || ch < 40) return resolve(dataUrl);
+        if (cw >= w - 4 && ch >= h - 4) return resolve(dataUrl);
+        const o = document.createElement("canvas");
+        o.width = cw; o.height = ch;
+        o.getContext("2d").drawImage(c, left, top, cw, ch, 0, 0, cw, ch);
+        resolve(o.toDataURL("image/jpeg", 0.86));
+      } catch (e) { resolve(dataUrl); }
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
 function markLand(img){
   if (!img) return;
   const box = img.closest(".preview");
@@ -1837,7 +1880,7 @@ function markLand(img){
 async function snapLive(){
   const vid = $("liveVid");
   if (!vid || !vid.videoWidth) return;
-  const data = snapFrame(vid);
+  const data = await trimMat(snapFrame(vid));
   const file = await dataToFile(data, liveTarget+".jpg");
   stopLive();
   if (liveTarget === "back") {
@@ -2415,23 +2458,33 @@ function groupByCard(cards){
     return { key:k, copies:copies, face:copies[0], qty:copies.length };
   });
 }
+function thumbHtml(c, slug){
+  const src = photoSrc(c, slug);
+  const missing = !src || c.has_photo === false;
+  if (missing && !src) return "<div class=\"thumb-well\"><div class=\"thumb-miss\">No photo</div></div>";
+  return "<div class=\"thumb-well\"><img src=\""+src+"\" alt=\"\" onerror=\"this.parentNode.innerHTML='<div class=thumb-miss>No photo</div>'\" /></div>";
+}
+function priceCol(c, val){
+  const mv = cardMove(c);
+  const up = mv && mv.pct>=0;
+  const tier = tierFromCad(val);
+  return "<div class=\"item-px\">"+(val!=null?money(val):"—")+
+    (mv?("<div class=\"row-chg "+(up?"up":"dn")+"\">"+(up?"+":"")+mv.pct.toFixed(1)+"% "+rowSpark(mv.pts,up)+"</div>"):"")+
+    (tier?"<span class=\"tier-tag "+tier+"\">"+tierLabel(tier)+"</span>":"")+
+    "</div>";
+}
 function cardRowHtml(c, qty, key){
   try {
   qty = qty || 1;
-  const img = photoSrc(c);
   const line = [c.team,c.year,c.set,c.number?"#"+c.number:""].filter(Boolean).join(" · ");
-  const grade = (!c.grader||c.grader==="Raw")?"Raw":[c.grader,c.grade].filter(Boolean).join(" ");
-  const chips = "<div>"+(c.insert?"<span class=\"chip\">"+c.insert+"</span>":"")+(c.parallel?"<span class=\"chip\">"+c.parallel+"</span>":(!c.insert?"<span class=\"chip dim\">Base</span>":""))+"<span class=\"chip dim\">"+grade+"</span></div>";
   const tier = tierFromCad(binderCad(c));
   const open = qty>1 ? " data-copies=\""+String(key||cardKey(c)).replace(/"/g,"")+"\"" : " data-open=\""+c.id+"\"";
-  const mv = cardMove(c);
-  const up = mv && mv.pct>=0;
   return "<article class=\"item"+grailCls(c)+(tier?" tier-"+tier:"")+"\""+open+">"+
-    "<div class=\"item-top\"><img src=\""+img+"\" alt=\"\" onerror=\"this.style.opacity=0\" /><div><h3>"+dash(c.player)+"</h3>"+
+    "<div class=\"item-top\">"+thumbHtml(c)+"<div><h3>"+dash(c.player)+"</h3>"+
     "<div class=\"item-meta\">"+dash(line)+(c.parallel?" · "+c.parallel:"")+"</div></div>"+
-    "<div class=\"item-px\">"+money(c.comp)+(mv?("<div class=\"row-chg "+(up?"up":"dn")+"\">"+(up?"+":"")+mv.pct.toFixed(1)+"% "+rowSpark(mv.pts,up)+"</div>"):"")+"</div></div>"+
+    priceCol(c, binderCad(c))+
+    "</div>"+
     (qty>1?"<span class=\"qty-pill\">×"+qty+"</span>":"")+
-    (tier?"<span class=\"tier-tag "+tier+"\">"+tierLabel(tier)+"</span>":"")+
     "</article>";
   } catch(e) {
     return "<article class=\"item\" data-open=\""+(c&&c.id||"")+"\"><h3>"+dash(c&&c.player)+"</h3></article>";
@@ -3185,7 +3238,9 @@ function pubCardHtml(c, qty, key){
   const pt = tierFromCad(publicCad(c) || (viewSlug===mySlug ? binderCad(c) : null));
   qty = qty || 1;
   const open = qty>1 ? " data-copies=\""+String(key||cardKey(c)).replace(/"/g,"")+"\"" : " data-pub=\""+c.id+"\"";
-  return "<article class=\"item"+grailCls(c)+(pt?" tier-"+pt:"")+"\""+open+"><div class=\"item-top\"><img src=\""+photoSrc(c, viewSlug)+"\" alt=\"\" /><div><h3>"+(c.player||"—")+" <span class=\"heart\">♥ "+(c.likes||0)+"</span></h3><div class=\"muted\">"+[c.team,c.year,c.set,c.number?"#"+c.number:"",(!c.grader||c.grader==="Raw")?"Raw":[c.grader,c.grade].filter(Boolean).join(" ")].filter(Boolean).join(" · ")+"</div></div></div>"+(qty>1?"<span class=\"qty-pill\">×"+qty+"</span>":"")+(pt?"<span class=\"tier-tag "+pt+"\">"+tierLabel(pt)+"</span>":"")+"</article>";
+  const line = [c.team,c.year,c.set,c.number?"#"+c.number:"",(!c.grader||c.grader==="Raw")?"Raw":[c.grader,c.grade].filter(Boolean).join(" ")].filter(Boolean).join(" · ");
+  const val = publicCad(c) || (viewSlug===mySlug ? binderCad(c) : null) || asCad(c.comp);
+  return "<article class=\"item"+grailCls(c)+(pt?" tier-"+pt:"")+"\""+open+"><div class=\"item-top\">"+thumbHtml(c, viewSlug)+"<div><h3>"+(c.player||"—")+" <span class=\"heart\">♥ "+(c.likes||0)+"</span></h3><div class=\"item-meta\">"+line+"</div></div>"+priceCol(c, val)+"</div>"+(qty>1?"<span class=\"qty-pill\">×"+qty+"</span>":"")+"</article>";
 }
 function renderPubList(){
   const box = $("pubList");
