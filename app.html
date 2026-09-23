@@ -60,14 +60,10 @@
     }
     header { padding:12px 16px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; }
     h1 { font-size:18px; margin:0; } h1 span { color:var(--ice); }
-    .brand { display:flex; align-items:flex-end; }
-    .brand h1 { font-size:18px; font-weight:800; font-style:italic; letter-spacing:.04em; text-transform:uppercase; line-height:1; display:flex; align-items:flex-end; gap:6px; }
-    .brand h1 span { font-style:italic; font-size:16px; letter-spacing:.02em; font-weight:800; margin:0; color:var(--ice); }
-    .brand .puck { width:20px; height:14px; flex:0 0 auto; margin:0 1px 1px; }
-    .auth-card .brand { justify-content:center; margin:10px 0 8px; }
-    .auth-card .brand h1 { font-size:28px; gap:8px; }
-    .auth-card .brand h1 span { font-size:24px; }
-    .auth-card .brand .puck { width:28px; height:20px; }
+    .brand { display:flex; align-items:center; }
+    .brand-logo { height:28px; width:auto; display:block; }
+    .auth-card .brand { justify-content:center; margin:12px 0 10px; }
+    .auth-card .brand-logo { height:52px; }
     nav { display:flex; gap:8px; }
     nav button { width:auto; margin:0; padding:8px 12px; }
     .page { display:none; padding:16px 16px 40px; }
@@ -297,7 +293,7 @@
     <div class="auth-wrap">
       <div class="auth-card" data-mode="signin">
         <div class="brand">
-          <h1>Clappers<svg class="puck" viewBox="0 0 28 18" aria-hidden="true"><ellipse cx="14" cy="6.2" rx="12" ry="5" fill="#8fd4ee"/><path d="M2 6.2v5.2c0 2.8 5.4 5 12 5s12-2.2 12-5V6.2" fill="#6bb8d4"/><ellipse cx="14" cy="6.2" rx="12" ry="5" fill="none" stroke="#c7eef8" stroke-width="1.2"/></svg><span>PC</span></h1>
+          <img class="brand-logo" src="/logo.jpg" alt="Clappers PC" />
         </div>
         <p class="muted" id="authLead">Sign in to your binder.</p>
         <label>Email</label>
@@ -349,7 +345,7 @@
   <div id="appShell" class="hidden">
   <header>
     <div class="brand">
-      <h1>Clappers<svg class="puck" viewBox="0 0 28 18" aria-hidden="true"><ellipse cx="14" cy="6.2" rx="12" ry="5" fill="#8fd4ee"/><path d="M2 6.2v5.2c0 2.8 5.4 5 12 5s12-2.2 12-5V6.2" fill="#6bb8d4"/><ellipse cx="14" cy="6.2" rx="12" ry="5" fill="none" stroke="#c7eef8" stroke-width="1.2"/></svg><span>PC</span></h1>
+      <img class="brand-logo" src="/logo.jpg" alt="Clappers PC" />
     </div>
   </header>
   <div class="quote-wrap" id="quoteWrap">

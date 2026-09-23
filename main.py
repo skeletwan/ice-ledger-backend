@@ -249,6 +249,13 @@ def home():
         return FileResponse(page)
     return HTMLResponse("<p>app.html missing</p>")
 
+@app.get("/logo.jpg")
+def logo_jpg():
+    p = ROOT / "logo.jpg"
+    if p.exists():
+        return FileResponse(p, media_type="image/jpeg")
+    raise HTTPException(404, "no logo")
+
 def legal_file():
     page = ROOT / "legal.html"
     if page.exists():
