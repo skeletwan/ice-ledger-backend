@@ -1075,6 +1075,7 @@ def public_card(raw: dict) -> dict:
         "grade": c.get("grade"),
         "photo": "",
         "has_photo": bool((c.get("photo") or c.get("scan") or "") and len(str(c.get("photo") or c.get("scan") or "")) > 80) or bool(c.get("has_photo")),
+        # never send what they paid to other collectors
         "comp": card_market(c) or c.get("comp"),
         "sysComp": card_market(c),
         "book": c.get("book") or {},
@@ -2310,6 +2311,14 @@ async def add_banner(payload: dict, request: Request, x_token: str | None = Head
     )
     con.commit()
     rid = con.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
+    slug = ensure_slug(uid)
+    who = display_of(con, uid)
+    if slug:
+        for f in con.execute("SELECT follower FROM follows WHERE slug=?", (slug,)).fetchall():
+            fid = f["follower"]
+            if fid and fid != uid:
+                add_note(con, fid, slug, who + " updated their banner")
+    con.commit()
     con.close()
     return {"ok": True, "id": rid}
 
