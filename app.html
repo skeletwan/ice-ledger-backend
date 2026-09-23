@@ -227,11 +227,12 @@
     .shot-ui small { font-size:11px; font-weight:600; color:var(--muted); }
     .cam-ico { width:22px; height:22px; border:2px solid var(--ice); border-radius:6px; position:relative; }
     .cam-ico:after { content:""; position:absolute; width:8px; height:8px; border:2px solid var(--ice); border-radius:50%; left:5px; top:5px; }
-    .live-overlay { position:fixed; inset:0; z-index:40; background:#000; display:flex; flex-direction:column; padding:12px 12px calc(18px + env(safe-area-inset-bottom)); }
+    .live-overlay { position:fixed; inset:0; z-index:40; background:#000; display:flex; flex-direction:column; padding:12px 12px 0; }
     .live-overlay.hidden { display:none; }
-    .live-overlay video, .live-overlay img#liveReview { flex:1 1 auto; width:100%; max-height:58vh; object-fit:contain; background:#000; border-radius:12px; }
-    .live-overlay #liveSnap, .live-overlay #liveReviewBtns { flex:0 0 auto; }
-    .live-overlay .row2 { margin-top:12px; }
+    .live-overlay video, .live-overlay img#liveReview { flex:1 1 0; min-height:0; width:100%; object-fit:contain; background:#000; }
+    .live-overlay #liveSnap { flex:0 0 auto; margin:10px 12px calc(16px + env(safe-area-inset-bottom)); width:auto; }
+    .live-overlay #liveReviewBtns { flex:0 0 auto; display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:10px 12px calc(16px + env(safe-area-inset-bottom)); }
+    .live-overlay #liveReviewBtns button { margin:0; width:auto; }
     .quota-chip { display:inline-flex; align-items:center; gap:8px; font-size:12px; color:var(--muted); background:var(--card); border:1px solid var(--line); border-radius:999px; padding:6px 12px; margin:0 0 12px; }
     .quota-chip.err { color:#ffd6d8; border-color:#6b2a30; background:#3a1b20; }
     .quota-chip.warn { color:#ffe7b3; border-color:#6b5420; background:#3a3018; }
@@ -1899,18 +1900,20 @@ function cropToCard(dataUrl){
         for (let x = 0; x < w; x += 3) { cs += colE(x); cn++; }
         const rT = Math.max(6, (rs / rn) * 1.25);
         const cT = Math.max(6, (cs / cn) * 1.25);
+        const flatR = Math.max(4, (rs / rn) * 0.55);
+        const flatC = Math.max(4, (cs / cn) * 0.55);
         let top = 0, bot = h - 1, left = 0, right = w - 1;
-        while (top < h * 0.28 && rowE(top) < rT) top++;
-        while (bot > h * 0.72 && rowE(bot) < rT) bot--;
-        while (left < w * 0.28 && colE(left) < cT) left++;
-        while (right > w * 0.72 && colE(right) < cT) right--;
-        const pad = Math.max(8, Math.round(Math.min(right - left + 1, bot - top + 1) * 0.06));
+        while (top < h * 0.12 && rowE(top) < flatR) top++;
+        while (bot > h * 0.88 && rowE(bot) < flatR) bot--;
+        while (left < w * 0.12 && colE(left) < flatC) left++;
+        while (right > w * 0.88 && colE(right) < flatC) right--;
+        const pad = Math.max(10, Math.round(Math.min(w, h) * 0.04));
         top = Math.max(0, top - pad);
         left = Math.max(0, left - pad);
         bot = Math.min(h - 1, bot + pad);
         right = Math.min(w - 1, right + pad);
         const cw = right - left + 1, ch = bot - top + 1;
-        if (cw < w * 0.78 || ch < h * 0.78) return resolve(dataUrl);
+        if (cw < w * 0.86 || ch < h * 0.86) return resolve(dataUrl);
         const ox = Math.round(left / scale), oy = Math.round(top / scale);
         const ow = Math.min(sw - ox, Math.round(cw / scale));
         const oh = Math.min(sh - oy, Math.round(ch / scale));
@@ -1957,7 +1960,7 @@ function rotateData(dataUrl){
 async function snapLive(){
   const vid = $("liveVid");
   if (!vid || !vid.videoWidth) return;
-  reviewData = await trimMat(snapFrame(vid));
+  reviewData = snapFrame(vid);
   if (liveStream) { liveStream.getTracks().forEach(t => t.stop()); liveStream = null; }
   vid.classList.add("hidden");
   const rev = $("liveReview");
