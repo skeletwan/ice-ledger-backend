@@ -76,7 +76,7 @@
     button.danger { background:#6b2a30; }
     button:disabled { opacity:.5; }
     .row2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-    .preview { margin-top:12px; background:var(--card); border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+    .preview { margin-top:12px; background:var(--card); border:1px solid var(--line); border-radius:4px; overflow:hidden; }
     .preview h3 { margin:0; padding:8px 10px; font-size:11px; color:var(--muted); text-transform:uppercase; border-bottom:1px solid var(--line); }
     .preview img { display:block; width:100%; max-height:200px; height:auto; object-fit:contain; object-position:center; background:#000; }
     .preview.land { grid-column:1/-1; }
@@ -139,7 +139,7 @@
     .stale { font-size:11px; color:var(--warn); margin-top:6px; }
     .chip { display:inline-block; font-size:11px; padding:2px 8px; border-radius:999px; background:#1c3340; color:var(--ice); margin:2px 4px 0 0; }
     .chip.dim { background:#24303a; color:var(--muted); }
-    .hero { background:#000; border-radius:16px; overflow:hidden; border:1px solid var(--line); margin-top:12px; }
+    .hero { background:#000; border-radius:4px; overflow:hidden; border:1px solid var(--line); margin-top:12px; }
     #backPub, #backBind, #backFind, #backPub { margin-bottom:4px; }
     #pubList, #list { margin-top:14px; }
     #pubSet, #setFilter { margin-bottom:8px; }
@@ -229,7 +229,8 @@
     .cam-ico:after { content:""; position:absolute; width:8px; height:8px; border:2px solid var(--ice); border-radius:50%; left:5px; top:5px; }
     .live-overlay { position:fixed; inset:0; z-index:40; background:#000; display:flex; flex-direction:column; padding:12px 12px calc(18px + env(safe-area-inset-bottom)); }
     .live-overlay.hidden { display:none; }
-    .live-overlay video, .live-overlay img#liveReview { flex:1; width:100%; object-fit:contain; background:#000; border-radius:12px; }
+    .live-overlay video, .live-overlay img#liveReview { flex:1 1 auto; width:100%; max-height:58vh; object-fit:contain; background:#000; border-radius:12px; }
+    .live-overlay #liveSnap, .live-overlay #liveReviewBtns { flex:0 0 auto; }
     .live-overlay .row2 { margin-top:12px; }
     .quota-chip { display:inline-flex; align-items:center; gap:8px; font-size:12px; color:var(--muted); background:var(--card); border:1px solid var(--line); border-radius:999px; padding:6px 12px; margin:0 0 12px; }
     .quota-chip.err { color:#ffd6d8; border-color:#6b2a30; background:#3a1b20; }
@@ -247,9 +248,9 @@
     .sec-label { margin:16px 0 8px; font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
     .item-top { display:grid; grid-template-columns:92px minmax(0,1fr) auto; gap:10px; align-items:center; }
     .item-top > div:nth-child(2) { min-width:0; }
-    .thumb-well { width:92px; height:128px; border-radius:8px; background:#10161c; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+    .thumb-well { width:92px; height:128px; border-radius:0; background:#10161c; display:flex; align-items:center; justify-content:center; overflow:hidden; }
     .thumb-well.land { width:92px; height:64px; }
-    .thumb-well img { width:100%; height:100%; object-fit:cover; object-position:center; background:transparent; border-radius:0; }
+    .thumb-well img { width:100%; height:100%; object-fit:contain; object-position:center; background:transparent; border-radius:0; }
     .thumb-miss { font-size:9px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#7d93a3; text-align:center; padding:8px; }
     .item-px { padding-bottom:2px; min-width:72px; }
     .item { position:relative; }
@@ -1899,17 +1900,17 @@ function cropToCard(dataUrl){
         const rT = Math.max(6, (rs / rn) * 1.25);
         const cT = Math.max(6, (cs / cn) * 1.25);
         let top = 0, bot = h - 1, left = 0, right = w - 1;
-        while (top < h * 0.38 && rowE(top) < rT) top++;
-        while (bot > h * 0.62 && rowE(bot) < rT) bot--;
-        while (left < w * 0.38 && colE(left) < cT) left++;
-        while (right > w * 0.62 && colE(right) < cT) right--;
-        const pad = 3;
+        while (top < h * 0.28 && rowE(top) < rT) top++;
+        while (bot > h * 0.72 && rowE(bot) < rT) bot--;
+        while (left < w * 0.28 && colE(left) < cT) left++;
+        while (right > w * 0.72 && colE(right) < cT) right--;
+        const pad = Math.max(8, Math.round(Math.min(right - left + 1, bot - top + 1) * 0.06));
         top = Math.max(0, top - pad);
         left = Math.max(0, left - pad);
         bot = Math.min(h - 1, bot + pad);
         right = Math.min(w - 1, right + pad);
         const cw = right - left + 1, ch = bot - top + 1;
-        if (cw < w * 0.32 || ch < h * 0.32) return resolve(dataUrl);
+        if (cw < w * 0.78 || ch < h * 0.78) return resolve(dataUrl);
         const ox = Math.round(left / scale), oy = Math.round(top / scale);
         const ow = Math.min(sw - ox, Math.round(cw / scale));
         const oh = Math.min(sh - oy, Math.round(ch / scale));
