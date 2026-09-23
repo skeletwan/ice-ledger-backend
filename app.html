@@ -251,7 +251,7 @@
     .item-top > div:nth-child(2) { min-width:0; }
     .thumb-well { width:92px; height:128px; border-radius:8px; background:#10161c; display:flex; align-items:center; justify-content:center; overflow:hidden; }
     .thumb-well.land { width:92px; height:64px; }
-    .thumb-well img { width:100%; height:100%; object-fit:contain; object-position:center; background:transparent; border-radius:0; }
+    .thumb-well img { width:100%; height:100%; object-fit:cover; object-position:center; background:transparent; border-radius:0; }
     .thumb-miss { font-size:9px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#7d93a3; text-align:center; padding:8px; }
     .item img { width:auto; height:64px; max-width:72px; object-fit:contain; background:#000; border-radius:8px; }
     .item-px { padding-bottom:2px; min-width:72px; }
@@ -958,11 +958,13 @@
       <div><label>PSA 10 sold</label><input id="e_psa10" type="number" step="0.01" /></div>
     </div>
     <label>Photo</label>
-    <label class="shot-wrap" for="e_photo" style="min-height:88px;margin-bottom:10px">
+    <div class="hero" style="margin:8px 0"><img id="ePrev" alt="" /></div>
+    <button type="button" class="ghost" id="eRot">Rotate photo</button>
+    <label class="shot-wrap" for="e_photo" style="min-height:88px;margin:10px 0">
       <input class="shot-file" id="e_photo" type="file" accept="image/*" />
       <div class="shot-ui">Replace photo</div>
     </label>
-    <p class="muted">This photo is what shows in your binder. Same idea as scan: fill the frame, even light, no glare.</p>
+    <p class="muted">Rotate if the card is sideways. This photo is what shows in your binder.</p>
     <label>Notes</label><textarea id="e_notes" rows="2"></textarea>
     <button id="saveEdit">Save changes</button>
     <p class="muted" id="editNote"></p>
@@ -1864,37 +1866,60 @@ function snapFrame(vid){
   }
   return c.toDataURL("image/jpeg", 0.86);
 }
-function trimMat(dataUrl){
+function cropToCard(dataUrl){
   return new Promise(resolve => {
     const img = new Image();
     img.onload = () => {
       try {
-        const w = img.naturalWidth, h = img.naturalHeight;
-        if (w < 80 || h < 80) return resolve(dataUrl);
+        const sw = img.naturalWidth, sh = img.naturalHeight;
+        if (sw < 80 || sh < 80) return resolve(dataUrl);
+        const max = 360;
+        const scale = Math.min(1, max / Math.max(sw, sh));
+        const w = Math.max(48, Math.round(sw * scale));
+        const h = Math.max(48, Math.round(sh * scale));
         const c = document.createElement("canvas");
         c.width = w; c.height = h;
-        const ctx = c.getContext("2d");
-        ctx.drawImage(img, 0, 0);
+        const ctx = c.getContext("2d", { willReadFrequently: true });
+        ctx.drawImage(img, 0, 0, w, h);
         const d = ctx.getImageData(0, 0, w, h).data;
-        const blank = i => {
-          const r = d[i], g = d[i+1], b = d[i+2];
-          const mx = Math.max(r,g,b), mn = Math.min(r,g,b);
-          return mx < 26 || (mn > 232 && mx - mn < 16);
+        const L = (x, y) => {
+          const i = (y * w + x) * 4;
+          return 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
         };
+        const rowE = y => {
+          let e = 0, n = 0;
+          for (let x = 1; x < w; x += 2) { e += Math.abs(L(x, y) - L(x - 1, y)); n++; }
+          return e / n;
+        };
+        const colE = x => {
+          let e = 0, n = 0;
+          for (let y = 1; y < h; y += 2) { e += Math.abs(L(x, y) - L(x, y - 1)); n++; }
+          return e / n;
+        };
+        let rs = 0, cs = 0, rn = 0, cn = 0;
+        for (let y = 0; y < h; y += 3) { rs += rowE(y); rn++; }
+        for (let x = 0; x < w; x += 3) { cs += colE(x); cn++; }
+        const rT = Math.max(6, (rs / rn) * 1.25);
+        const cT = Math.max(6, (cs / cn) * 1.25);
         let top = 0, bot = h - 1, left = 0, right = w - 1;
-        scan: for (; top < h; top++) for (let x = 0; x < w; x++) if (!blank((top * w + x) * 4)) break scan;
-        scan2: for (; bot > top; bot--) for (let x = 0; x < w; x++) if (!blank((bot * w + x) * 4)) break scan2;
-        scan3: for (; left < w; left++) for (let y = top; y <= bot; y++) if (!blank((y * w + left) * 4)) break scan3;
-        scan4: for (; right > left; right--) for (let y = top; y <= bot; y++) if (!blank((y * w + right) * 4)) break scan4;
-        const pad = 6;
-        top = Math.max(0, top - pad); left = Math.max(0, left - pad);
-        bot = Math.min(h - 1, bot + pad); right = Math.min(w - 1, right + pad);
+        while (top < h * 0.38 && rowE(top) < rT) top++;
+        while (bot > h * 0.62 && rowE(bot) < rT) bot--;
+        while (left < w * 0.38 && colE(left) < cT) left++;
+        while (right > w * 0.62 && colE(right) < cT) right--;
+        const pad = 3;
+        top = Math.max(0, top - pad);
+        left = Math.max(0, left - pad);
+        bot = Math.min(h - 1, bot + pad);
+        right = Math.min(w - 1, right + pad);
         const cw = right - left + 1, ch = bot - top + 1;
-        if (cw < w * 0.55 || ch < h * 0.55 || cw < 40 || ch < 40) return resolve(dataUrl);
-        if (cw >= w - 4 && ch >= h - 4) return resolve(dataUrl);
+        if (cw < w * 0.32 || ch < h * 0.32) return resolve(dataUrl);
+        const ox = Math.round(left / scale), oy = Math.round(top / scale);
+        const ow = Math.min(sw - ox, Math.round(cw / scale));
+        const oh = Math.min(sh - oy, Math.round(ch / scale));
+        if (ow < 40 || oh < 40) return resolve(dataUrl);
         const o = document.createElement("canvas");
-        o.width = cw; o.height = ch;
-        o.getContext("2d").drawImage(c, left, top, cw, ch, 0, 0, cw, ch);
+        o.width = ow; o.height = oh;
+        o.getContext("2d").drawImage(img, ox, oy, ow, oh, 0, 0, ow, oh);
         resolve(o.toDataURL("image/jpeg", 0.86));
       } catch (e) { resolve(dataUrl); }
     };
@@ -1902,6 +1927,7 @@ function trimMat(dataUrl){
     img.src = dataUrl;
   });
 }
+function trimMat(dataUrl){ return cropToCard(dataUrl); }
 function markLand(img){
   if (!img) return;
   const box = img.closest(".preview");
@@ -1945,7 +1971,7 @@ async function snapLive(){
 }
 async function useReview(){
   if (!reviewData) return;
-  const data = reviewData;
+  const data = await cropToCard(reviewData);
   const file = await dataToFile(data, liveTarget+".jpg");
   stopLive();
   if (liveTarget === "back") {
@@ -2466,6 +2492,7 @@ function fillEdit(){
   $("e_psa8").value = c.psa8Comp??"";
   $("e_psa10").value = c.psa10Comp??"";
   $("e_notes").value = c.notes||"";
+  if ($("ePrev")) $("ePrev").src = photoSrc(c);
 }
 function teamName(c){ return (c.team||"").trim() || "No team"; }
 function photoSrc(c, slug){
@@ -2747,6 +2774,31 @@ $("e_photo") && ($("e_photo").onchange = async ev => {
   const f = ev.target.files && ev.target.files[0];
   if (!f) return;
   editPhoto = await toJpeg(f, 900);
+  if ($("ePrev")) $("ePrev").src = editPhoto;
+});
+$("eRot") && ($("eRot").onclick = async () => {
+  const c = load().find(x => x.id===openId);
+  if (!c) return;
+  $("editNote").textContent = "Rotating…";
+  try {
+    let src = editPhoto || (c.photo && String(c.photo).slice(0,5)==="data:" ? c.photo : "");
+    if (!src) {
+      const r = await fetch(photoSrc(c));
+      if (!r.ok) throw new Error("no photo");
+      const b = await r.blob();
+      src = await new Promise((res, rej) => {
+        const fr = new FileReader();
+        fr.onload = () => res(fr.result);
+        fr.onerror = rej;
+        fr.readAsDataURL(b);
+      });
+    }
+    editPhoto = await rotateData(src);
+    if ($("ePrev")) $("ePrev").src = editPhoto;
+    $("editNote").textContent = "Rotated. Save changes to keep it.";
+  } catch (e) {
+    $("editNote").textContent = "Could not rotate that photo.";
+  }
 });
 $("saveEdit").onclick = () => {
   const cards = load();
