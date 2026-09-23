@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Ice Ledger</title>
+  <title>Clappers PC</title>
   <style>
 :root { --bg:#081118; --card:#121c24; --line:#2a3b48; --text:#eef6fb; --muted:#8aa3b5; --ice:#8fd4ee; --btn:#2a9bbd; --warn:#e6c07b; --bad:#f07178; --good:#6ee7a8; --ink:#0c141b; }
     * { box-sizing: border-box; }
@@ -60,6 +60,10 @@
     }
     header { padding:12px 16px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; }
     h1 { font-size:18px; margin:0; } h1 span { color:var(--ice); }
+    h1.wordmark { display:flex; align-items:flex-end; gap:0; letter-spacing:.02em; font-weight:800; }
+    h1.wordmark .stick-l { width:13px; height:20px; margin:0 1px -1px; fill:var(--ice); }
+    .auth-card h1.wordmark { font-size:28px; }
+    .auth-card h1.wordmark .stick-l { width:20px; height:30px; }
     nav { display:flex; gap:8px; }
     nav button { width:auto; margin:0; padding:8px 12px; }
     .page { display:none; padding:16px 16px 40px; }
@@ -266,6 +270,8 @@
     .shot-ui span { font-size:11px; font-weight:600; color:var(--muted); }
     .shot-file { position:absolute; width:1px; height:1px; opacity:0; overflow:hidden; clip:rect(0,0,0,0); }
     #go { margin-top:16px; padding:16px; font-size:17px; letter-spacing:.02em; border-radius:14px; background:linear-gradient(180deg,#3db4d8,#2a86a8); box-shadow:0 8px 24px rgba(47,158,196,.28); }
+    body.scan-ready #go { position:fixed; left:12px; right:12px; bottom:calc(64px + env(safe-area-inset-bottom)); z-index:15; margin:0; }
+    body.scan-ready #scanPage { padding-bottom:180px; }
     .banner { display:none; margin:0 0 12px; padding:12px 14px; border-radius:12px; background:#173445; border:1px solid #2f6f86; color:var(--ice); font-weight:700; font-size:14px; }
     .banner.on { display:block; }
     .banner.wait { animation: pulse 1.2s ease-in-out infinite; }
@@ -280,7 +286,7 @@
     <div class="auth-wrap">
       <div class="auth-card" data-mode="signin">
         <div class="mark"></div>
-        <h1>Ice <span>Ledger</span></h1>
+        <h1 class="wordmark">C<svg class="stick-l" viewBox="0 0 18 28" aria-hidden="true"><path d="M7 2v16l-4 8h3l3.2-8H14V2z"/></svg>appers <span>PC</span></h1>
         <p class="muted" id="authLead">Sign in to your binder.</p>
         <label>Email</label>
         <input id="email" type="email" autocomplete="username" />
@@ -330,7 +336,7 @@
   </section>
   <div id="appShell" class="hidden">
   <header>
-    <h1>Ice <span>Ledger</span></h1>
+    <h1 class="wordmark">C<svg class="stick-l" viewBox="0 0 18 28" aria-hidden="true"><path d="M7 2v16l-4 8h3l3.2-8H14V2z"/></svg>appers <span>PC</span></h1>
   </header>
   <div class="quote-wrap" id="quoteWrap">
   <div class="fxbar">
@@ -385,7 +391,7 @@
     <div class="pay-mini">
       <div class="row2">
         <div>
-          <button class="ghost" id="payBtn">Ice+</button>
+          <button class="ghost" id="payBtn">Clappers+</button>
           <p class="muted">$8 / 30 days · 200 IDs</p>
         </div>
         <div>
@@ -505,7 +511,7 @@
   </section>
   <section class="page" id="ledgerzPage">
     <button class="ghost" id="backLedgerz">Back to community</button>
-    <h2 style="font-size:18px;margin:12px 0 8px">Search Ledgerz</h2>
+    <h2 style="font-size:18px;margin:12px 0 8px">Search Clappers</h2>
     <p class="muted">Player or team across every public binder.</p>
     <input id="ledgerzQ" placeholder="Matthews, Leafs…" autocomplete="off" />
     <div id="ledgerzList"></div>
@@ -550,7 +556,7 @@
     <button class="ghost" id="noteCatGrail">Grails</button>
     <button class="ghost" id="noteCatLike">Likes</button>
     <button class="ghost" id="noteCatComment">Comments</button>
-    <button class="ghost" id="noteCatMgmt">Ice Ledger</button>
+    <button class="ghost" id="noteCatMgmt">Clappers PC</button>
   </section>
   <section class="page" id="notesCatPage">
     <button class="ghost" id="backNotesHub">All alerts</button>
@@ -638,7 +644,7 @@
       <div class="you-group">
         <button class="ghost" data-you="youProfile">Profile</button>
         <button class="ghost" data-you="youAlerts">Inbox</button>
-        <button class="ghost" data-you="youBill">Ice+ / Rip Night!</button>
+        <button class="ghost" data-you="youBill">Clappers+ / Rip Night!</button>
       </div>
       <div class="you-group">
         <button class="ghost" data-you="youComm">Community</button>
@@ -723,7 +729,7 @@
     <div id="youAlerts" class="hidden">
     <button class="ghost" data-you="youHub">Back</button>
     <h3 style="font-size:15px;margin:16px 0 8px">Inbox</h3>
-    <p class="muted">Notes from Ice Ledger Management.</p>
+    <p class="muted">Notes from Clappers Management.</p>
     <div id="youInbox"></div>
     <h3 style="font-size:15px;margin:20px 0 8px">Follow alerts</h3>
     <p class="muted">Ping when a binder you follow adds a card. Works with the app open or on the Home Screen.</p>
@@ -736,9 +742,9 @@
     </div>
     <div id="youBill" class="hidden">
     <button class="ghost" data-you="youHub">Back</button>
-    <h3 style="font-size:15px;margin:16px 0 8px">Ice+ / Rip Night!</h3>
+    <h3 style="font-size:15px;margin:16px 0 8px">Clappers+ / Rip Night!</h3>
     <p class="muted" id="youQuota"></p>
-    <button class="ghost" id="youPayBtn">Ice+</button>
+    <button class="ghost" id="youPayBtn">Clappers+</button>
     <p class="muted">$8 / 30 days · 200 IDs + 30 book refreshes</p>
     <button class="ghost" id="youRipBtn">Rip Night!</button>
     <p class="muted">$2.99 · 20 extra IDs for 30 days</p>
@@ -761,10 +767,10 @@
   <section class="page" id="opsPage">
     <button class="ghost" id="backYouOps">Back to You</button>
     <h2 style="font-size:18px;margin:12px 0 8px">Owner tools</h2>
-    <p class="muted">Owner only. Unlock starts a 30-day Ice+ window on this signed-in account.</p>
+    <p class="muted">Owner only. Unlock starts a 30-day Clappers+ window on this signed-in account.</p>
     <label>App secret</label>
     <input id="plusSecret" type="password" autocomplete="off" />
-    <button id="plusBtn">Unlock Ice+ on this account</button>
+    <button id="plusBtn">Unlock Clappers+ on this account</button>
     <p class="muted" id="plusNote"></p>
     <h3 style="font-size:15px;margin:16px 0 8px">Moderation</h3>
     <p class="muted" id="modStats">Load the inbox to see reports. Hide and unhide from each card.</p>
@@ -798,8 +804,8 @@
     </div>
     <button class="ghost" id="modClearBanner">Remove banner</button>
     <div class="row2">
-      <button class="ghost" id="modPlusOn">Give Ice+</button>
-      <button class="ghost" id="modPlusOff">Remove Ice+</button>
+      <button class="ghost" id="modPlusOn">Give Clappers+</button>
+      <button class="ghost" id="modPlusOff">Remove Clappers+</button>
     </div>
     <div class="row2">
       <button class="ghost" id="modSuspend">Suspend</button>
@@ -812,7 +818,7 @@
     <label>To (email or slug)</label>
     <input id="modMailTo" placeholder="user@email or slug" />
     <label>Subject</label>
-    <input id="modMailSub" placeholder="Ice Ledger" />
+    <input id="modMailSub" placeholder="Clappers PC" />
     <label>Message</label>
     <textarea id="modMailBody" rows="5" placeholder="Keep it short."></textarea>
     <div class="row2">
@@ -822,9 +828,9 @@
     <button class="ghost" id="modMailAll">Email everyone</button>
     <p class="muted" id="modMailNote"></p>
     <h3 style="font-size:15px;margin:16px 0 8px">In-app message</h3>
-    <p class="muted">Shows under Alerts as Ice Ledger Management. Can also email.</p>
+    <p class="muted">Shows under Alerts as Clappers Management. Can also email.</p>
     <label>In-app text</label>
-    <textarea id="modPushBody" rows="4" placeholder="Short notice from Ice Ledger Management"></textarea>
+    <textarea id="modPushBody" rows="4" placeholder="Short notice from Clappers Management"></textarea>
     <div class="row2">
       <button class="ghost" id="modPushOne">Message looked-up user</button>
       <button class="ghost" id="modPushAll">Message everyone in-app</button>
@@ -837,12 +843,12 @@
     <p class="muted">I’m just one dude running this app. If you need a hand with anything, I’ll do my best to get back to you as soon as I can. Any feedback on improvements is definitely welcome!</p>
     <div class="card">
       <h3 style="margin:0 0 8px;font-size:15px">Contact</h3>
-      <p class="muted"><a href="mailto:iceledger@outlook.com" style="color:var(--ice)">iceledger@outlook.com</a></p>
-      <a class="btn" href="mailto:iceledger@outlook.com?subject=Ice%20Ledger%20feedback">Email support / feedback</a>
+      <p class="muted"><a href="mailto:hello@clapperspc.com" style="color:var(--ice)">hello@clapperspc.com</a></p>
+      <a class="btn" href="mailto:hello@clapperspc.com?subject=Ice%20Ledger%20feedback">Email support / feedback</a>
     </div>
     <div class="card" style="margin-top:12px">
       <h3 style="margin:0 0 8px;font-size:15px">Legal</h3>
-      <p class="muted">TWANTECH · Ice Ledger</p>
+      <p class="muted">TWANTECH · Clappers PC</p>
       <a class="ghost btn" href="/terms#terms-of-service" target="_blank" rel="noopener">Terms of Service</a>
       <a class="ghost btn" href="/aup#acceptable-use-policy" target="_blank" rel="noopener">Acceptable Use</a>
       <a class="ghost btn" href="/privacy#privacy-policy" target="_blank" rel="noopener">Privacy Policy</a>
@@ -1207,6 +1213,7 @@ $("photoTipsBtn") && ($("photoTipsBtn").onclick = () => {
 });
 let last = null, scanData = null, bindData = null, frontFile = null, backFile = null;
 function lockIdentify(){
+  document.body.classList.toggle("scan-ready", !!(typeof frontFile !== "undefined" && frontFile));
   const on = !!(frontFile || ($("file") && $("file").files && $("file").files[0]));
   if ($("go")) $("go").disabled = !on;
 }
@@ -1275,6 +1282,7 @@ document.addEventListener("click", ev => {
   youShow(b.getAttribute("data-you"));
 });
 function show(id){
+  if (id!=="scan") document.body.classList.remove("scan-ready");
   $("scanPage").classList.toggle("on", id==="scan");
   $("resultPage").classList.toggle("on", id==="result");
   $("bindPage").classList.toggle("on", id==="bind");
@@ -1292,7 +1300,7 @@ function show(id){
   if ($("ledgerzPage")) $("ledgerzPage").classList.toggle("on", id==="ledgerz");
   if ($("notesPage")) $("notesPage").classList.toggle("on", id==="notes");
   if ($("notesCatPage")) $("notesCatPage").classList.toggle("on", id==="notesCat");
-  if (id==="scan" && $("status")) $("status").textContent = "";
+  if (id==="scan") { if ($("status")) $("status").textContent = ""; lockIdentify(); }
   if (id!=="set" && $("pNote")) $("pNote").textContent = "";
   if ($("opsPage")) $("opsPage").classList.toggle("on", id==="ops");
   if (id==="set") youShow("youHub");
@@ -1562,7 +1570,7 @@ function scheduleDaily(){
   if (next <= now) next.setDate(next.getDate()+1);
   noteTimer = setTimeout(() => {
     const t = totals();
-    ping("Ice Ledger daily", t.mktN ? ("Binder book "+money(t.mkt)+" · "+t.cards+" cards") : "Open Ice Ledger to refresh comps.");
+    ping("Clappers PC daily", t.mktN ? ("Binder book "+money(t.mkt)+" · "+t.cards+" cards") : "Open Clappers PC to refresh comps.");
     scheduleDaily();
   }, next - now);
 }
@@ -1783,7 +1791,7 @@ async function openLive(which){
     box.classList.remove("hidden");
     $("status").textContent = "Line up the card, then Take photo.";
   } catch(e) {
-    $("status").textContent = "Camera blocked. Allow camera for Ice Ledger.";
+    $("status").textContent = "Camera blocked. Allow camera for Clappers PC.";
     $("status").className = "status err";
   }
 }
@@ -1848,7 +1856,7 @@ async function snapLive(){
     if ($("shotFront")) $("shotFront").classList.add("on");
     lockIdentify();
     $("status").textContent = backFile ? "Front loaded. Identify when ready." : "Front loaded. Add the back on raws.";
-    requestAnimationFrame(() => { const btn = $("go"); if (btn) btn.scrollIntoView({ behavior:"smooth", block:"center" }); });
+    /* stay put — Identify docks at the bottom */
   }
 }
 $("shotFront") && ($("shotFront").onclick = () => openLive("front"));
@@ -1916,7 +1924,7 @@ $("go").onclick = async () => {
     const r = await fetch("/identify", { method:"POST", headers:{ "x-token": token() }, body: fd, signal: ctrl.signal });
     const t = await r.text();
     if (r.status === 401) throw new Error("Session expired. Sign in again.");
-    if (r.status === 402) { showPaywall("No IDs left in this 30-day window. Upgrade Ice+."); refreshUsage(); return; }
+    if (r.status === 402) { showPaywall("No IDs left in this 30-day window. Upgrade Clappers+."); refreshUsage(); return; }
     if (!r.ok) throw new Error(t.slice(0,200));
     refreshUsage();
     const d = JSON.parse(t);
@@ -1944,7 +1952,7 @@ $("go").onclick = async () => {
     if (d.hockey === false) {
       $("badge").textContent = "Not hockey — won’t save to binder";
       $("badge").className = "badge review";
-      $("status").textContent = "That’s a " + (d.sport || "non-hockey") + " card. Ice Ledger only saves hockey right now.";
+      $("status").textContent = "That’s a " + (d.sport || "non-hockey") + " card. Clappers PC only saves hockey right now.";
       $("status").className = "status warn";
       lockSave(true, "Save to binder");
       $("result").classList.remove("hidden");
@@ -2687,7 +2695,7 @@ async function refreshBookNow(){
           })
         });
       }
-      if (r.status === 402) { note.textContent = "Book refresh cap hit. Ice+ is 30 per 30 days."; break; }
+      if (r.status === 402) { note.textContent = "Book refresh cap hit. Clappers+ is 30 per 30 days."; break; }
       if (!r.ok) continue;
       applyCompObj(card, await r.json());
       ok++;
@@ -2720,7 +2728,7 @@ async function maybeAutoBook(){
 }
 function noteKind(n){
   const b = (n.body||"").toLowerCase();
-  if (b.indexOf("ice ledger management")>=0) return "mgmt";
+  if (b.indexOf("clappers management")>=0) return "mgmt";
   if (b.indexOf("grail")>=0) return "grail";
   if (b.indexOf("liked")>=0) return "like";
   if (b.indexOf("comment")>=0 || b.indexOf("replied")>=0) return "comment";
@@ -2779,7 +2787,7 @@ async function refreshUsage(){
   const u = await r.json();
   window.lastPlan = u.plan || "free";
   const bonus = u.bonus ? " + "+u.bonus+" extra" : "";
-  const line = (u.plan==="plus"?"Ice+":"Free")+" · "+u.left+" IDs left"+bonus+" · "+(u.book_left??"?")+" book refreshes";
+  const line = (u.plan==="plus"?"Clappers+":"Free")+" · "+u.left+" IDs left"+bonus+" · "+(u.book_left??"?")+" book refreshes";
   if ($("quotaBox")) {
     $("quotaBox").textContent = line;
     $("quotaBox").className = "quota-chip " + (u.left<=0 ? "err" : (u.left<=3 ? "warn" : "ok"));
@@ -2789,7 +2797,7 @@ async function refreshUsage(){
 }
 function showPaywall(msg){
   if ($("quotaBox")) {
-    $("quotaBox").textContent = msg || "Scan cap reached. Upgrade Ice+ ($8 / 30 days) for 200 IDs.";
+    $("quotaBox").textContent = msg || "Scan cap reached. Upgrade Clappers+ ($8 / 30 days) for 200 IDs.";
     $("quotaBox").className = "quota-chip err";
   }
   show("scan");
@@ -2799,8 +2807,8 @@ async function unlockPlus(){
   if (!secret) { if ($("plusNote")) $("plusNote").textContent = "Paste APP_SECRET from Railway first."; show("set"); return; }
   const p = await authPost("/plus", { secret, token: token() });
   await refreshUsage();
-  if ($("plusNote")) $("plusNote").textContent = "Ice+ on. "+p.left+" IDs in this 30-day window.";
-  if ($("quotaBox")) { $("quotaBox").textContent = "Ice+ on. "+p.left+" IDs left in this 30-day window."; $("quotaBox").className = "quota-chip ok"; }
+  if ($("plusNote")) $("plusNote").textContent = "Clappers+ on. "+p.left+" IDs in this 30-day window.";
+  if ($("quotaBox")) { $("quotaBox").textContent = "Clappers+ on. "+p.left+" IDs left in this 30-day window."; $("quotaBox").className = "quota-chip ok"; }
 }
 $("modLoad") && ($("modLoad").onclick = async () => {
   const box = $("modList");
@@ -3021,11 +3029,11 @@ $("modUnsuspend") && ($("modUnsuspend").onclick = async () => {
   catch(e){ $("modUserNote").textContent = e.message; }
 });
 $("modPlusOn") && ($("modPlusOn").onclick = async () => {
-  try { const d = await modAccount("/admin/plan", { plan:"plus" }); $("modUserNote").textContent = "Ice+ on for "+(d.email||d.slug)+" (30 days)"; $("modLookup") && $("modLookup").click(); }
+  try { const d = await modAccount("/admin/plan", { plan:"plus" }); $("modUserNote").textContent = "Clappers+ on for "+(d.email||d.slug)+" (30 days)"; $("modLookup") && $("modLookup").click(); }
   catch(e){ $("modUserNote").textContent = e.message; }
 });
 $("modPlusOff") && ($("modPlusOff").onclick = async () => {
-  try { const d = await modAccount("/admin/plan", { plan:"free" }); $("modUserNote").textContent = "Ice+ off for "+(d.email||d.slug); $("modLookup") && $("modLookup").click(); }
+  try { const d = await modAccount("/admin/plan", { plan:"free" }); $("modUserNote").textContent = "Clappers+ off for "+(d.email||d.slug); $("modLookup") && $("modLookup").click(); }
   catch(e){ $("modUserNote").textContent = e.message; }
 });
 $("modMailOne") && ($("modMailOne").onclick = async () => {
@@ -3057,11 +3065,11 @@ $("modPushOne") && ($("modPushOne").onclick = async () => {
   try { await sendAnnounce(false); } catch(e) { if ($("modPushNote")) $("modPushNote").textContent = e.message; }
 });
 $("modPushAll") && ($("modPushAll").onclick = async () => {
-  if (!window.confirm("Send an in-app Ice Ledger Management message to every account?")) return;
+  if (!window.confirm("Send an in-app Clappers Management message to every account?")) return;
   try { await sendAnnounce(true); } catch(e) { if ($("modPushNote")) $("modPushNote").textContent = e.message; }
 });
 $("modMailAll") && ($("modMailAll").onclick = async () => {
-  if (!window.confirm("Email every account on Ice Ledger?")) return;
+  if (!window.confirm("Email every account on Clappers PC?")) return;
   try {
     const d = await authPost("/admin/mail-all", {
       subject: ($("modMailSub")&&$("modMailSub").value)||"",
@@ -3853,8 +3861,8 @@ async function refreshNotesBadge(){
     const n = d.unread || 0;
     const b = $("noteBadge");
     if (b) b.textContent = n ? ("("+n+")") : "";
-    const mgmt = (d.notes||[]).some(x => !x.read && /ice ledger management/i.test(x.body||""));
-    const social = (d.notes||[]).some(x => !x.read && !/ice ledger management/i.test(x.body||""));
+    const mgmt = (d.notes||[]).some(x => !x.read && /clappers management/i.test(x.body||""));
+    const social = (d.notes||[]).some(x => !x.read && !/clappers management/i.test(x.body||""));
     if ($("tabFind")) $("tabFind").classList.toggle("ping", social);
     if ($("openNotes")) $("openNotes").classList.toggle("ping", n > 0);
     if ($("tabSet")) $("tabSet").classList.toggle("ping", mgmt);
@@ -3862,12 +3870,12 @@ async function refreshNotesBadge(){
     const last = +(localStorage.getItem("ice-note-unread")||0);
     const fresh = (d.notes||[]).filter(x => !x.read);
     const msg = (fresh[0] && fresh[0].body) || "";
-    const allow = (msg.toLowerCase().indexOf("ice ledger management")>=0)
+    const allow = (msg.toLowerCase().indexOf("clappers management")>=0)
       || (msg.indexOf("liked")>=0 && alertOn("ice-like-alerts"))
       || (((msg.indexOf("commented")>=0)||(msg.indexOf("replied")>=0)) && alertOn("ice-comment-alerts"))
       || (msg.indexOf("added")>=0 && alertOn("ice-follow-alerts"));
     if (allow && n > last && "Notification" in window && Notification.permission === "granted") {
-      const title = msg.toLowerCase().indexOf("ice ledger management")>=0 ? "Ice Ledger Management" : "Ice Ledger";
+      const title = msg.toLowerCase().indexOf("clappers management")>=0 ? "Clappers Management" : "Clappers PC";
       try { new Notification(title, { body: msg || "New activity in Community" }); } catch(e){}
     }
     localStorage.setItem("ice-note-unread", String(n));
@@ -3896,10 +3904,10 @@ async function paintNotesHub(){
   label("noteCatGrail", "Grails", "grail");
   label("noteCatLike", "Likes", "like");
   label("noteCatComment", "Comments", "comment");
-  label("noteCatMgmt", "Ice Ledger", "mgmt");
+  label("noteCatMgmt", "Clappers PC", "mgmt");
 }
 async function openNoteCat(kind){
-  const titles = { card:"New cards", grail:"Grails", like:"Likes", comment:"Comments", mgmt:"Ice Ledger Management" };
+  const titles = { card:"New cards", grail:"Grails", like:"Likes", comment:"Comments", mgmt:"Clappers Management" };
   if ($("notesList")) $("notesList").innerHTML = "";
   if ($("notesCatTitle")) $("notesCatTitle").textContent = titles[kind] || "Alerts";
   show("notesCat");

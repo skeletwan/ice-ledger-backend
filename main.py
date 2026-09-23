@@ -11,7 +11,7 @@ import httpx
 
 XAI_API_KEY = os.environ.get("XAI_API_KEY", "")
 APP_SECRET = os.environ.get("APP_SECRET", "")
-OPERATOR_EMAIL = (os.environ.get("OPERATOR_EMAIL", "iceledger@outlook.com") or "iceledger@outlook.com").lower()
+OPERATOR_EMAIL = (os.environ.get("OPERATOR_EMAIL", "hello@clapperspc.com") or "hello@clapperspc.com").lower()
 MODEL = os.environ.get("XAI_MODEL", "grok-4-1-fast-non-reasoning")
 DAILY_CAP = int(os.environ.get("DAILY_CAP", "80"))
 FREE_SCANS = int(os.environ.get("FREE_SCANS", "10"))
@@ -25,8 +25,8 @@ RIP_PRICE = os.environ.get("RIP_PRICE", "2.99 CAD")
 def _env(name: str, default: str = "") -> str:
     return (os.environ.get(name, default) or default).strip().strip('"').strip("'")
 
-MAIL_TO = _env("MAIL_TO", "iceledger@outlook.com")
-MAIL_FROM = _env("MAIL_FROM", "Ice Ledger <noreply@contact.iceledgerz.com>")
+MAIL_TO = _env("MAIL_TO", "hello@clapperspc.com")
+MAIL_FROM = _env("MAIL_FROM", "Clappers PC <noreply@contact.clapperspc.com>")
 RESEND_API_KEY = _env("RESEND_API_KEY")
 SMTP_HOST = _env("SMTP_HOST")
 SMTP_PORT = int(_env("SMTP_PORT", "587") or "587")
@@ -48,7 +48,7 @@ def send_mail(subject: str, body: str, to: str | None = None) -> bool:
     if not to or "@" not in to:
         MAIL_LAST_ERROR = "no recipient"
         return False
-    sender = MAIL_FROM or f"Ice Ledger <{MAIL_TO}>"
+    sender = MAIL_FROM or f"Clappers PC <{MAIL_TO}>"
     addr = _from_address(sender)
     if RESEND_API_KEY:
         try:
@@ -86,7 +86,7 @@ def send_mail(subject: str, body: str, to: str | None = None) -> bool:
         MAIL_LAST_ERROR = "no RESEND_API_KEY and no SMTP settings"
     return False
 
-app = FastAPI(title="Ice Ledger Identify")
+app = FastAPI(title="Clappers PC Identify")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -96,7 +96,7 @@ app.add_middleware(
 
 _hits = {}
 
-PROMPT = """Identify this trading card. Ice Ledger only catalogs HOCKEY right now.
+PROMPT = """Identify this trading card. Clappers PC only catalogs HOCKEY right now.
 Hockey = NHL, AHL, CHL (OHL/WHL/QMJHL), IIHF, Team Canada/USA, PWHL, junior/international hockey.
 If the card is baseball, basketball, football, soccer, Pokemon, TCG, entertainment, or anything else: set hockey false and sport to that category. Do not pretend it is hockey.
 Return ONLY JSON, no markdown.
@@ -424,7 +424,7 @@ async def identify(
         data["needs_review"] = True
         data["blocked"] = True
         label = data.get("sport") or "not hockey"
-        data["notes"] = (data.get("notes") or "") + f" Ice Ledger is hockey-only for now ({label})."
+        data["notes"] = (data.get("notes") or "") + f" Clappers PC is hockey-only for now ({label})."
     return data
 
 
@@ -1469,7 +1469,7 @@ async def admin_grant_rip(payload: dict, request: Request, x_token: str | None =
     uid = row["id"]
     con.close()
     add_credits(uid, scans)
-    send_mail("Ice Ledger Rip Night", f"Granted {scans} extra IDs to {email}")
+    send_mail("Clappers PC Rip Night", f"Granted {scans} extra IDs to {email}")
     return {"ok": True, "email": email, "scans": scans}
 
 @app.post("/reset")
@@ -1485,8 +1485,8 @@ async def reset_request(payload: dict):
         con.execute("INSERT INTO resets(email,token,created) VALUES(?,?,?)", (email, token, int(time.time())))
         con.commit()
         sent = send_mail(
-            "Ice Ledger password reset",
-            f"Your Ice Ledger reset code is: {token}\n\nIt expires in 30 minutes. If you didn't ask for this, ignore the email.",
+            "Clappers PC password reset",
+            f"Your Clappers PC reset code is: {token}\n\nIt expires in 30 minutes. If you didn't ask for this, ignore the email.",
             to=email,
         )
         if not sent:
@@ -1503,7 +1503,7 @@ async def reset_request(payload: dict):
 
 
 def _mail_test_body(to: str):
-    ok = send_mail("Ice Ledger mail test", "If you got this, mail is working on Ice Ledger.", to=to)
+    ok = send_mail("Clappers PC mail test", "If you got this, mail is working on Clappers PC.", to=to)
     return {"ok": ok, "to": to, "from": MAIL_FROM, "resend_key": bool(RESEND_API_KEY), "error": MAIL_LAST_ERROR}
 
 
@@ -1865,12 +1865,12 @@ async def report_binder(slug: str, payload: dict, request: Request, x_token: str
     con.commit()
     con.close()
     send_mail(
-        "Ice Ledger photo report",
+        "Clappers PC photo report",
         f"Profile photo report\nBinder: {slug}\nReporter: {who} (id {uid})\nReason: {reason}\nUnique reports: {n}\n(3 unique reports hide the photo.)",
     )
     if hidden:
         send_mail(
-            "Ice Ledger photo removed",
+            "Clappers PC photo removed",
             f"Profile photo HIDDEN after 3 unique reports.\nBinder: {slug}\nLast reason: {reason}\nRestore it from Owner tools → Removed if this was junk reporting.",
         )
     return {"ok": True, "reports": n, "already": False, "removed": hidden}
@@ -2398,7 +2398,7 @@ async def report_user(slug: str, payload: dict, request: Request, x_token: str |
     con.commit()
     con.close()
     send_mail(
-        "Ice Ledger user report",
+        "Clappers PC user report",
         f"Collector report\nBinder: {slug}\nDisplay: {target['display']}\nEmail: {target['email']}\nReporter: {who} (id {uid})\nReason: {reason}\nUnique reports: {n}\nLook them up in Owner tools. Accounts are not auto-deleted.",
     )
     return {"ok": True, "reports": n, "already": False}
@@ -2441,12 +2441,12 @@ async def report_comment(cid: int, payload: dict, request: Request, x_token: str
     con.commit()
     con.close()
     send_mail(
-        "Ice Ledger comment report",
+        "Clappers PC comment report",
         f"Comment report\nComment id: {cid}\nBinder: {row['slug']}\nReporter: {who} (id {uid})\nReason: {reason}\nText: {(row['body'] or '')[:200]}\nUnique reports: {n}\n(3 unique reports hide the comment.)",
     )
     if hidden:
         send_mail(
-            "Ice Ledger comment removed",
+            "Clappers PC comment removed",
             f"Comment HIDDEN after 3 unique reports.\nComment id: {cid}\nBinder: {row['slug']}\nText: {(row['body'] or '')[:200]}\nLast reason: {reason}\nRestore it from Owner tools → Removed if this was junk reporting.",
         )
     return {"ok": True, "reports": n, "already": False, "removed": hidden}
@@ -2536,7 +2536,7 @@ async def admin_restore_photo(payload: dict, request: Request, x_token: str | No
     con.execute("UPDATE users SET avatar_hidden=0 WHERE slug=?", (slug,))
     con.commit()
     con.close()
-    send_mail("Ice Ledger photo restored", f"Profile photo restored for binder: {slug}")
+    send_mail("Clappers PC photo restored", f"Profile photo restored for binder: {slug}")
     return {"ok": True}
 
 @app.post("/admin/restore-comment")
@@ -2547,7 +2547,7 @@ async def admin_restore_comment(payload: dict, request: Request, x_token: str | 
     con.execute("UPDATE comments SET hidden=0 WHERE id=?", (cid,))
     con.commit()
     con.close()
-    send_mail("Ice Ledger comment restored", f"Comment {cid} restored")
+    send_mail("Clappers PC comment restored", f"Comment {cid} restored")
     return {"ok": True}
 
 @app.post("/admin/hide-comment")
@@ -2558,7 +2558,7 @@ async def admin_hide(payload: dict, request: Request, x_token: str | None = Head
     con.execute("UPDATE comments SET hidden=1 WHERE id=?", (cid,))
     con.commit()
     con.close()
-    send_mail("Ice Ledger comment hidden", f"Comment {cid} hidden by operator")
+    send_mail("Clappers PC comment hidden", f"Comment {cid} hidden by operator")
     return {"ok": True}
 
 @app.post("/admin/dismiss-report")
@@ -2642,7 +2642,7 @@ async def admin_clear_banner(payload: dict, request: Request, x_token: str | Non
     con.execute("DELETE FROM banner_posts WHERE user_id=?", (u["id"],))
     con.commit()
     con.close()
-    send_mail("Ice Ledger banner removed", f"Banner cleared for {slug}")
+    send_mail("Clappers PC banner removed", f"Banner cleared for {slug}")
     return {"ok": True}
 
 @app.post("/admin/hide-user-comments")
@@ -2668,7 +2668,7 @@ async def admin_hide_photo(payload: dict, request: Request, x_token: str | None 
     con.execute("UPDATE users SET avatar_hidden=1 WHERE slug=?", (slug,))
     con.commit()
     con.close()
-    send_mail("Ice Ledger photo hidden", f"Profile photo hidden for {slug}")
+    send_mail("Clappers PC photo hidden", f"Profile photo hidden for {slug}")
     return {"ok": True}
 
 def _find_user(con, payload: dict):
@@ -2707,7 +2707,7 @@ async def admin_announce(payload: dict, request: Request, x_token: str | None = 
     raw = str(payload.get("body") or "").strip()
     if not raw:
         raise HTTPException(400, "message required")
-    text = "Ice Ledger Management: " + raw
+    text = "Clappers Management: " + raw
     text = text[:500]
     who = str(payload.get("to") or "").strip()
     con = db()
@@ -2770,7 +2770,7 @@ async def admin_plan(payload: dict, request: Request, x_token: str | None = Head
         con.execute("UPDATE users SET plan='free', plus_until=NULL WHERE id=?", (row["id"],))
     con.commit()
     con.close()
-    send_mail("Ice Ledger plan "+want, f"{row['email']} / {row['slug'] if 'slug' in row.keys() else ''}")
+    send_mail("Clappers PC plan "+want, f"{row['email']} / {row['slug'] if 'slug' in row.keys() else ''}")
     return {"ok": True, "email": row["email"], "slug": row["slug"], "plan": want}
 
 @app.post("/admin/suspend")
@@ -2790,7 +2790,7 @@ async def admin_suspend(payload: dict, request: Request, x_token: str | None = H
         con.execute("DELETE FROM sessions WHERE user_id=?", (row["id"],))
     con.commit()
     con.close()
-    send_mail("Ice Ledger account "+("suspended" if on else "restored"), f"{row['email']} / {row['slug']}")
+    send_mail("Clappers PC account "+("suspended" if on else "restored"), f"{row['email']} / {row['slug']}")
     return {"ok": True, "email": row["email"], "slug": row["slug"], "suspended": bool(on)}
 
 @app.post("/admin/delete-user")
@@ -2821,7 +2821,7 @@ async def admin_delete_user(payload: dict, request: Request, x_token: str | None
     con.execute("DELETE FROM users WHERE id=?", (uid,))
     con.commit()
     con.close()
-    send_mail("Ice Ledger account deleted", f"{row['email']} / {slug} removed")
+    send_mail("Clappers PC account deleted", f"{row['email']} / {slug} removed")
     return {"ok": True}
 
 @app.post("/me/delete")
@@ -2849,7 +2849,7 @@ async def me_delete(payload: dict, request: Request, x_token: str | None = Heade
     con.execute("DELETE FROM users WHERE id=?", (uid,))
     con.commit()
     con.close()
-    send_mail("Ice Ledger account deleted", f"{row['email']} / {slug} deleted their account")
+    send_mail("Clappers PC account deleted", f"{row['email']} / {slug} deleted their account")
     return {"ok": True}
 
 @app.delete("/comments/{cid}")
