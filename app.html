@@ -139,11 +139,11 @@
     .stale { font-size:11px; color:var(--warn); margin-top:6px; }
     .chip { display:inline-block; font-size:11px; padding:2px 8px; border-radius:999px; background:#1c3340; color:var(--ice); margin:2px 4px 0 0; }
     .chip.dim { background:#24303a; color:var(--muted); }
-    .hero { background:#000; border-radius:4px; overflow:hidden; border:1px solid var(--line); margin-top:12px; }
+    .hero { background:transparent; border:0; border-radius:0; margin:12px 0 0; text-align:center; }
     #backPub, #backBind, #backFind, #backPub { margin-bottom:4px; }
     #pubList, #list { margin-top:14px; }
     #pubSet, #setFilter { margin-bottom:8px; }
-    .hero img { width:100%; max-height:280px; object-fit:contain; display:block; background:#000; }
+    .hero img { width:auto; max-width:100%; max-height:320px; height:auto; object-fit:contain; display:inline-block; background:transparent; vertical-align:middle; }
     .vals { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:12px 0; }
     .val { background:#0e171e; border:1px solid var(--line); border-radius:12px; padding:10px; text-align:center; }
     .val b { display:block; font-size:18px; }
@@ -1311,7 +1311,10 @@ document.addEventListener("click", ev => {
   if (!b || !b.closest("#setPage")) return;
   youShow(b.getAttribute("data-you"));
 });
+const pageScroll = {};
+let lastPage = "";
 function show(id){
+  if (lastPage==="bind" || lastPage==="pub" || lastPage==="find") pageScroll[lastPage] = window.scrollY || window.pageYOffset || 0;
   if (id!=="scan") document.body.classList.remove("scan-ready");
   $("scanPage").classList.toggle("on", id==="scan");
   $("resultPage").classList.toggle("on", id==="result");
@@ -1347,6 +1350,12 @@ function show(id){
     if ($(tid)) $(tid).classList.toggle("on", (tid==="tabScan"&&(id==="scan"||id==="result"))||(tid==="tabBind"&&(id==="bind"||id==="detail"||id==="edit"||id==="search"))||(tid==="tabFind"&&(id==="find"||id==="pub"||id==="pubDetail"||id==="notes"||id==="notesCat"||id==="feed"||id==="ledgerz"))||(tid==="tabSet"&&(id==="set"||id==="ops"||id==="help")));
   });
   window.scrollTo(0,0);
+  lastPage = id;
+  if ((id==="bind" || id==="pub" || id==="find") && pageScroll[id]) {
+    const y = pageScroll[id];
+    requestAnimationFrame(() => window.scrollTo(0, y));
+    setTimeout(() => window.scrollTo(0, y), 50);
+  }
 }
 function paintResume(){
   const on = !!window.idPending;
@@ -1609,7 +1618,8 @@ function scheduleDaily(){
   }, next - now);
 }
 function qstr(d){
-  return encodeURIComponent([d.year,d.player,d.sport,d.set,d.number,d.insert,d.parallel].filter(Boolean).join(" "));
+  const grade = (!d.grader || d.grader==="Raw") ? "raw" : [d.grader, d.grade].filter(Boolean).join(" ");
+  return encodeURIComponent([d.year,d.player,"hockey",d.set,d.number,d.insert,d.parallel,grade].filter(Boolean).join(" "));
 }
 function daysAgo(iso){
   if (!iso) return null;
@@ -2471,6 +2481,8 @@ function openDetail(id){
   $("dChips").innerHTML = chips.join("");
   $("dLine").textContent = [c.year,c.set,c.number?"#"+c.number:"",c.team].filter(Boolean).join(" · ");
   $("vHold").textContent = money(c.comp);
+  const holdLbl = $("vHold") && $("vHold").nextElementSibling;
+  if (holdLbl) holdLbl.textContent = (!c.grader || c.grader==="Raw") ? "This copy · Raw" : ("This copy · "+[c.grader,c.grade].filter(Boolean).join(" "));
   $("vPaid").textContent = money(c.cost);
   $("vRaw").textContent = money(bookGet(c,"Raw",""));
   paintCardSpark(c);
@@ -3812,6 +3824,8 @@ function openPubCard(c){
   $("pubTitle").textContent = c.player || "Card";
   $("pubLine").textContent = [c.team,c.year,c.set,c.number?"#"+c.number:"",c.insert,c.parallel].filter(Boolean).join(" · ");
   if ($("pubHold")) $("pubHold").textContent = money(c.comp);
+  const pubLbl = $("pubHold") && $("pubHold").nextElementSibling;
+  if (pubLbl) pubLbl.textContent = (!c.grader || c.grader==="Raw") ? "This copy · Raw" : ("This copy · "+[c.grader,c.grade].filter(Boolean).join(" "));
   if ($("pubRaw")) $("pubRaw").textContent = money((c.book&&c.book.Raw)!=null?c.book.Raw:c.comp);
   paintPubGradePick();
   show("pubDetail");
