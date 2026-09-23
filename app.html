@@ -247,10 +247,10 @@
     .you-quiet { opacity:.85; }
     .filters { margin-top:8px; }
     .sec-label { margin:16px 0 8px; font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
-    .item-top { display:grid; grid-template-columns:108px 1fr auto; gap:10px; align-items:center; }
-    .thumb-well { width:108px; height:142px; border-radius:10px; background:radial-gradient(120% 80% at 50% 35%, #2c3542 0%, #0b0e12 72%); display:flex; align-items:center; justify-content:center; overflow:hidden; }
-    .thumb-well.land { width:142px; height:96px; }
-    .thumb-well img { width:auto; height:90%; max-width:90%; object-fit:contain; background:transparent; border-radius:0; }
+    .item-top { display:grid; grid-template-columns:68px 1fr auto; gap:10px; align-items:center; }
+    .thumb-well { width:68px; height:92px; border-radius:8px; background:#10161c; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+    .thumb-well.land { width:92px; height:62px; }
+    .thumb-well img { width:100%; height:100%; object-fit:contain; background:transparent; border-radius:0; }
     .thumb-miss { font-size:9px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#7d93a3; text-align:center; padding:8px; }
     .item img { width:auto; height:64px; max-width:72px; object-fit:contain; background:#000; border-radius:8px; }
     .item-px { padding-bottom:2px; min-width:72px; }
@@ -258,6 +258,7 @@
     .tier-tag { position:absolute; right:8px; bottom:8px; display:inline-block; margin:0; z-index:2; }
     .item h3 { margin:0 0 2px; font-size:15px; font-weight:650; }
     .item-meta { font-size:12px; color:var(--muted); line-height:1.3; }
+    .item-ver { font-size:12px; color:var(--ice); font-weight:700; margin-top:2px; }
     .item-px { text-align:right; font-size:13px; font-weight:700; white-space:nowrap; }
     .item.comment, .thread .item { padding:8px 10px; margin-bottom:6px; }
     .item.reply { margin-left:14px; padding:8px 10px; }
@@ -2577,6 +2578,12 @@ function priceCol(c, val){
     (mv?("<div class=\"row-chg "+(up?"up":"dn")+"\">"+(up?"+":"")+mv.pct.toFixed(1)+"% "+rowSpark(mv.pts,up)+"</div>"):"")+
     "</div>";
 }
+function rowVersion(c){
+  const bits = [];
+  if (c && c.insert) bits.push(c.insert);
+  if (c && c.parallel) bits.push(c.parallel);
+  return bits.length ? bits.join(" · ") : "Base";
+}
 function cardRowHtml(c, qty, key){
   try {
   qty = qty || 1;
@@ -2585,7 +2592,7 @@ function cardRowHtml(c, qty, key){
   const open = qty>1 ? " data-copies=\""+String(key||cardKey(c)).replace(/"/g,"")+"\"" : " data-open=\""+c.id+"\"";
   return "<article class=\"item"+grailCls(c)+(tier?" tier-"+tier:"")+"\""+open+">"+
     "<div class=\"item-top\">"+thumbHtml(c)+"<div><h3>"+dash(c.player)+"</h3>"+
-    "<div class=\"item-meta\">"+dash(line)+(c.parallel?" · "+c.parallel:"")+"</div></div>"+
+    "<div class=\"item-meta\">"+dash(line)+"</div><div class=\"item-ver\">"+rowVersion(c)+"</div></div>"+
     priceCol(c, binderCad(c))+
     "</div>"+
     (qty>1?"<span class=\"qty-pill\">×"+qty+"</span>":"")+
@@ -3345,7 +3352,7 @@ function pubCardHtml(c, qty, key){
   const open = qty>1 ? " data-copies=\""+String(key||cardKey(c)).replace(/"/g,"")+"\"" : " data-pub=\""+c.id+"\"";
   const line = [c.team,c.year,c.set,c.number?"#"+c.number:"",(!c.grader||c.grader==="Raw")?"Raw":[c.grader,c.grade].filter(Boolean).join(" ")].filter(Boolean).join(" · ");
   const val = publicCad(c) || (viewSlug===mySlug ? binderCad(c) : null) || asCad(c.comp);
-  return "<article class=\"item"+grailCls(c)+(pt?" tier-"+pt:"")+"\""+open+"><div class=\"item-top\">"+thumbHtml(c, viewSlug)+"<div><h3>"+(c.player||"—")+" <span class=\"heart\">♥ "+(c.likes||0)+"</span></h3><div class=\"item-meta\">"+line+"</div></div>"+priceCol(c, val)+"</div>"+(qty>1?"<span class=\"qty-pill\">×"+qty+"</span>":"")+(pt?"<span class=\"tier-tag "+pt+"\">"+tierLabel(pt)+"</span>":"")+"</article>";
+  return "<article class=\"item"+grailCls(c)+(pt?" tier-"+pt:"")+"\""+open+"><div class=\"item-top\">"+thumbHtml(c, viewSlug)+"<div><h3>"+(c.player||"—")+" <span class=\"heart\">♥ "+(c.likes||0)+"</span></h3><div class=\"item-meta\">"+line+"</div><div class=\"item-ver\">"+rowVersion(c)+"</div></div>"+priceCol(c, val)+"</div>"+(qty>1?"<span class=\"qty-pill\">×"+qty+"</span>":"")+(pt?"<span class=\"tier-tag "+pt+"\">"+tierLabel(pt)+"</span>":"")+"</article>";
 }
 function renderPubList(){
   const box = $("pubList");
@@ -3985,7 +3992,7 @@ function renderFeed(){
   box.innerHTML = rows.length ? rows.map(c => {
     const line = [c.team,c.year,c.set,c.number?"#"+c.number:""].filter(Boolean).join(" · ");
     const ft = tierFromCad(publicCad(c));
-    return "<article class=\"item"+grailCls(c)+(ft?" tier-"+ft:"")+"\" data-feed-slug=\""+c.slug+"\" data-feed-card=\""+c.id+"\"><div class=\"item-top\"><img src=\""+photoSrc(c, c.slug)+"\" alt=\"\" /><div><h3>"+(c.player||"—")+"</h3><div class=\"muted\">"+line+"</div><div class=\"muted\">"+(c.display||"Collector")+" · "+timeAgo(c.added)+"</div><div class=\"muted\">"+money(publicCad(c) || c.comp)+"</div></div></div>"+(ft?"<span class=\"tier-tag "+ft+"\">"+tierLabel(ft)+"</span>":"")+"</article>";
+    return "<article class=\"item"+grailCls(c)+(ft?" tier-"+ft:"")+"\" data-feed-slug=\""+c.slug+"\" data-feed-card=\""+c.id+"\"><div class=\"item-top\"><img src=\""+photoSrc(c, c.slug)+"\" alt=\"\" /><div><h3>"+(c.player||"—")+"</h3><div class=\"muted\">"+line+"</div><div class=\"item-ver\">"+rowVersion(c)+"</div><div class=\"muted\">"+(c.display||"Collector")+" · "+timeAgo(c.added)+"</div><div class=\"muted\">"+money(publicCad(c) || c.comp)+"</div></div></div>"+(ft?"<span class=\"tier-tag "+ft+"\">"+tierLabel(ft)+"</span>":"")+"</article>";
   }).join("") : "<p class=\"muted\">No new cards yet.</p>";
 }
 $("feedSort") && ($("feedSort").onchange = renderFeed);
