@@ -692,9 +692,18 @@ def _drop_junk_raw(out: dict, q: str):
 
 def _sale_fits(title: str, q: str, player: str) -> bool:
     t = (title or "").lower()
-    last = (player or "").strip().split()[-1].lower() if player else ""
-    if last and last not in t:
-        return False
+    parts = (player or "").strip().split()
+    last = parts[-1].lower() if parts else ""
+    if last:
+        alts = {last}
+        if last.endswith("sky"):
+            alts.add(last[:-1] + "i")
+        if last.endswith("ski"):
+            alts.add(last[:-1] + "y")
+        if last.endswith("ov"):
+            alts.add(last + "a")
+        if not any(a in t for a in alts):
+            return False
     if _junk_title(title):
         return False
     ql = (q or "").lower()
@@ -704,6 +713,31 @@ def _sale_fits(title: str, q: str, player: str) -> bool:
     if "jumbo" not in ql and "jumbo" in t:
         return False
     return True
+
+def search_queries(card: dict) -> list:
+    player = str(card.get("player") or "").strip()
+    last = player.split()[-1] if player else ""
+    year = str(card.get("year") or "").strip()
+    year_short = year[:4] if year else ""
+    ins = str(card.get("insert") or "").strip()
+    st = str(card.get("set") or "").strip()
+    par = str(card.get("parallel") or "").strip()
+    num = str(card.get("number") or "").strip()
+    num = re.sub(r"\s*\d+\s*/\s*\d+\s*", " ", num).strip()
+    out = []
+    for bits in (
+        [player, ins or st, year_short, par],
+        [player, year_short],
+        [player, ins or st],
+        [player, num, year_short] if num else None,
+        [last, ins or st, year_short],
+    ):
+        if not bits:
+            continue
+        q = " ".join(str(x) for x in bits if x)
+        if q and q not in out:
+            out.append(q)
+    return out[:5]
 
 def _clean_bucket(vals):
     vals = [v for v in vals if v and v >= 1]
@@ -1174,17 +1208,16 @@ async def comp(
         num = re.sub(r"\s*\d+\s*/\s*\d+\s*", " ", num).strip()
     par = run_only(card.get("parallel"))
     ins = run_only(card.get("insert"))
-    q = " ".join(str(x) for x in [
-        card.get("player"), ins or card.get("set"), card.get("year"),
-        par if par else None,
-    ] if x)
-    api_hit = await fetch_card_api(q, card.get("player") or "", ck)
-    if card.get("player"):
-        q2 = " ".join(str(x) for x in [card.get("player"), ins or "Young Guns", card.get("year")] if x)
-        if q2.strip() != q.strip():
-            extra = await fetch_card_api(q2, card.get("player") or "", ck)
-            if extra and not api_hit:
-                api_hit = extra
+    qs = search_queries(card)
+    q = qs[0] if qs else " ".join(str(x) for x in [card.get("player"), ins or card.get("set"), card.get("year")] if x)
+    api_hit = None
+    for qtry in qs:
+        extra = await fetch_card_api(qtry, card.get("player") or "", ck)
+        if extra:
+            api_hit = extra
+            if extra.get("raw_cad") or extra.get("psa10_cad") or extra.get("sample_count"):
+                break
+    if ck.strip("|"):
         house = pack_house(ck)
         if house:
             api_hit = house
