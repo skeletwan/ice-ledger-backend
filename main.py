@@ -893,7 +893,7 @@ def _ingest(rows, q, player, buckets, only_raw=None, sales=None):
             })
 
 async def _card_api_rows(client, q: str, extra: dict) -> list:
-    start = (datetime.now(timezone.utc) - timedelta(days=3)).date().isoformat()
+    start = (datetime.now(timezone.utc) - timedelta(days=14)).date().isoformat()
     params = {"q": q, "limit": 40, "category": "sports", "date_from": start}
     params.update(extra or {})
     r = await client.get(

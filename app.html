@@ -2879,8 +2879,7 @@ function copyValue(c){
   return n==null ? -1 : n;
 }
 function cardMove(c){
-  let hist = sliceHist(cardHist(c), "7D");
-  if (hist.length === 1) hist = [hist[0], hist[0]];
+  const hist = sliceHist(cardHist(c), "7D");
   if (hist.length < 2) return null;
   const a = +hist[0].v, b = +hist[hist.length-1].v;
   if (!(a>0) || isNaN(b)) return null;
