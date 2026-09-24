@@ -954,6 +954,75 @@ async def fetch_card_api(q: str, player: str, fp: str = "") -> dict | None:
     out["model"] = "card-api"
     return out
 
+def book_job_on() -> bool:
+    try:
+        con = db()
+        con.execute("CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT)")
+        row = con.execute("SELECT v FROM kv WHERE k='book_job'").fetchone()
+        con.close()
+        if not row:
+            return False
+        return (time.time() - float(row["v"])) < 45 * 60
+    except Exception:
+        return False
+
+def pack_house(fp: str) -> dict | None:
+    if not fp:
+        return None
+    out, counts, when = house_day_close(fp)
+    series = house_series(fp)
+    if not out and series:
+        out, counts, when = {}, {}, {}
+        for k, pts in series.items():
+            if pts:
+                out[k] = pts[-1]["v"]
+                counts[k] = 1
+                when[k] = pts[-1]["d"]
+    if not out:
+        return None
+    out = _order_grades(out)
+    out["raw_n"] = counts.get("raw_cad", 0)
+    out["currency"] = "CAD"
+    out["sample_count"] = sum(counts.values())
+    out["close_day"] = when.get("raw_cad") or (max(when.values()) if when else "")
+    out["hist_days"] = series
+    out["house"] = True
+    out["cached"] = True
+    out["sources"] = ["house"]
+    out["summary"] = f"House close · {out.get('close_day') or 'today'}."
+    out["model"] = "house"
+    return out
+
+def _copy_bucket(card: dict) -> str:
+    g = str(card.get("grader") or "Raw").upper()
+    gr = str(card.get("grade") or "").strip()
+    if g == "PSA" and gr.startswith("10"):
+        return "psa10_cad"
+    if g == "PSA" and gr.startswith("9"):
+        return "psa9_cad"
+    if g == "PSA" and gr.startswith("8"):
+        return "psa8_cad"
+    if g == "PSA" and gr.startswith("7"):
+        return "psa7_cad"
+    if g == "PSA" and gr.startswith("6"):
+        return "psa6_cad"
+    if g == "BGS" and "black" in gr.lower():
+        return "bgs_black_cad"
+    if g == "BGS" and "9.5" in gr:
+        return "bgs95_cad"
+    if g == "BGS" and gr.startswith("10"):
+        return "bgs10_cad"
+    if g == "BGS" and gr.startswith("9"):
+        return "bgs9_cad"
+    if g == "SGC" and gr.startswith("10"):
+        return "sgc10_cad"
+    return "raw_cad"
+
+def attach_hist_copy(data: dict, card: dict) -> dict:
+    days = (data or {}).get("hist_days") or {}
+    data["hist_copy"] = days.get(_copy_bucket(card)) or days.get("raw_cad") or []
+    return data
+
 def _extract_response_text(body: dict) -> str:
     if isinstance(body.get("output_text"), str) and body["output_text"]:
         return body["output_text"]
@@ -1002,6 +1071,24 @@ async def comp(
     ck = "|".join(str(card.get(k) or "").strip().lower() for k in ("player","year","set","number","parallel","insert"))
     day = time.strftime("%Y-%m-%d")
     ck_day = f"{ck}|{day}"
+    nightly = bool(payload.get("auto") or payload.get("skip_web"))
+    if ck.strip("|") and not nightly:
+        house = pack_house(ck)
+        if house:
+            return attach_hist_copy(house, card)
+        con = db()
+        row = con.execute("SELECT data, t FROM comp_cache WHERE k=?", (ck_day,)).fetchone()
+        if not row:
+            row = con.execute("SELECT data, t FROM comp_cache WHERE k=?", (ck,)).fetchone()
+        con.close()
+        if row and (time.time() - float(row["t"])) < 36 * 3600:
+            try:
+                cached = json.loads(row["data"])
+                if isinstance(cached, dict) and any(cached.get(k) for k in ("raw_cad","psa10_cad","suggested_cad","psa9_cad")):
+                    cached["cached"] = True
+                    return attach_hist_copy(cached, card)
+            except Exception:
+                pass
     def run_only(v):
         s = re.sub(r"\b\d+\s*/\s*(\d+)\b", r"/\1", str(v or ""))
         s = re.sub(r"\b\d+\s+of\s+(\d+)\b", r"/\1", s, flags=re.I)
@@ -1238,7 +1325,15 @@ async def comp(
             pass
     if ck.strip("|"):
         data = _drop_junk_raw(data, q + " " + (card.get("insert") or ""))
+        data = attach_hist_copy(data, card)
         try:
+            con = db()
+            con.execute(
+                "INSERT OR REPLACE INTO comp_cache(k,data,t) VALUES(?,?,?)",
+                (ck_day, json.dumps(data), time.time()),
+            )
+            con.commit()
+            con.close()
             spread_comp(ck, data)
         except Exception:
             pass
@@ -2013,22 +2108,25 @@ async def usage(request: Request, x_token: str | None = Header(default=None)):
 
 @app.post("/book-refresh")
 async def book_refresh(payload: dict, request: Request, x_token: str | None = Header(default=None)):
-    uid = require_user(request, x_token)
-    card = {k: payload.get(k) for k in ("player","year","set","number","parallel","insert","team","grader","grade","cert")}
-    ck = "|".join(str(card.get(k) or "").strip().lower() for k in ("player","year","set","number","parallel","insert"))
-    con = db()
-    row = con.execute("SELECT data, t FROM comp_cache WHERE k=?", (ck,)).fetchone()
-    con.close()
-    if row and (time.time() - float(row["t"])) < 2 * 86400:
-        try:
-            cached = json.loads(row["data"])
-            cached["cached"] = True
-            return cached
-        except Exception:
-            pass
-    u = usage_of(uid)
-    auto = bool(payload.get("auto"))
+    require_user(request, x_token)
+    payload = dict(payload or {})
+    payload["auto"] = True
+    payload["skip_web"] = True
     return await comp(payload, payload.get("secret"), x_token)
+
+@app.post("/book-job")
+async def book_job(payload: dict, request: Request, x_token: str | None = Header(default=None)):
+    require_user(request, x_token)
+    on = bool(payload.get("on"))
+    con = db()
+    con.execute("CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT)")
+    if on:
+        con.execute("INSERT OR REPLACE INTO kv(k,v) VALUES('book_job',?)", (str(time.time()),))
+    else:
+        con.execute("DELETE FROM kv WHERE k='book_job'")
+    con.commit()
+    con.close()
+    return {"on": on}
 
 @app.get("/checkout")
 async def checkout(request: Request, x_token: str | None = Header(default=None)):
