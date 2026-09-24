@@ -869,22 +869,12 @@ def _sale_fits(title: str, q: str, player: str, parallel: str = "", number: str 
         titled = bool(re.search(r"\b(?:19|20)\d{2}\b", t) or re.search(r"\b\d{2}\s*[-/]\s*\d{2}\b", t))
         if titled and not _season_hit(t, season):
             return False
-    hits = [k for k in SET_KEYS if k in ql]
-    if hits:
-        if not any(_set_in_title(k, t) for k in hits):
-            return False
     if "young guns" in ql or " yg" in f" {ql}":
         if not re.search(r"young guns|\byg\b", t):
             return False
-    elif re.search(r"young guns|\byg\b", t):
+    elif re.search(r"young guns|\byg\b", t) and "young guns" not in (parallel or "").lower():
         return False
     if "renewed" in t and "renewed" not in ql:
-        return False
-    if "jumbo" not in ql and "jumbo" in t:
-        return False
-    if "outburst" in ql and "red" not in ql and re.search(r"outburst\s+red|\bred\s+outburst\b", t):
-        return False
-    if "outburst" in ql and "gold" not in ql and re.search(r"outburst\s+gold|\bgold\s+outburst\b", t):
         return False
     need = _par_need(parallel)
     if need:
@@ -1006,44 +996,17 @@ def search_queries(card: dict) -> list:
         product = re.sub(r"^(upper deck|ud)\s+", "", st, flags=re.I).strip() or st
 
     parts = [player, _q_token(product)]
-    # Year stays out of the API string. 85/86 vs 1985 is applied in _sale_fits.
-
     color = re.sub(r"/.*", "", par).strip()
     run = re.search(r"/\s*(\d{1,4})", par)
     if color and color.lower() not in (product.lower(), "base", "parallel"):
         parts.append(_q_token(color))
     if run:
         parts.append("/" + run.group(1))
-
     code = _code_num(num)
-    if code and (not unique or "holo" in blob or "renewed" in blob):
+    if code:
         parts.append(code)
-
     q = " ".join(x for x in parts if x)
-    q += " -(lot,checklist,reprint,jumbo,bundle,album)"
-
-    mine = blob + " " + product.lower()
-    exclude = []
-    for name in catalog_parallel_terms(year, st or product, ins if unique else ( "Young Guns" if yg else ins)):
-        key = name.lower()
-        if key in mine or key in ("base", "young guns"):
-            continue
-        tok = _q_token(name)
-        if tok and tok not in exclude:
-            exclude.append(tok)
-    if not yg:
-        exclude.append('"Young Guns"')
-    if "future watch" not in mine:
-        exclude.append('"Future Watch"')
-    if "outburst" not in mine:
-        exclude.append("outburst")
-    if "holo" not in mine:
-        exclude.append("holofoil")
-    # drop tokens already required in q
-    ql = q.lower()
-    exclude = [e for e in exclude if e.lower().strip('"') not in mine][:8]
-    if exclude:
-        q += " -(" + ",".join(exclude) + ")"
+    q += " -(lot,checklist,reprint,bundle)"
     return [q]
 
 def _clean_bucket(vals):
@@ -1316,6 +1279,8 @@ async def fetch_card_api(q: str, player: str, fp: str = "", parallel: str = "", 
     try:
         async with httpx.AsyncClient(timeout=20) as client:
             mixed = await _card_api_rows(client, q, {})
+            if not mixed and player:
+                mixed = await _card_api_rows(client, player, {})
             raw_rows = [x for x in mixed if isinstance(x, dict) and not str(x.get("grader") or "").strip()]
             slab_rows = [x for x in mixed if isinstance(x, dict) and str(x.get("grader") or "").strip()]
             extra = {}
@@ -1328,8 +1293,8 @@ async def fetch_card_api(q: str, player: str, fp: str = "", parallel: str = "", 
             _ingest(slab_rows, q, player, buckets, only_raw=False, sales=sales, parallel=parallel, number=number, year=year)
             _ingest(slab_exact, q, player, buckets, only_raw=False, sales=sales, parallel=parallel, number=number, year=year)
             _ingest(mixed, q, player, buckets, only_raw=None, sales=sales, parallel=parallel, number=number, year=year)
-    except Exception:
-        return None
+    except Exception as e:
+        return {"query": q, "error": str(e)[:180], "sample_count": 0, "summary": "Card API error: "+str(e)[:120]}
     if fp and sales:
         save_house_solds(fp, sales)
         out, counts, when = house_day_close(fp)
@@ -1363,6 +1328,7 @@ async def fetch_card_api(q: str, player: str, fp: str = "", parallel: str = "", 
         + (str(out["sample_count"])+" solds")
         + ((" · tape " + ", ".join(bits)) if bits else " · no dated solds")
     )
+    out["query"] = q
     out["model"] = "card-api"
     return out
 

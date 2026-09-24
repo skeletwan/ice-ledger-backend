@@ -3420,13 +3420,16 @@ async function refreshBookNow(auto){
       if (r.status === 402) { note.textContent = "Could not refresh that card. Continuing."; continue; }
       if (!r.ok) continue;
       const payload = await r.json();
-      if (owner) {
+      if (owner && Array.isArray(payload.hist_copy) && payload.hist_copy.length) {
         card.hist = [];
         card.histMap = {};
       }
       applyCompObj(card, payload);
       ok++;
       await pushCard(card).catch(()=>{});
+      if (i === 1 && note) {
+        note.textContent = (payload.summary || payload.error || "Got a comps reply") + (payload.raw_cad!=null ? (" · raw "+payload.raw_cad) : " · no raw");
+      }
     } catch(e) {}
   }
   saveAll(cards);
