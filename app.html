@@ -334,7 +334,7 @@
         <div class="brand">
           <img class="brand-logo" src="/logo.jpg" alt="Clappers PC" />
         </div>
-        <p class="muted" id="authLead">Sign in to your binder.</p>
+        <p class="muted" id="authLead">Your exclusive hockey card community.</p>
         <form id="authForm" action="#" method="post">
         <label>Email</label>
         <input id="email" type="email" autocomplete="username" />
@@ -477,10 +477,9 @@
       <div class="id-more hidden" id="idMore">
         <div class="field"><label>Cert</label><input id="f_cert" /></div>
         <div class="row2">
-          <a class="ghost btn" id="gImg" target="_blank" rel="noopener">Google Images</a>
           <a class="ghost btn" id="ebay" target="_blank" rel="noopener">eBay sold</a>
+          <a class="ghost btn" id="pt130" target="_blank" rel="noopener">Fanatics sold</a>
         </div>
-        <a class="ghost btn" id="pt130" target="_blank" rel="noopener">Fanatics sold</a>
         <a class="ghost btn hidden" id="psa" target="_blank" rel="noopener">PSA cert</a>
       </div>
       <p class="muted" id="compNote"></p>
@@ -2201,7 +2200,6 @@ $("go").onclick = async () => {
       player:$("f_player").value, year:$("f_year").value, set:$("f_set").value,
       number:$("f_number").value, parallel:$("f_parallel").value, insert:$("f_insert").value
     });
-    $("gImg").href = "https://www.google.com/search?tbm=isch&q="+qq;
     $("ebay").href = "https://www.ebay.ca/sch/i.html?_nkw="+qq+"&LH_Sold=1&LH_Complete=1";
     $("pt130").href = "https://sales-history.fanaticscollect.com/?q="+qq;
     if (d.cert) { $("psa").href = "https://www.psacard.com/cert/"+encodeURIComponent(d.cert); $("psa").classList.remove("hidden"); }
@@ -2344,6 +2342,10 @@ function soldForCopy(c){
   return null;
 }
 async function lookupComp(){
+  const prior = {
+    raw: $("rawComp") && $("rawComp").value,
+    sug: $("comp") && $("comp").value
+  };
   clearCompFields();
   setCompBanner("wait", "Searching sold comps…");
   $("status").textContent = "Looking up sold comps…";
@@ -2356,6 +2358,33 @@ async function lookupComp(){
   const ct = await cr.text();
   if (!cr.ok) throw new Error(ct.slice(0,200));
   const c = JSON.parse(ct);
+  const moneyKeys = ["suggested_cad","raw_cad","psa10_cad","psa9_cad","psa8_cad"];
+  const empty = !moneyKeys.some(k => c[k] != null && c[k] !== "");
+  if (empty) {
+    const fp = ["f_player","f_year","f_set","f_number","f_parallel","f_insert"].map(id => ($(id)&&$(id).value||"").trim().toLowerCase()).join("|");
+    const mem = (window._compMem && window._compMem[fp]) || null;
+    let saved = null;
+    try {
+      saved = (load()||[]).find(x => [x.player,x.year,x.set,x.number,x.parallel,x.insert].map(v=>String(v||"").trim().toLowerCase()).join("|")===fp);
+    } catch(e) {}
+    if (mem) Object.assign(c, mem, { cached:true, summary: (c.summary||"") + " Kept last sold from this session." });
+    else if (saved) {
+      c.raw_cad = saved.rawComp; c.suggested_cad = saved.comp || saved.sysComp || saved.rawComp;
+      c.psa6_cad = saved.psa6Comp; c.psa7_cad = saved.psa7Comp; c.psa8_cad = saved.psa8Comp;
+      c.psa9_cad = saved.psa9Comp; c.psa10_cad = saved.psa10Comp;
+      c.bgs9_cad = saved.bgs9Comp; c.bgs95_cad = saved.bgs95Comp; c.bgs10_cad = saved.bgs10Comp;
+      c.sgc10_cad = saved.sgc10Comp;
+      c.cached = true;
+      c.summary = (c.summary||"") + " Kept sold already in your binder.";
+    } else if (prior.raw || prior.sug) {
+      c.raw_cad = prior.raw || c.raw_cad;
+      c.suggested_cad = prior.sug || c.suggested_cad;
+      c.summary = (c.summary||"") + " Kept the number from the last look.";
+    }
+  }
+  window._compMem = window._compMem || {};
+  const fpKeep = ["f_player","f_year","f_set","f_number","f_parallel","f_insert"].map(id => ($(id)&&$(id).value||"").trim().toLowerCase()).join("|");
+  if (moneyKeys.some(k => c[k] != null && c[k] !== "") || c.raw_cad || c.suggested_cad) window._compMem[fpKeep] = c;
   let sug = soldForCopy(c);
   if (sug == null && (($("f_grader").value||"Raw")==="Raw")) {
     if (c.suggested_cad != null) sug = c.suggested_cad;
@@ -2439,7 +2468,7 @@ if ($("photoStrip")) $("photoStrip").onclick = e => {
 if ($("refreshPhotos")) $("refreshPhotos").onclick = async ev => {
   ev.preventDefault();
   try { await loadPhotos(); } catch(e) {
-    $("photoStrip").innerHTML = "<p class=\"muted\">Photo search failed. Use Google Images or your scan.</p>";
+    $("photoStrip").innerHTML = "<p class=\"muted\">Photo search failed. Use your scan.</p>";
   }
 };
 function saveNote(msg, cls){
@@ -4002,6 +4031,8 @@ $("pubPost") && ($("pubPost").onclick = () => {
 });
 function openPubCard(c){
   viewCard = c;
+  if ($("backPub")) $("backPub").textContent = window.pubFrom==="grails" ? "Back to grails" : window.pubFrom==="feed" ? "Back to added" : "Back to binder";
+  viewCard = c;
   $("pubHero").src = photoSrc(c, viewSlug);
   $("pubTitle").textContent = c.player || "Card";
   $("pubLine").textContent = [c.team,c.year,c.set,c.number?"#"+c.number:"",c.insert,c.parallel].filter(Boolean).join(" · ");
@@ -4270,6 +4301,7 @@ $("feedSet") && ($("feedSet").onchange = renderFeed);
 $("feedList") && ($("feedList").onclick = ev => {
   const art = ev.target.closest("[data-feed-slug]");
   if (!art) return;
+  window.pubFrom = window.feedGrailMode ? "grails" : "feed";
   openPublic(art.getAttribute("data-feed-slug"), art.getAttribute("data-feed-card"));
 });
 $("backNotesHub") && ($("backNotesHub").onclick = () => { show("notes"); paintNotesHub(); });
@@ -4366,7 +4398,11 @@ async function openNoteCat(kind){
 }
 $("notesList") && ($("notesList").onclick = e => {
   const art = e.target.closest("[data-slug]");
-  if (art && art.getAttribute("data-slug")) openPublic(art.getAttribute("data-slug"), art.getAttribute("data-card"));
+  if (art && art.getAttribute("data-slug")) {
+    const title = ($("notesCatTitle") && $("notesCatTitle").textContent) || "";
+    window.pubFrom = title === "Grails" ? "grails" : "binder";
+    openPublic(art.getAttribute("data-slug"), art.getAttribute("data-card"));
+  }
 });
 let lastLikers = [];
 function openLikers(){
@@ -4473,11 +4509,12 @@ async function openPublic(slug, cardId){
     if (rr.ok) $("reportUserBtn").textContent = "Reported";
   });
   renderPubList();
-  show("pub");
   if (cardId) {
     const c = pubCards.find(x => x.id === cardId);
-    if (c) openPubCard(c);
+    if (c) { openPubCard(c); return; }
   }
+  window.pubFrom = window.pubFrom === "grails" || window.pubFrom === "feed" ? window.pubFrom : "binder";
+  show("pub");
 }
 $("pubList") && ($("pubList").onclick = e => {
   const stack = e.target.closest("[data-copies]");
@@ -4485,9 +4522,13 @@ $("pubList") && ($("pubList").onclick = e => {
   const art = e.target.closest("[data-pub]");
   if (!art) return;
   const c = pubCards.find(x => x.id === art.getAttribute("data-pub"));
-  if (c) openPubCard(c);
+  if (c) { window.pubFrom = "binder"; openPubCard(c); }
 });
-$("backPub") && ($("backPub").onclick = () => show("pub"));
+$("backPub") && ($("backPub").onclick = () => {
+  if (window.pubFrom === "grails") { window.feedGrailMode = true; show("feed"); return; }
+  if (window.pubFrom === "feed") { window.feedGrailMode = false; show("feed"); return; }
+  show("pub");
+});
 
 $("logoutBtn") && ($("logoutBtn").onclick = () => { setToken(""); location.reload(); });
 $("youRipRedeem") && ($("youRipRedeem").onclick = async () => {

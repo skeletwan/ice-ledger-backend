@@ -718,6 +718,28 @@ async def comp(
         data["needs_review"] = True
         data["sample_count"] = data.get("sample_count") or 0
         data["summary"] = data.get("summary") or "No Fanatics / Goldin / Heritage sold matched this copy."
+    money_keys = ("suggested_cad","suggested_usd","raw_cad","psa6_cad","psa7_cad","psa8_cad","psa9_cad","psa10_cad","bgs9_cad","bgs95_cad","bgs10_cad","sgc10_cad")
+    if not any(data.get(k) for k in money_keys) and ck.strip("|"):
+        try:
+            con = db()
+            row = con.execute("SELECT data FROM comp_cache WHERE k=?", (ck,)).fetchone()
+            if not row:
+                pl = str(card.get("player") or "").strip().lower()
+                yr = str(card.get("year") or "").strip().lower()
+                if pl and yr:
+                    row = con.execute(
+                        "SELECT data FROM comp_cache WHERE k LIKE ? ORDER BY t DESC LIMIT 1",
+                        (pl + "|" + yr + "|%",),
+                    ).fetchone()
+            con.close()
+            if row:
+                old = json.loads(row["data"])
+                if isinstance(old, dict) and any(old.get(k) for k in money_keys):
+                    old["cached"] = True
+                    old["summary"] = (old.get("summary") or "") + " Kept last sold; new search was empty."
+                    return old
+        except Exception:
+            pass
     data["model"] = used
     data["card"] = card
     if err and not data.get("suggested_cad") and not data.get("suggested_usd"):
