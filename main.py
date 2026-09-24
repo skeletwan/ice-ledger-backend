@@ -400,6 +400,42 @@ def scrub_user_yg(uid: int) -> int:
     con.close()
     return n
 
+
+def wipe_user_book(uid: int) -> int:
+    keys = (
+        "comp","sysComp","rawComp","psa6Comp","psa7Comp","psa8Comp","psa9Comp","psa10Comp",
+        "bgs9Comp","bgs95Comp","bgs10Comp","bgsBlackComp","sgc10Comp","book","compAt",
+    )
+    n = 0
+    con = db()
+    rows = con.execute("SELECT id, data FROM cards WHERE user_id=?", (uid,)).fetchall()
+    for r in rows:
+        try:
+            card = json.loads(r["data"])
+        except Exception:
+            continue
+        for k in keys:
+            card.pop(k, None)
+        card["comp"] = 1
+        card["rawComp"] = 1
+        card["sysComp"] = 1
+        card["book"] = {"raw_cad": 1, "suggested_cad": 1}
+        con.execute("UPDATE cards SET data=? WHERE id=? AND user_id=?", (json.dumps(card), r["id"], uid))
+        n += 1
+    pl_seen = set()
+    for r in rows:
+        try:
+            pl = str(json.loads(r["data"]).get("player") or "").strip().lower()
+        except Exception:
+            continue
+        if pl and pl not in pl_seen:
+            pl_seen.add(pl)
+            con.execute("DELETE FROM comp_cache WHERE k LIKE ?", (pl + "|%",))
+            con.execute("DELETE FROM house_solds WHERE fp LIKE ?", (pl + "|%",))
+    con.commit()
+    con.close()
+    return n
+
 @app.post("/identify")
 async def identify(
     file: UploadFile = File(...),
@@ -1375,12 +1411,15 @@ async def comp(
     day = time.strftime("%Y-%m-%d")
     ck_day = f"{ck}|{day}"
     nightly = bool(payload.get("auto") or payload.get("skip_web") or payload.get("force"))
-    force = bool(payload.get("force") or payload.get("auto"))
-    if force and ck.strip("|"):
+    force = bool(payload.get("force"))
+    pl = str(card.get("player") or "").strip().lower()
+    yr = str(card.get("year") or "").strip().lower()
+    if force and pl:
         try:
             con = db()
-            con.execute("DELETE FROM comp_cache WHERE k=? OR k=?", (ck, ck_day))
-            con.execute("DELETE FROM house_solds WHERE fp=?", (ck,))
+            like = pl + "|" + (yr + "|" if yr else "")
+            con.execute("DELETE FROM comp_cache WHERE k LIKE ?", (like + "%",))
+            con.execute("DELETE FROM house_solds WHERE fp LIKE ?", (like + "%",))
             con.commit()
             con.close()
         except Exception:
@@ -1423,7 +1462,7 @@ async def comp(
             api_hit = extra
             if extra.get("raw_cad") or extra.get("psa10_cad") or extra.get("sample_count"):
                 break
-    if ck.strip("|"):
+    if ck.strip("|") and not force:
         house = pack_house(ck)
         if house:
             api_hit = house
@@ -1576,6 +1615,12 @@ async def comp(
             pick = data.get("raw_cad")
         if pick is not None:
             data["suggested_cad"] = pick
+    if not any(data.get(k) for k in money_keys):
+        data["raw_cad"] = 1
+        data["suggested_cad"] = 1
+        data["sample_count"] = data.get("sample_count") or 0
+        data["summary"] = data.get("summary") or "No solds in the lookback; $1 floor."
+        data["floor"] = True
     data = _order_grades(data)
     data["model"] = used
     data["card"] = card
@@ -2402,15 +2447,27 @@ async def usage(request: Request, x_token: str | None = Header(default=None)):
 
 @app.post("/book-refresh")
 async def book_refresh(payload: dict, request: Request, x_token: str | None = Header(default=None)):
-    require_user(request, x_token)
+    uid = require_user(request, x_token)
     try:
-        uid = require_user(request, x_token)
         scrub_user_yg(uid)
     except Exception:
         pass
+    if is_operator(uid):
+        try:
+            con = db()
+            con.execute("CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT)")
+            done = con.execute("SELECT v FROM kv WHERE k='book_wipe_v1'").fetchone()
+            if not done:
+                wipe_user_book(uid)
+                con.execute("INSERT OR REPLACE INTO kv(k,v) VALUES('book_wipe_v1',?)", (str(time.time()),))
+                con.commit()
+            con.close()
+        except Exception:
+            pass
     payload = dict(payload or {})
     scrub_false_yg(payload)
     payload["auto"] = True
+    payload["force"] = is_operator(uid)
     payload["skip_web"] = True
     return await comp(payload, payload.get("secret"), x_token)
 
@@ -2702,7 +2759,11 @@ async def upsert_card(payload: dict, request: Request, x_token: str | None = Hea
                 for bk, bv in incoming.items():
                     if _alive(bv):
                         merged[bk] = bv
+                if incoming.get("suggested_cad") == 1 or incoming.get("raw_cad") == 1 or card.get("comp") == 1:
+                    merged = incoming or {"raw_cad": 1, "suggested_cad": 1}
                 card["book"] = merged
+                continue
+            if card.get("comp") == 1 or card.get("rawComp") == 1 or card.get("floor"):
                 continue
             if not _alive(card.get(k)) and _alive(old.get(k)):
                 card[k] = old[k]
