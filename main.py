@@ -749,14 +749,30 @@ def _sale_fits(title: str, q: str, player: str, parallel: str = "", number: str 
             if y in t or re.search(rf"\b{y[2:]}\s*[-/]\s*\d{{2}}\b", t):
                 ok_year = True
                 break
-        # year in the query is enough if the listing skipped it
+        if not ok_year and re.search(r"\b(?:19|20)\d{2}\b", t):
+            return False
     hits = [k for k in SET_KEYS if k in ql]
-    if hits and not any(k in t for k in hits):
-        return False
+    if hits:
+        ok_set = False
+        for k in hits:
+            if k == "young guns" and re.search(r"young guns|\byg\b", t):
+                ok_set = True
+            elif k in t:
+                ok_set = True
+        if not ok_set:
+            return False
     if "young guns" in ql or " yg" in f" {ql}":
         if not re.search(r"young guns|\byg\b", t):
             return False
+    elif re.search(r"young guns|\byg\b", t):
+        return False
+    if "renewed" in t and "renewed" not in ql:
+        return False
     if "jumbo" not in ql and "jumbo" in t:
+        return False
+    if "outburst" in ql and "red" not in ql and re.search(r"outburst\s+red|\bred\s+outburst\b", t):
+        return False
+    if "outburst" in ql and "gold" not in ql and re.search(r"outburst\s+gold|\bgold\s+outburst\b", t):
         return False
     need = _par_need(parallel)
     if need:
@@ -764,8 +780,10 @@ def _sale_fits(title: str, q: str, player: str, parallel: str = "", number: str 
             if n.startswith("/"):
                 if not re.search(r"/\s*" + re.escape(n[1:]) + r"\b", t):
                     return False
-            elif n not in t:
+            elif n not in t and not (n == "exclusives" and "ud exclusives" in t):
                 return False
+        if "exclusives" not in ql and re.search(r"exclusive", t) and "exclusives" not in " ".join(need):
+            return False
     else:
         if re.search(r"/\s*(?:1|5|10|25|49|50|99|100|150|199|249|299|349|399|499|999)\b", t):
             return False
@@ -773,9 +791,12 @@ def _sale_fits(title: str, q: str, player: str, parallel: str = "", number: str 
             "orange", "gold vinyl", "superfractor", "printing plate",
             "outburst", "extravagance", "canvas", "acetate", "clear cut",
             "red rainbow", "green parallel", "blue parallel", "pink",
-            "future watch", "sizzle reel",
+            "future watch", "sizzle reel", "exclusives", "high gloss",
+            "deluxe", "speckle", "holofoil",
         )
         if any(flag in t and flag not in ql for flag in extra):
+            return False
+        if re.search(r"\bgold\b", t) and "gold" not in ql:
             return False
     num = re.sub(r"[^\d]", "", str(number or "").split("/")[0])
     if num and len(num) >= 3 and num not in t and re.search(r"#\s*\d+", t) and "young guns" not in ql:
@@ -1334,7 +1355,7 @@ async def comp(
     q = qs[0] if qs else " ".join(str(x) for x in [card.get("player"), ins or card.get("set"), card.get("year")] if x)
     api_hit = None
     for qtry in qs:
-        extra = await fetch_card_api(qtry, card.get("player") or "", ck, card.get("parallel") or card.get("insert") or "", card.get("number") or "", card.get("grader") or "", card.get("grade") or "")
+        extra = await fetch_card_api(qtry, card.get("player") or "", ck, card.get("parallel") or "", card.get("number") or "", card.get("grader") or "", card.get("grade") or "")
         if extra:
             api_hit = extra
             if extra.get("raw_cad") or extra.get("psa10_cad") or extra.get("sample_count"):
