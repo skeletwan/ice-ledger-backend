@@ -828,17 +828,24 @@ def spread_comp(ck: str, data: dict):
             continue
         book = c.get("book") if isinstance(c.get("book"), dict) else {}
         for src, field, label in fields:
-            v = data.get(src)
-            if v is None:
+            try:
+                v = float(data.get(src))
+            except (TypeError, ValueError):
+                continue
+            if v < 1:
                 continue
             c[field] = v
             book[label] = v
         copy = _copy_sold(c, data)
-        if copy is not None:
+        try:
+            copy = float(copy) if copy is not None else None
+        except (TypeError, ValueError):
+            copy = None
+        if copy is not None and copy >= 1:
             c["sysComp"] = copy
             c["comp"] = copy
+            c["compAt"] = now
         c["book"] = book
-        c["compAt"] = now
         con.execute("UPDATE cards SET data=? WHERE id=?", (json.dumps(c), r["id"]))
     con.commit()
     con.close()
@@ -1748,7 +1755,43 @@ async def upsert_card(payload: dict, request: Request, x_token: str | None = Hea
             if isinstance(v, str) and len(v) > 1800000:
                 card[k] = v[:1800000]
     con = db()
-    existed = con.execute("SELECT id FROM cards WHERE id=? AND user_id=?", (cid, uid)).fetchone()
+    existed = con.execute("SELECT id, data FROM cards WHERE id=? AND user_id=?", (cid, uid)).fetchone()
+    old = {}
+    if existed:
+        try:
+            old = json.loads(existed["data"])
+        except Exception:
+            old = {}
+    else:
+        fp = _card_fp(card)
+        if fp.strip("|"):
+            for r in con.execute("SELECT data FROM cards WHERE user_id=?", (uid,)).fetchall():
+                try:
+                    o = json.loads(r["data"])
+                except Exception:
+                    continue
+                if _card_fp(o) == fp:
+                    old = o
+                    break
+    keep = ("comp","sysComp","rawComp","psa6Comp","psa7Comp","psa8Comp","psa9Comp","psa10Comp","bgs9Comp","bgs95Comp","bgs10Comp","sgc10Comp","book","compAt")
+    def _alive(v):
+        try:
+            return v is not None and v != "" and float(v) >= 1
+        except (TypeError, ValueError):
+            return bool(v)
+    if old:
+        for k in keep:
+            if k == "book":
+                book = old.get("book") if isinstance(old.get("book"), dict) else {}
+                incoming = card.get("book") if isinstance(card.get("book"), dict) else {}
+                merged = dict(book)
+                for bk, bv in incoming.items():
+                    if _alive(bv):
+                        merged[bk] = bv
+                card["book"] = merged
+                continue
+            if not _alive(card.get(k)) and _alive(old.get(k)):
+                card[k] = old[k]
     con.execute(
         "INSERT OR REPLACE INTO cards(id,user_id,data) VALUES(?,?,?)",
         (cid, uid, json.dumps(card)),

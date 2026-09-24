@@ -70,7 +70,211 @@ SETS = [
     ("2024-25", "Upper Deck", "MVP", "", ["Base", "Gold Script", "Super Script"]),
     ("2024-25", "Upper Deck", "Chronology", "", ["Base", "Gold /25"]),
     ("2024-25", "Upper Deck", "Credentials", "", ["Base /99", "Gold /10"]),
+    ("2019-20", "Upper Deck", "Allure", "", ["Base", "Black Rainbow", "Red Rainbow", "Orange Slice", "Glitter Bomb", "Gold Glitter Bomb /199", "Green Rainbow /99", "Blue Line /35", "Purple Diamond /10", "Golden Treasures 1/1"]),
+    ("2020-21", "Upper Deck", "Allure", "", ["Base", "Black Rainbow", "Red Rainbow", "Orange Slice", "Glitter Bomb", "Gold Glitter Bomb /199", "Purple Diamond /10", "Golden Treasures 1/1"]),
+    ("2021-22", "Upper Deck", "Allure", "", ["Base", "Black Rainbow", "Red Rainbow", "Orange Slice", "Glitter Bomb", "Gold Glitter Bomb /199", "Green Rainbow /99", "Blue Line /35", "Purple Diamond /10", "Golden Treasures 1/1"]),
+    ("2022-23", "Upper Deck", "Allure", "", ["Base", "Black Rainbow", "Red Rainbow", "Orange Slice", "Pink Lemonade", "Glitter Bomb", "Gold Glitter Bomb /199", "Green Rainbow /99", "Blue Line /35", "Purple Diamond /10", "Golden Treasures 1/1"]),
+    ("2023-24", "Upper Deck", "Allure", "", ["Base", "Black Rainbow", "Red Rainbow", "Orange Slice", "Pink Lemonade", "Yellow Taxi", "Confetti", "Hypnosis", "Gold Glitter Bomb /199", "Green Rainbow /99", "Blue Line /35", "Purple Diamond /10", "Golden Treasures 1/1"]),
+    ("2024-25", "Upper Deck", "Allure", "", ["Base", "Black Rainbow", "Red Rainbow", "Orange Slice", "Glitter Bomb", "Flying Puck", "Gold Glitter Bomb /199", "Green Rainbow /99", "Blue Line /35", "Purple Diamond /10", "Golden Treasures 1/1"]),
+    ("2025-26", "Upper Deck", "Allure", "", ["Base", "Black Rainbow", "Red Rainbow", "Orange Slice", "Glitter Bomb", "Gold Glitter Bomb /199", "Green Quartz /99", "Blue Line /35", "Purple Diamond /10", "Golden Treasures 1/1"]),
+    ("2023-24", "Upper Deck", "Allure", "Color Flow", ["Red-Orange", "Orange-Yellow", "Yellow-Green", "Green-Blue", "Blue-Purple", "Golden Treasures 1/1"]),
+    ("2024-25", "Upper Deck", "Allure", "Color Flow", ["Red-Orange", "Orange-Yellow", "Yellow-Green", "Green-Blue", "Blue-Purple"]),
+    ("2025-26", "Upper Deck", "Allure", "Color Flow", ["Red-Orange", "Orange-Yellow", "Yellow-Green", "Green-Blue", "Blue-Purple"]),
+    ("2024-25", "Upper Deck", "Allure", "Rookie", ["Base", "Black Rainbow", "Red Rainbow", "Orange Slice", "Purple Diamond /10"]),
+    ("2025-26", "Upper Deck", "Allure", "Rookie", ["Base", "Black Rainbow", "Red Rainbow", "Orange Slice", "Purple Diamond /10"]),
 ]
+
+
+def _season(start):
+    return f"{start}-{str(start+1)[2:]}"
+
+
+_YG = ["Base", "Clear Cut", "Exclusives /100", "High Gloss /10"]
+_YG_DEL = ["Base", "Clear Cut", "Exclusives /100", "High Gloss /10", "Deluxe /250"]
+for _y in range(2005, 2026):
+    SETS.append((_season(_y), "Upper Deck", "Series 1", "Young Guns", list(_YG_DEL if _y >= 2015 else ["Base"])))
+    SETS.append((_season(_y), "Upper Deck", "Series 2", "Young Guns", list(_YG if _y >= 2015 else ["Base"])))
+    SETS.append((_season(_y), "Upper Deck", "Series 1", "", ["Base", "Canvas"]))
+    SETS.append((_season(_y), "Upper Deck", "Series 2", "", ["Base", "Canvas"]))
+    SETS.append((_season(_y), "Upper Deck", "Extended", "Young Guns", ["Base", "Clear Cut", "Exclusives /100"]))
+    SETS.append((_season(_y), "O-Pee-Chee", "OPC", "", ["Base", "Red Border", "Rainbow", "Black /100"]))
+    SETS.append((_season(_y), "Upper Deck", "MVP", "", ["Base", "Gold Script", "Super Script"]))
+
+for _y in range(2015, 2026):
+    SETS.append((_season(_y), "Upper Deck", "SP Authentic", "Future Watch", ["Base /999", "Inscribed", "Gold /150", "Patch Autograph"]))
+    SETS.append((_season(_y), "Upper Deck", "The Cup", "", ["Base /249", "Gold /24", "Black /8", "Printing Plate 1/1", "Rookie Auto Patch"]))
+    SETS.append((_season(_y), "Upper Deck", "Artifacts", "", ["Base", "Ruby /499", "Emerald /99", "Sapphire /85", "Gold /65", "Auto"]))
+    SETS.append((_season(_y), "Upper Deck", "Ice", "", ["Base", "Green /10", "Black /5", "Premieres /99"]))
+    SETS.append((_season(_y), "Upper Deck", "Premier", "", ["Base /299", "Gold /25", "Black /5", "Rookie Auto Patch"]))
+    SETS.append((_season(_y), "Upper Deck", "Stature", "", ["Base /399", "Red /35", "Black /5"]))
+    SETS.append((_season(_y), "Upper Deck", "SPx", "", ["Base", "Finite /199", "Auto"]))
+    SETS.append((_season(_y), "Upper Deck", "Synergy", "", ["Base", "Red", "Purple /899", "Gold /65", "Black /5"]))
+    SETS.append((_season(_y), "Upper Deck", "Trilogy", "", ["Base", "Red /999", "Gold /49", "Rookie Premieres"]))
+    SETS.append((_season(_y), "Upper Deck", "Ultimate Collection", "", ["Base /399", "Gold /25", "Black /5", "Rookie Auto Patch"]))
+    SETS.append((_season(_y), "Upper Deck", "Black Diamond", "", ["Base", "Gem /99", "Quad Jersey", "Diamond Relics"]))
+    SETS.append((_season(_y), "O-Pee-Chee", "Platinum", "", ["Base", "Sunset", "Rainbow", "Golden Treasures 1/1", "Matte"]))
+    SETS.append((_season(_y), "Parkhurst", "Parkhurst", "", ["Base", "Red", "Gold /10", "Champions"]))
+    SETS.append((_season(_y), "Upper Deck", "Clear Cut", "", ["Base", "Gold /10", "Auto"]))
+    SETS.append((_season(_y), "Upper Deck", "Portraits", "", ["Base", "Gold", "Auto"]))
+    SETS.append((_season(_y), "Upper Deck", "Credentials", "", ["Base /99", "Gold /10"]))
+    SETS.append((_season(_y), "Upper Deck", "Chronology", "", ["Base", "Gold /25"]))
+
+SETS += [
+    ("1990-91", "Upper Deck", "Upper Deck", "", ["Base"]),
+    ("1991-92", "Upper Deck", "Upper Deck", "", ["Base"]),
+    ("1992-93", "Upper Deck", "Upper Deck", "", ["Base"]),
+    ("1993-94", "Upper Deck", "SP", "", ["Base", "Die-Cut", "Holoview"]),
+    ("1994-95", "Upper Deck", "SP", "", ["Base", "Die-Cut"]),
+    ("1995-96", "Upper Deck", "SP", "", ["Base"]),
+    ("1996-97", "Upper Deck", "Series 1", "", ["Base"]),
+    ("1997-98", "Upper Deck", "Series 1", "", ["Base"]),
+    ("1998-99", "Upper Deck", "Series 1", "", ["Base"]),
+    ("1999-00", "Upper Deck", "Series 1", "", ["Base"]),
+    ("2000-01", "Upper Deck", "Series 1", "", ["Base"]),
+    ("2001-02", "Upper Deck", "Series 1", "", ["Base"]),
+    ("2002-03", "Upper Deck", "Series 1", "", ["Base"]),
+    ("2004-05", "Upper Deck", "Series 1", "", ["Base"]),
+    ("1997-98", "Pinnacle", "Be A Player", "", ["Base", "Autograph"]),
+    ("1998-99", "Be A Player", "BAP Memorabilia", "", ["Base", "Autograph"]),
+    ("1999-00", "Be A Player", "BAP Millennium", "", ["Base", "Autograph"]),
+    ("2000-01", "Be A Player", "BAP Signature", "", ["Base", "Autograph"]),
+    ("2001-02", "Be A Player", "BAP Signature", "", ["Base", "Autograph"]),
+    ("2002-03", "Be A Player", "BAP Signature Series", "", ["Base", "Autograph"]),
+    ("2005-06", "Upper Deck", "The Cup", "", ["Base /249", "Rookie Auto Patch"]),
+    ("2006-07", "Upper Deck", "The Cup", "", ["Base /249", "Rookie Auto Patch"]),
+    ("2007-08", "Upper Deck", "The Cup", "", ["Base /249", "Rookie Auto Patch"]),
+    ("2008-09", "Upper Deck", "The Cup", "", ["Base /249", "Rookie Auto Patch"]),
+    ("1990-91", "Score", "Score", "", ["Base"]),
+    ("1991-92", "Score", "Score", "", ["Base", "Young Superstars"]),
+    ("1992-93", "Score", "Score", "", ["Base"]),
+    ("1990-91", "Pro Set", "Pro Set", "", ["Base"]),
+    ("1991-92", "Pro Set", "Pro Set", "", ["Base"]),
+    ("1991-92", "Parkhurst", "Parkhurst", "", ["Base"]),
+    ("1992-93", "Parkhurst", "Parkhurst", "", ["Base"]),
+    ("1993-94", "Parkhurst", "Parkhurst", "", ["Base"]),
+    ("1994-95", "Parkhurst", "Parkhurst", "", ["Base"]),
+    ("1990-91", "O-Pee-Chee", "OPC", "", ["Base", "Premier"]),
+    ("1991-92", "O-Pee-Chee", "OPC", "", ["Base", "Premier"]),
+    ("1992-93", "O-Pee-Chee", "OPC", "", ["Base"]),
+    ("2007-08", "O-Pee-Chee", "OPC", "", ["Base"]),
+    ("1993-94", "Fleer", "Ultra", "", ["Base", "Ultra Power", "Scoring Kings"]),
+    ("1994-95", "Fleer", "Ultra", "", ["Base", "Ultra Power"]),
+    ("1995-96", "Fleer", "Ultra", "", ["Base"]),
+    ("1997-98", "Fleer", "Ultra", "", ["Base"]),
+    ("1995-96", "Fleer", "Metal Universe", "", ["Base", "Precious Metal Gems"]),
+    ("1996-97", "Fleer", "Metal Universe", "", ["Base"]),
+    ("1997-98", "Fleer", "Metal Universe", "", ["Base"]),
+    ("1996-97", "Skybox", "E-X2000", "", ["Base", "Credentials"]),
+    ("1997-98", "Skybox", "E-X2001", "", ["Base"]),
+    ("1992-93", "Skybox", "Impact", "", ["Base", "Rookie"]),
+    ("1993-94", "Pinnacle", "Pinnacle", "", ["Base"]),
+    ("1994-95", "Pinnacle", "Pinnacle", "", ["Base"]),
+    ("1995-96", "Pinnacle", "Pinnacle", "", ["Base"]),
+    ("1996-97", "Pinnacle", "Pinnacle", "", ["Base"]),
+    ("1997-98", "Pinnacle", "Pinnacle", "", ["Base"]),
+    ("1998-99", "Pacific", "Omega", "", ["Base"]),
+    ("1999-00", "Pacific", "Paramount", "", ["Base"]),
+    ("2000-01", "Pacific", "Crown Royale", "", ["Base"]),
+    ("2001-02", "Pacific", "Crown Royale", "", ["Base", "Jerseys"]),
+    ("2002-03", "Pacific", "Private Stock", "", ["Base"]),
+    ("2003-04", "Pacific", "Atomic", "", ["Base"]),
+    ("1995-96", "Donruss", "Donruss", "", ["Base"]),
+    ("1996-97", "Donruss", "Donruss", "", ["Base"]),
+    ("1997-98", "Donruss", "Donruss", "", ["Base"]),
+    ("1998-99", "Donruss", "Priority", "", ["Base"]),
+    ("2005-06", "ITG", "Heroes and Prospects", "", ["Base", "Autograph"]),
+    ("2006-07", "ITG", "Heroes and Prospects", "", ["Base", "Autograph"]),
+    ("2007-08", "ITG", "O Canada", "", ["Base"]),
+    ("2013-14", "Panini", "Prizm", "", ["Base", "Silver", "Gold /10"]),
+    ("2013-14", "Panini", "Select", "", ["Base", "Prizm"]),
+    ("2013-14", "Panini", "National Treasures", "", ["Base /99", "Rookie Patch Auto"]),
+    ("2013-14", "Panini", "Dominion", "", ["Base /99"]),
+    ("2006-07", "Upper Deck", "SP Game Used", "", ["Base", "Authentic Fabrics", "SIGnificance"]),
+    ("2007-08", "Upper Deck", "SP Game Used", "", ["Base", "Authentic Fabrics"]),
+    ("2008-09", "Upper Deck", "SP Game Used", "", ["Base", "Authentic Fabrics"]),
+    ("2009-10", "Upper Deck", "SP Game Used", "", ["Base", "Authentic Fabrics"]),
+    ("2010-11", "Upper Deck", "SP Game Used", "", ["Base", "Authentic Fabrics"]),
+    ("2005-06", "Upper Deck", "Ice", "", ["Base", "Premieres"]),
+    ("2006-07", "Upper Deck", "Ice", "", ["Base", "Premieres"]),
+    ("1999-00", "Upper Deck", "Wayne Gretzky Hockey", "", ["Base"]),
+    ("2014-15", "Upper Deck", "Tim Hortons", "", ["Base", "Gold Etchings", "Platinum Profiles"]),
+    ("2015-16", "Upper Deck", "Tim Hortons", "", ["Base", "Gold Etchings"]),
+    ("2016-17", "Upper Deck", "Tim Hortons", "", ["Base"]),
+    ("2017-18", "Upper Deck", "Tim Hortons", "", ["Base"]),
+    ("2018-19", "Upper Deck", "Tim Hortons", "", ["Base"]),
+    ("2019-20", "Upper Deck", "Tim Hortons", "", ["Base"]),
+    ("2020-21", "Upper Deck", "Tim Hortons", "", ["Base"]),
+    ("2021-22", "Upper Deck", "Tim Hortons", "", ["Base"]),
+    ("2022-23", "Upper Deck", "Tim Hortons", "", ["Base"]),
+    ("2023-24", "Upper Deck", "Tim Hortons", "", ["Base"]),
+    ("2024-25", "Upper Deck", "Tim Hortons", "", ["Base"]),
+    ("2025-26", "Upper Deck", "Tim Hortons", "", ["Base"]),
+    ("2014-15", "Upper Deck", "World Junior Championship", "", ["Base", "Gold"]),
+    ("2015-16", "Upper Deck", "World Junior Championship", "", ["Base"]),
+    ("2016-17", "Upper Deck", "Team Canada Juniors", "", ["Base"]),
+    ("2023-24", "Upper Deck", "Team Canada Juniors", "", ["Base", "Gold"]),
+    ("2024-25", "Upper Deck", "Team Canada Juniors", "", ["Base", "Gold"]),
+    ("2005-06", "McDonald's", "McDonald's", "", ["Base"]),
+    ("2013-14", "Upper Deck", "Victory", "", ["Base"]),
+    ("2008-09", "Upper Deck", "Collector's Choice", "", ["Base"]),
+    ("2009-10", "Upper Deck", "Collector's Choice", "", ["Base"]),
+    ("2017-18", "Upper Deck", "Engrained", "", ["Base", "Wood"]),
+    ("2018-19", "Upper Deck", "Engrained", "", ["Base"]),
+    ("2019-20", "Upper Deck", "Stature", "", ["Base /399"]),
+    ("2020-21", "Upper Deck", "Stature", "", ["Base /399"]),
+    ("2018-19", "Upper Deck", "Clear Cut", "", ["Base"]),
+    ("2019-20", "Upper Deck", "Clear Cut", "", ["Base"]),
+    ("2020-21", "Upper Deck", "Clear Cut", "", ["Base"]),
+    ("2021-22", "Upper Deck", "Metal Universe", "", ["Base", "Precious Metal Gems /100", "Skybox Premium"]),
+    ("2022-23", "Upper Deck", "Metal Universe", "", ["Base", "Precious Metal Gems /100"]),
+    ("2023-24", "Upper Deck", "Metal Universe", "", ["Base", "Precious Metal Gems /100", "Skybox Premium"]),
+    ("2024-25", "Upper Deck", "Metal Universe", "", ["Base", "Precious Metal Gems /100"]),
+    ("2025-26", "Upper Deck", "Metal Universe", "", ["Base", "Precious Metal Gems /100"]),
+    ("2021-22", "Upper Deck", "Skybox Metal Universe", "", ["Base", "Precious Metal Gems"]),
+    ("2018-19", "Upper Deck", "Trilogy", "", ["Base", "Rookie Premieres"]),
+    ("2019-20", "Upper Deck", "Trilogy", "", ["Base", "Rookie Premieres"]),
+    ("2020-21", "Upper Deck", "Trilogy", "", ["Base", "Rookie Premieres"]),
+    ("2015-16", "Upper Deck", "Black Diamond", "", ["Base", "Gem"]),
+    ("2016-17", "Upper Deck", "Black Diamond", "", ["Base", "Gem"]),
+    ("2017-18", "Upper Deck", "Black Diamond", "", ["Base", "Gem"]),
+    ("2018-19", "Upper Deck", "Black Diamond", "", ["Base", "Gem"]),
+    ("2010-11", "Upper Deck", "SP Authentic", "Future Watch", ["Base /999", "Autograph"]),
+    ("2011-12", "Upper Deck", "SP Authentic", "Future Watch", ["Base /999"]),
+    ("2012-13", "Upper Deck", "SP Authentic", "Future Watch", ["Base /999"]),
+    ("2013-14", "Upper Deck", "SP Authentic", "Future Watch", ["Base /999"]),
+    ("2014-15", "Upper Deck", "SP Authentic", "Future Watch", ["Base /999"]),
+    ("2005-06", "Upper Deck", "SP Authentic", "Future Watch", ["Base /999"]),
+    ("2007-08", "Upper Deck", "SP Authentic", "Future Watch", ["Base /999"]),
+    ("2008-09", "Upper Deck", "SP Authentic", "Future Watch", ["Base /999"]),
+    ("2009-10", "Upper Deck", "SP Authentic", "Future Watch", ["Base /999"]),
+    ("2023-24", "Upper Deck", "Honorary", "", ["Base"]),
+    ("2024-25", "Upper Deck", "Dazzlers", "", ["Blue", "Pink", "Orange", "Green"]),
+    ("2023-24", "Upper Deck", "Dazzlers", "", ["Blue", "Pink", "Orange"]),
+    ("2022-23", "Upper Deck", "Dazzlers", "", ["Blue", "Pink"]),
+    ("2021-22", "Upper Deck", "Dazzlers", "", ["Blue", "Pink"]),
+    ("2020-21", "Upper Deck", "Dazzlers", "", ["Blue", "Pink"]),
+    ("2019-20", "Upper Deck", "Dazzlers", "", ["Blue", "Pink"]),
+    ("2018-19", "Upper Deck", "Dazzlers", "", ["Blue", "Pink"]),
+    ("2016-17", "Upper Deck", "Dazzlers", "", ["Blue", "Pink"]),
+    ("2015-16", "Upper Deck", "Dazzlers", "", ["Blue", "Pink"]),
+    ("2023-24", "Upper Deck", "UD Portraits", "", ["Base", "Gold"]),
+    ("2024-25", "Upper Deck", "UD Portraits", "", ["Base", "Gold"]),
+    ("2024-25", "Upper Deck", "Full Force", "", ["Base"]),
+    ("2023-24", "Upper Deck", "Full Force", "", ["Base"]),
+    ("2022-23", "Upper Deck", "Full Force", "", ["Base"]),
+    ("2021-22", "Upper Deck", "Extended Series", "Young Guns", ["Base", "Exclusives /100"]),
+    ("2020-21", "Upper Deck", "Extended Series", "Young Guns", ["Base"]),
+    ("2019-20", "Upper Deck", "Extended Series", "Young Guns", ["Base"]),
+    ("2018-19", "Upper Deck", "Extended Series", "Young Guns", ["Base"]),
+    ("2024-25", "Leaf", "In The Game", "", ["Base", "Auto"]),
+    ("2023-24", "Leaf", "In The Game", "", ["Base", "Auto"]),
+    ("2024-25", "Upper Deck", "AHL", "", ["Base"]),
+    ("2023-24", "Upper Deck", "AHL", "", ["Base"]),
+    ("2022-23", "Upper Deck", "AHL", "", ["Base"]),
+    ("2024-25", "Upper Deck", "CHL", "", ["Base"]),
+    ("2023-24", "Upper Deck", "CHL", "", ["Base"]),
+]
+
 
 
 def _tok(s):
@@ -119,8 +323,6 @@ def ensure_catalog(con: sqlite3.Connection):
     con.execute("CREATE INDEX IF NOT EXISTS cat_votes_fp ON catalog_votes(fp)")
     n = con.execute("SELECT COUNT(*) AS n FROM catalog WHERE source='seed'").fetchone()
     count = n["n"] if n else 0
-    if count:
-        return
     now = time.strftime("%Y-%m-%dT%H:%M:%SZ")
     rows = []
     for year, brand, set_name, insert, pars in SETS:
@@ -130,10 +332,22 @@ def ensure_catalog(con: sqlite3.Connection):
             if m:
                 run = m.group(0).replace(" ", "")
             rows.append((year, brand, set_name, insert or "", p, "", "", "", run, "seed", now))
-    con.executemany(
-        "INSERT INTO catalog(year,brand,set_name,insert_name,parallel,player,number,team,print_run,source,created) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-        rows,
-    )
+    if not count:
+        con.executemany(
+            "INSERT INTO catalog(year,brand,set_name,insert_name,parallel,player,number,team,print_run,source,created) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+            rows,
+        )
+        return
+    for row in rows:
+        hit = con.execute(
+            "SELECT id FROM catalog WHERE year=? AND set_name=? AND insert_name=? AND parallel=? AND source='seed' LIMIT 1",
+            (row[0], row[2], row[3], row[4]),
+        ).fetchone()
+        if not hit:
+            con.execute(
+                "INSERT INTO catalog(year,brand,set_name,insert_name,parallel,player,number,team,print_run,source,created) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                row,
+            )
 
 
 def _fp(player, year, set_name, number, par, ins):
@@ -203,8 +417,13 @@ def catalog_matches(con: sqlite3.Connection, data: dict, limit: int = 3):
            FROM catalog
            WHERE (?='' OR player='' OR lower(player) LIKE ?)
              AND (?='' OR year='' OR year=?)
-           LIMIT 400""",
-        (player, f"%{player}%" if player else "%", year, year),
+             AND (?='' OR lower(set_name) LIKE ? OR lower(insert_name) LIKE ? OR lower(parallel) LIKE ?)
+           LIMIT 500""",
+        (
+            player, f"%{player}%" if player else "%",
+            year, year,
+            st, f"%{st}%" if st else "%", f"%{st}%" if st else "%", f"%{st}%" if st else "%",
+        ),
     ).fetchall()
     scored = []
     seen = set()
