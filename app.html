@@ -1198,7 +1198,7 @@ function money(n){
 const RNG = "ice-range";
 function rangeKey(){
   const r = localStorage.getItem(RNG) || "7D";
-  if (r==="1D"||r==="5D") return "7D";
+  if (r==="1D"||r==="5D"||r==="14D") return "7D";
   return ["7D","1M","6M","YTD","1Y","ALL"].indexOf(r)>=0 ? r : "7D";
 }
 function loadHist(){ try { return JSON.parse(localStorage.getItem(HIST)||"[]"); } catch(e){ return []; } }
@@ -1294,19 +1294,21 @@ function histForRange(){
   if (r === "YTD") start = end.slice(0,4)+"-01-01";
   else if (r === "ALL") start = h[0].d;
   else {
-    const n = { "7D":7, "1M":30, "6M":183, "1Y":365 }[r] || 7;
+    const n = { "7D":7, "14D":14, "1M":30, "6M":183, "1Y":365 }[r] || 7;
     const d = new Date(end+"T12:00:00");
     d.setDate(d.getDate() - (n - 1));
     start = d.toISOString().slice(0,10);
   }
   const real = h.filter(x => x.d >= start && x.d <= end);
-  const first = real.length ? real : h.slice(-1);
-  if (first.length <= 1) return first.map(x => ({ d:x.d, v:+x.v }));
+  let last = null;
+  h.forEach(x => { if (x.d <= start) last = +x.v; });
+  if (last==null && real.length) last = +real[0].v;
+  if (last==null && h.length) last = +h[0].v;
+  if (last==null) return [];
   const map = {};
-  first.forEach(x => { map[x.d] = +x.v; });
+  real.forEach(x => { map[x.d] = +x.v; });
   const out = [];
-  let last = +first[0].v;
-  const from = new Date(first[0].d+"T12:00:00");
+  const from = new Date(start+"T12:00:00");
   const to = new Date(end+"T12:00:00");
   for (let d = new Date(from); d <= to; d.setDate(d.getDate()+1)) {
     const key = d.toISOString().slice(0,10);
@@ -1322,7 +1324,7 @@ function fmtChartDate(iso, r){
   const mon = d.toLocaleString("en-US",{month:"short"});
   const day = d.getDate();
   const yr = String(d.getFullYear()).slice(2);
-  if (r==="1D"||r==="7D"||r==="5D"||r==="1M") return mon+" "+day;
+  if (r==="1D"||r==="7D"||r==="5D"||r==="14D"||r==="1M") return mon+" "+day;
   if (r==="6M"||r==="YTD"||r==="1Y") return mon+" "+yr;
   return mon+" "+yr;
 }
@@ -1678,7 +1680,7 @@ function miniSpark(vals, elId){
 const CRNG = "ice-card-rng";
 function cardRangeKey(){
   const r = localStorage.getItem(CRNG) || "7D";
-  if (r==="5D") return "7D";
+  if (r==="5D"||r==="14D") return "7D";
   return ["7D","1M","6M","YTD","1Y","ALL"].indexOf(r)>=0 ? r : "7D";
 }
 function sliceHist(h, r){
@@ -1689,18 +1691,21 @@ function sliceHist(h, r){
   if (r === "YTD") start = end.slice(0,4)+"-01-01";
   else if (r === "ALL") start = h[0].d;
   else {
-    const n = { "7D":7, "1M":30, "6M":183, "1Y":365 }[r] || 7;
+    const n = { "7D":7, "14D":14, "1M":30, "6M":183, "1Y":365 }[r] || 7;
     const d = new Date(end+"T12:00:00");
     d.setDate(d.getDate() - (n - 1));
     start = d.toISOString().slice(0,10);
   }
   const real = h.filter(x => x.d >= start && x.d <= end);
-  if (real.length <= 1) return (real.length ? real : h.slice(-1)).map(x => ({ d:x.d, v:+x.v }));
+  let last = null;
+  h.forEach(x => { if (x.d <= start) last = +x.v; });
+  if (last==null && real.length) last = +real[0].v;
+  if (last==null && h.length) last = +h[0].v;
+  if (last==null) return [];
   const map = {};
   real.forEach(x => { map[x.d] = +x.v; });
   const out = [];
-  let last = +real[0].v;
-  const from = new Date(real[0].d+"T12:00:00");
+  const from = new Date(start+"T12:00:00");
   const to = new Date(end+"T12:00:00");
   for (let d = new Date(from); d <= to; d.setDate(d.getDate()+1)) {
     const key = d.toISOString().slice(0,10);

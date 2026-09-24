@@ -957,9 +957,14 @@ def _season_years(year: str) -> list:
         if len(b) == 2:
             b = a[:2] + b
         return [a, b]
+    m = re.match(r"^(\d{2})\s*[-/]\s*(\d{2})$", y)
+    if m:
+        a, b = int(m.group(1)), int(m.group(2))
+        cen = "19" if a >= 50 else "20"
+        return [f"{cen}{a:02d}", f"{cen}{b:02d}"]
     if re.match(r"(?:19|20)\d{2}$", y[:4] or ""):
-        a = y[:4]
-        return [a, str(int(a) + 1)]
+        a = int(y[:4])
+        return [str(a - 1), str(a), str(a + 1)]
     return []
 
 
@@ -968,24 +973,26 @@ def _season_hit(title: str, year: str) -> bool:
     ys = _season_years(year)
     if not ys:
         return True
-    a, b = ys[0], ys[1] if len(ys) > 1 else str(int(ys[0]) + 1)
-    s1, s2 = a[2:], b[2:]
-    if a in t or b in t:
+    if any(y in t for y in ys):
         return True
-    if re.search(rf"\b{s1}\s*[-/]\s*{s2}\b", t):
-        return True
-    if re.search(rf"\b{a}\s*[-/]\s*{s2}\b", t) or re.search(rf"\b{a}\s*[-/]\s*{b}\b", t):
-        return True
+    for i, a in enumerate(ys):
+        for b in ys[i + 1:]:
+            s1, s2 = a[2:], b[2:]
+            if re.search(rf"\b{s1}\s*[-/]\s*{s2}\b", t):
+                return True
+            if re.search(rf"\b{a}\s*[-/]\s*{s2}\b", t) or re.search(rf"\b{a}\s*[-/]\s*{b}\b", t):
+                return True
     return False
 
 
 def _season_q(year: str) -> str:
     ys = _season_years(year)
     if not ys:
-        return ""
+        return (year or "")[:4]
     a, b = ys[0], ys[1] if len(ys) > 1 else str(int(ys[0]) + 1)
-    s1, s2 = a[2:], b[2:]
-    return f'({a},{b},"{s1}/{s2}","{s1}-{s2}","{a}-{s2}")'
+    if a == b:
+        return a
+    return f"({a},{b})"
 
 
 def _q_token(s: str) -> str:
@@ -1019,9 +1026,8 @@ def search_queries(card: dict) -> list:
         product = re.sub(r"^(upper deck|ud)\s+", "", st, flags=re.I).strip() or st
 
     parts = [player, _q_token(product)]
-    use_year = bool(year) and (yg or not unique or "holo" in blob or "allure" in blob)
-    if use_year:
-        parts.append(year[:4])
+    if year:
+        parts.append(_season_q(year) or year[:4])
 
     color = re.sub(r"/.*", "", par).strip()
     run = re.search(r"/\s*(\d{1,4})", par)
