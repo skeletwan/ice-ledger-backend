@@ -8,7 +8,7 @@ from urllib.parse import urlparse, quote_plus
 from pathlib import Path
 from PIL import Image, ImageOps
 import httpx
-from catalog import ensure_catalog, catalog_matches, vote_card, catalog_stats
+from catalog import ensure_catalog, catalog_matches, vote_card, catalog_stats, catalog_parallel_terms
 
 XAI_API_KEY = os.environ.get("XAI_API_KEY", "")
 APP_SECRET = os.environ.get("APP_SECRET", "")
@@ -775,7 +775,7 @@ def _sale_fits(title: str, q: str, player: str, parallel: str = "", number: str 
         )):
             return False
     num = re.sub(r"[^\d]", "", str(number or "").split("/")[0])
-    if num and len(num) >= 3 and num not in t and re.search(r"#\s*\d+", t):
+    if num and len(num) >= 3 and num not in t and re.search(r"#\s*\d+", t) and "young guns" not in ql:
         return False
     return True
 
@@ -794,6 +794,32 @@ def search_queries(card: dict) -> list:
     setish = ins or st
     if re.search(r"young guns|\byg\b", (ins + " " + st).lower()):
         setish = "Young Guns"
+        named = False
+        parts = [player, '"Young Guns"']
+        if year:
+            parts.append(year if "-" in year else year_short)
+        if par:
+            run = re.search(r"/\s*(\d{1,4})", par)
+            color = re.sub(r"/.*", "", par).strip()
+            already = f"{ins} {st}".lower()
+            if color and color.lower() not in already and color.lower() not in ("base",):
+                parts.append(f'"{color}"' if " " in color else color)
+            if run:
+                parts.append("/" + run.group(1))
+        q = " ".join(x for x in parts if x)
+        q += " -(lot,checklist,reprint,jumbo,bundle,album)"
+        mine = f"{ins} {st} {par}".lower()
+        exclude = []
+        for name in catalog_parallel_terms(year, st or "Young Guns", "Young Guns"):
+            key = name.lower()
+            if key in mine or key == "young guns":
+                continue
+            token = f'"{name}"' if " " in name else name
+            if token not in exclude:
+                exclude.append(token)
+        if exclude:
+            q += " -(" + ",".join(exclude[:12]) + ")"
+        return [q] if player else []
     blob = f"{ins} {st} {par}".lower()
     named = ins and len(ins) > 4 and ins.lower() not in (
         "base", "young guns", "series 1", "series 2", "series 3", "extended", "upper deck"
@@ -803,6 +829,13 @@ def search_queries(card: dict) -> list:
         parts.append(f'"{ins}"' if " " in ins else ins)
         if year:
             parts.append(year if "-" in year else year_short)
+        if par:
+            run = re.search(r"/\s*(\d{1,4})", par)
+            color = re.sub(r"/.*", "", par).strip()
+            if color and color.lower() not in ins.lower():
+                parts.append(f'"{color}"' if " " in color else color)
+            if run:
+                parts.append("/" + run.group(1))
     else:
         if year:
             parts.append(year if "-" in year else year_short)
@@ -815,7 +848,8 @@ def search_queries(card: dict) -> list:
         if par:
             run = re.search(r"/\s*(\d{1,4})", par)
             color = re.sub(r"/.*", "", par).strip()
-            if color and color.lower() not in blob:
+            already = f"{ins} {st}".lower()
+            if color and color.lower() not in already:
                 parts.append(f'"{color}"' if " " in color else color)
             if run:
                 parts.append("/" + run.group(1))
@@ -823,21 +857,19 @@ def search_queries(card: dict) -> list:
             parts.append("#" + num)
     q = " ".join(x for x in parts if x)
     q += " -(lot,checklist,reprint,jumbo,bundle,album)"
+    mine = blob
     exclude = []
-    if "outburst" not in blob:
+    for name in catalog_parallel_terms(year, st or setish, ins):
+        key = name.lower()
+        if key in mine:
+            continue
+        token = f'"{name}"' if " " in name else name
+        if token not in exclude:
+            exclude.append(token)
+    if "outburst" not in mine:
         exclude.append("outburst")
-    if "exclusive" not in blob:
-        exclude.append("exclusives")
-    if "acetate" not in blob and "clear cut" not in blob:
-        exclude.append("acetate")
-    if "canvas" not in blob:
-        exclude.append("canvas")
-    if "high gloss" not in blob:
-        exclude.append('"high gloss"')
-    if "superfractor" not in blob:
-        exclude.append("superfractor")
     if exclude:
-        q += " -(" + ",".join(exclude) + ")"
+        q += " -(" + ",".join(exclude[:12]) + ")"
     return [q] if player else []
 
 def _clean_bucket(vals):
@@ -1081,7 +1113,7 @@ async def _card_api_rows(client, q: str, extra: dict) -> list:
             break
     return rows
 
-async def fetch_card_api(q: str, player: str, fp: str = "", parallel: str = "", number: str = "") -> dict | None:
+async def fetch_card_api(q: str, player: str, fp: str = "", parallel: str = "", number: str = "", grader: str = "", grade: str = "") -> dict | None:
     if not CARD_API_KEY or not q:
         return None
     buckets = {}
@@ -1090,9 +1122,16 @@ async def fetch_card_api(q: str, player: str, fp: str = "", parallel: str = "", 
         async with httpx.AsyncClient(timeout=20) as client:
             raw_rows = await _card_api_rows(client, q, {"graded": "false"})
             slab_rows = await _card_api_rows(client, q, {"graded": "true"})
+            extra = {}
+            g = (grader or "").strip().upper()
+            gr = (grade or "").strip()
+            if g and g != "RAW" and gr:
+                extra = {"graded": "true", "grader": g, "grade": gr.split()[0]}
+            slab_exact = await _card_api_rows(client, q, extra) if extra else []
             mixed = await _card_api_rows(client, q, {})
             _ingest(raw_rows, q, player, buckets, only_raw=True, sales=sales, parallel=parallel, number=number)
             _ingest(slab_rows, q, player, buckets, only_raw=False, sales=sales, parallel=parallel, number=number)
+            _ingest(slab_exact, q, player, buckets, only_raw=False, sales=sales, parallel=parallel, number=number)
             _ingest(mixed, q, player, buckets, only_raw=None, sales=sales, parallel=parallel, number=number)
     except Exception:
         return None
@@ -1289,7 +1328,7 @@ async def comp(
     q = qs[0] if qs else " ".join(str(x) for x in [card.get("player"), ins or card.get("set"), card.get("year")] if x)
     api_hit = None
     for qtry in qs:
-        extra = await fetch_card_api(qtry, card.get("player") or "", ck, card.get("parallel") or "", card.get("number") or "")
+        extra = await fetch_card_api(qtry, card.get("player") or "", ck, card.get("parallel") or "", card.get("number") or "", card.get("grader") or "", card.get("grade") or "")
         if extra:
             api_hit = extra
             if extra.get("raw_cad") or extra.get("psa10_cad") or extra.get("sample_count"):

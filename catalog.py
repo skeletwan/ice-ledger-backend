@@ -277,6 +277,35 @@ SETS += [
 
 
 
+def catalog_parallel_terms(year="", set_name="", insert=""):
+    """Parallel names from the seed checklist for this set (Allure, YG, etc.)."""
+    y = str(year or "")[:4]
+    sl = (set_name or "").lower()
+    il = (insert or "").lower()
+    generic = {"red", "gold", "black", "green", "blue", "purple", "orange", "pink", "silver", "base", "auto", "patch"}
+    out = []
+    seen = set()
+    for sy, brand, st, ins, pars in SETS:
+        hay = f"{brand} {st} {ins}".lower()
+        if sl:
+            if sl not in hay and st.lower() not in sl and brand.lower() not in sl:
+                continue
+        elif il:
+            if il not in hay and (ins or "").lower() not in il:
+                continue
+        if y and sy[:4] != y and str(year or "") != sy:
+            if not sl or (st.lower() not in sl and sl not in hay):
+                continue
+        for p in pars:
+            name = re.sub(r"\s*/\s*.+$", "", p).strip()
+            key = name.lower()
+            if not name or key in seen or key in generic:
+                continue
+            seen.add(key)
+            out.append(name)
+    return out
+
+
 def _tok(s):
     return re.sub(r"[^a-z0-9]+", " ", str(s or "").lower()).strip()
 
