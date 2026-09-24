@@ -1235,14 +1235,42 @@ function rawCardHist(c){
 }
 function seedHistFromCards(){
   const cards = load() || [];
-  let tot = 0;
-  let n = 0;
-  cards.forEach(c => {
-    const now = binderCad(c);
-    if (now!=null && !isNaN(+now) && +now > 0) { tot += +now; n++; }
+  const cutoff = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 13);
+    return d.toISOString().slice(0,10);
+  })();
+  const series = cards.map(c => ({
+    h: rawCardHist(c).filter(p => p.d >= cutoff),
+    now: binderCad(c)
+  }));
+  const daySet = {};
+  series.forEach(s => s.h.forEach(p => { daySet[p.d] = 1; }));
+  daySet[localDay()] = 1;
+  const days = Object.keys(daySet).sort().filter(d => d >= cutoff);
+  const out = [];
+  days.forEach(d => {
+    let tot = 0;
+    series.forEach(s => {
+      let last = null;
+      for (let i=0;i<s.h.length;i++) if (s.h[i].d <= d) last = +s.h[i].v;
+      if (last==null && d===localDay() && s.now!=null) last = +s.now;
+      if (last!=null) tot += last;
+    });
+    if (tot > 0) out.push({ d, v: tot, t: d+"T12:00:00Z" });
   });
-  if (!n) return;
-  saveHist([{ d: localDay(), v: tot, t: new Date().toISOString() }]);
+  if (out.length) saveHist(out);
+}
+function resetCardTicks(cards){
+  const day = localDay();
+  (cards || []).forEach(c => {
+    const v = binderCad(c);
+    const pt = (v != null && +v >= 1) ? [{ d: day, v: +v }] : [];
+    c.hist = pt;
+    c.histMap = {};
+    if (pt.length) c.histMap[gradeKey(c)] = pt;
+  });
+  return cards;
 }
 function pushHist(bookCad){
   if (bookCad==null || isNaN(+bookCad)) return;
@@ -1362,7 +1390,18 @@ function lockIdentify(){
   if ($("go")) $("go").disabled = !on;
 }
 
-function load(){ try { return JSON.parse(localStorage.getItem(KEY)||"[]"); } catch(e){ return []; } }
+function load(){
+  try {
+    const cards = JSON.parse(localStorage.getItem(KEY)||"[]");
+    if (!localStorage.getItem("ice-tick-reset-v5") && cards.length) {
+      resetCardTicks(cards);
+      localStorage.setItem("ice-tick-reset-v5", localDay());
+      try { localStorage.setItem(KEY, JSON.stringify(cards)); } catch(e){}
+      seedHistFromCards();
+    }
+    return cards;
+  } catch(e){ return []; }
+}
 function persistCards(cards){
   const copy = cards.map(c => Object.assign({}, c));
   for (let n=0;n<12;n++){
@@ -3296,7 +3335,12 @@ function applyCompObj(card, c){
   card.compAt = new Date().toISOString();
   orderGrades(card);
   if (Array.isArray(c.hist_copy) && c.hist_copy.length) {
-    const pts = c.hist_copy.filter(p => p && p.d && !isNaN(+p.v)).map(p => ({ d: String(p.d).slice(0,10), v:+p.v }));
+    const cutoff = (() => {
+      const d = new Date();
+      d.setDate(d.getDate() - 13);
+      return d.toISOString().slice(0,10);
+    })();
+    const pts = c.hist_copy.filter(p => p && p.d && !isNaN(+p.v) && String(p.d).slice(0,10) >= cutoff).map(p => ({ d: String(p.d).slice(0,10), v:+p.v }));
     if (pts.length) {
       const map = {};
       (Array.isArray(card.hist) ? card.hist : []).forEach(p => {
