@@ -779,6 +779,13 @@ def _sale_fits(title: str, q: str, player: str, parallel: str = "", number: str 
         return False
     return True
 
+def _code_num(num: str) -> str:
+    n = re.sub(r"^#+", "", (num or "").strip())
+    if re.search(r"[A-Za-z]", n) and re.search(r"\d", n):
+        return n
+    return ""
+
+
 def search_queries(card: dict) -> list:
     player = str(card.get("player") or "").strip()
     year = str(card.get("year") or "").strip()
@@ -806,6 +813,9 @@ def search_queries(card: dict) -> list:
                 parts.append(f'"{color}"' if " " in color else color)
             if run:
                 parts.append("/" + run.group(1))
+        code = _code_num(num)
+        if code:
+            parts.append(code)
         q = " ".join(x for x in parts if x)
         q += " -(lot,checklist,reprint,jumbo,bundle,album)"
         mine = f"{ins} {st} {par}".lower()
@@ -818,7 +828,7 @@ def search_queries(card: dict) -> list:
             if token not in exclude:
                 exclude.append(token)
         if exclude:
-            q += " -(" + ",".join(exclude[:12]) + ")"
+            q += " -(" + ",".join(exclude[:8]) + ")"
         return [q] if player else []
     blob = f"{ins} {st} {par}".lower()
     named = ins and len(ins) > 4 and ins.lower() not in (
@@ -855,6 +865,9 @@ def search_queries(card: dict) -> list:
                 parts.append("/" + run.group(1))
         elif num:
             parts.append("#" + num)
+    code = _code_num(num)
+    if code and code.lower() not in " ".join(parts).lower():
+        parts.append(code)
     q = " ".join(x for x in parts if x)
     q += " -(lot,checklist,reprint,jumbo,bundle,album)"
     mine = blob
@@ -868,8 +881,12 @@ def search_queries(card: dict) -> list:
             exclude.append(token)
     if "outburst" not in mine:
         exclude.append("outburst")
+    if "holofoil" in mine or "holo foil" in mine:
+        for extra in ('"Future Watch"', "limited"):
+            if extra.lower().strip('"') not in mine:
+                exclude.append(extra)
     if exclude:
-        q += " -(" + ",".join(exclude[:12]) + ")"
+        q += " -(" + ",".join(exclude[:8]) + ")"
     return [q] if player else []
 
 def _clean_bucket(vals):

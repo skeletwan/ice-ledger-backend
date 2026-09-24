@@ -7,7 +7,10 @@ SETS = [
     # year, brand, set, insert, parallels (name, print hint)
     ("2025-26", "Upper Deck", "Series 1", "Young Guns", ["Base", "Clear Cut", "Exclusives /100", "High Gloss /10", "Deluxe /250"]),
     ("2025-26", "Upper Deck", "Series 1", "", ["Base", "Canvas", "UD Exclusives /100", "High Gloss /10"]),
-    ("2025-26", "Upper Deck", "Series 2", "Young Guns", ["Base", "Clear Cut", "Exclusives /100", "High Gloss /10", "Deluxe /250"]),
+    ("2025-26", "Upper Deck", "Series 1", "Sizzle Reel", ["Base", "Speckle", "Red /199", "Gold /25", "Printing Plate 1/1"]),
+    ("2025-26", "Upper Deck", "Series 2", "Sizzle Reel", ["Base", "Speckle", "Red /199", "Gold /25", "Printing Plate 1/1"]),
+    ("2024-25", "Upper Deck", "Series 1", "Sizzle Reel", ["Base", "Speckle", "Red /199", "Gold /25"]),
+    ("2024-25", "Upper Deck", "Series 2", "Sizzle Reel", ["Base", "Speckle", "Red /199", "Gold /25"]),
     ("2024-25", "Upper Deck", "Series 1", "Young Guns", ["Base", "Clear Cut", "Exclusives /100", "High Gloss /10", "Deluxe /250"]),
     ("2024-25", "Upper Deck", "Series 1", "", ["Base", "Canvas", "UD Exclusives /100", "High Gloss /10"]),
     ("2024-25", "Upper Deck", "Series 2", "Young Guns", ["Base", "Clear Cut", "Exclusives /100", "High Gloss /10", "Deluxe /250"]),
@@ -21,7 +24,11 @@ SETS = [
     ("2015-16", "Upper Deck", "Series 1", "Young Guns", ["Base", "Exclusives /100", "High Gloss /10"]),
     ("2005-06", "Upper Deck", "Series 1", "Young Guns", ["Base"]),
     ("2024-25", "Upper Deck", "Extended", "Young Guns", ["Base", "Clear Cut", "Exclusives /100"]),
-    ("2024-25", "Upper Deck", "SP Authentic", "Future Watch", ["Base /999", "Inscribed", "Gold /150", "Patch"]),
+    ("2025-26", "Upper Deck", "SP Authentic", "Holofoil", ["Base", "Red", "Gold /25"]),
+    ("2024-25", "Upper Deck", "SP Authentic", "Holofoil", ["Base", "Red", "Gold /25"]),
+    ("2023-24", "Upper Deck", "SP Authentic", "Holofoil", ["Base"]),
+    ("2022-23", "Upper Deck", "SP Authentic", "Holofoil", ["Base"]),
+    ("2021-22", "Upper Deck", "SP Authentic", "Holofoil", ["Base"]),
     ("2023-24", "Upper Deck", "SP Authentic", "Future Watch", ["Base /999", "Inscribed", "Gold /150"]),
     ("2024-25", "Upper Deck", "The Cup", "", ["Base /249", "Gold /24", "Black /8", "Printing Plate 1/1"]),
     ("2023-24", "Upper Deck", "The Cup", "", ["Base /249", "Gold /24", "Black /8"]),
@@ -287,11 +294,22 @@ def catalog_parallel_terms(year="", set_name="", insert=""):
     seen = set()
     for sy, brand, st, ins, pars in SETS:
         hay = f"{brand} {st} {ins}".lower()
+        row_ins = (ins or "").lower()
         if sl:
-            if sl not in hay and st.lower() not in sl and brand.lower() not in sl:
+            if st.lower() in sl or sl in st.lower():
+                pass
+            elif ins and ins.lower() in sl:
+                pass
+            else:
                 continue
         elif il:
-            if il not in hay and (ins or "").lower() not in il:
+            if il not in hay and row_ins not in il:
+                continue
+        if il:
+            if row_ins and row_ins not in il and il not in row_ins:
+                continue
+        else:
+            if row_ins:
                 continue
         if y and sy[:4] != y and str(year or "") != sy:
             if not sl or (st.lower() not in sl and sl not in hay):
@@ -299,7 +317,9 @@ def catalog_parallel_terms(year="", set_name="", insert=""):
         for p in pars:
             name = re.sub(r"\s*/\s*.+$", "", p).strip()
             key = name.lower()
-            if not name or key in seen or key in generic:
+            if not name or key in seen:
+                continue
+            if key in generic and "starquest" not in sl and "sizzle" not in sl and "sizzle" not in il:
                 continue
             seen.add(key)
             out.append(name)
