@@ -701,12 +701,14 @@ def _median(vals):
 def _sale_bucket(item: dict) -> str | None:
     grader = str(item.get("grader") or "").upper().strip()
     grade = str(item.get("grade") or "").strip().lower()
-    title = str(item.get("title") or "")
-    blob = f"{grader} {grade} {title}".lower()
+    if grader in ("", "RAW", "UNGRADED", "NONE", "N/A", "NULL") and grade in ("", "raw", "ungraded", "none", "n/a"):
+        return "raw_cad"
     if grader in ("PSA",):
         if grade.startswith("10"):
             return "psa10_cad"
-        if grade.startswith("9") and "9.5" not in grade:
+        if "9.5" in grade:
+            return "psa9_cad"
+        if grade.startswith("9"):
             return "psa9_cad"
         if grade.startswith("8"):
             return "psa8_cad"
@@ -714,8 +716,9 @@ def _sale_bucket(item: dict) -> str | None:
             return "psa7_cad"
         if grade.startswith("6"):
             return "psa6_cad"
+        return "raw_cad"
     if grader in ("BGS", "BECKETT", "BECKETT GRADING SERVICES"):
-        if "black" in grade or re.search(r"black\s*label", blob):
+        if "black" in grade:
             return "bgs_black_cad"
         if "9.5" in grade:
             return "bgs95_cad"
@@ -723,8 +726,11 @@ def _sale_bucket(item: dict) -> str | None:
             return "bgs10_cad"
         if grade.startswith("9"):
             return "bgs9_cad"
-    if grader in ("SGC",) and (grade.startswith("10") or "10" in grade):
-        return "sgc10_cad"
+        return "raw_cad"
+    if grader in ("SGC",):
+        if grade.startswith("10") or "10" in grade:
+            return "sgc10_cad"
+        return "raw_cad"
     if grader in ("KSA", "KIDDLEY'S", "KIDDLEY"):
         if "9.5" in grade or "95" in grade:
             return "ksa95_cad"
@@ -732,38 +738,7 @@ def _sale_bucket(item: dict) -> str | None:
             return "ksa10_cad"
         if grade.startswith("9"):
             return "ksa9_cad"
-    if grader in ("", "RAW", "UNGRADED", "NONE", "N/A") and (not grade or grade in ("raw", "ungraded", "none")):
-        if not re.search(r"\b(psa|bgs|sgc|cgc)\b", title.lower()):
-            return "raw_cad"
-    if "psa" in blob and re.search(r"\b10(\.0)?\b", blob) and "9.5" not in blob:
-        return "psa10_cad"
-    if "psa" in blob and re.search(r"\b9(\.0)?\b", blob) and "9.5" not in blob and not re.search(r"\b10\b", blob):
-        return "psa9_cad"
-    if "psa" in blob and re.search(r"\b8(\.0)?\b", blob):
-        return "psa8_cad"
-    if "psa" in blob and re.search(r"\b7(\.0)?\b", blob):
-        return "psa7_cad"
-    if "psa" in blob and re.search(r"\b6(\.0)?\b", blob):
-        return "psa6_cad"
-    if "bgs" in blob and re.search(r"black\s*label|blacklabel", blob):
-        return "bgs_black_cad"
-    if "bgs" in blob and "9.5" in blob:
-        return "bgs95_cad"
-    if "bgs" in blob and re.search(r"\b10\b", blob):
-        return "bgs10_cad"
-    if "bgs" in blob and re.search(r"\b9(\.0)?\b", blob):
-        return "bgs9_cad"
-    if "ksa" in blob and "9.5" in blob:
-        return "ksa95_cad"
-    if "ksa" in blob and re.search(r"\b10\b", blob):
-        return "ksa10_cad"
-    if "ksa" in blob and re.search(r"\b9(\.0)?\b", blob):
-        return "ksa9_cad"
-    if "sgc" in blob and re.search(r"\b10\b", blob):
-        return "sgc10_cad"
-    if grader in ("", "RAW", "UNGRADED") or " raw" in f" {blob}" or "ungraded" in blob:
-        if not re.search(r"\b(psa|bgs|sgc|cgc)\s*\d", blob):
-            return "raw_cad"
+        return "raw_cad"
     return "raw_cad"
 
 def _junk_title(title: str) -> bool:
@@ -1321,8 +1296,8 @@ async def fetch_card_api(q: str, player: str, fp: str = "", parallel: str = "", 
     sales = []
     try:
         async with httpx.AsyncClient(timeout=20) as client:
-            raw_rows = await _card_api_rows(client, q, {"graded": "false"})
-            slab_rows = await _card_api_rows(client, q, {"graded": "true"})
+            raw_rows = await _card_api_rows(client, q, {"graded": False})
+            slab_rows = await _card_api_rows(client, q, {"graded": True})
             extra = {}
             g = (grader or "").strip().upper()
             gr = (grade or "").strip()
