@@ -740,8 +740,9 @@ def _sale_fits(title: str, q: str, player: str, parallel: str = "", number: str 
             return False
     if _junk_title(title):
         return False
-    ql = (q or "").lower()
-    years = re.findall(r"\b((?:19|20)\d{2})\b", ql)
+    required = (q or "").split(" -(")[0].lower()
+    ql = required
+    years = re.findall(r"\b((?:19|20)\d{2})\b", required)
     if years:
         ok_year = False
         for y in years:
@@ -827,7 +828,7 @@ def search_queries(card: dict) -> list:
     parts = [player, _q_token(product)]
     use_year = bool(year) and (yg or not unique or "holo" in blob or "allure" in blob)
     if use_year:
-        parts.append(year if "-" in year else year[:4])
+        parts.append(year[:4])
 
     color = re.sub(r"/.*", "", par).strip()
     run = re.search(r"/\s*(\d{1,4})", par)
@@ -1289,7 +1290,17 @@ async def comp(
     ck = "|".join(str(card.get(k) or "").strip().lower() for k in ("player","year","set","number","parallel","insert"))
     day = time.strftime("%Y-%m-%d")
     ck_day = f"{ck}|{day}"
-    nightly = bool(payload.get("auto") or payload.get("skip_web"))
+    nightly = bool(payload.get("auto") or payload.get("skip_web") or payload.get("force"))
+    force = bool(payload.get("force") or payload.get("auto"))
+    if force and ck.strip("|"):
+        try:
+            con = db()
+            con.execute("DELETE FROM comp_cache WHERE k=? OR k=?", (ck, ck_day))
+            con.execute("DELETE FROM house_solds WHERE fp=?", (ck,))
+            con.commit()
+            con.close()
+        except Exception:
+            pass
     if ck.strip("|") and not nightly:
         house = pack_house(ck)
         if house:
@@ -1438,7 +1449,7 @@ async def comp(
         data["sample_count"] = data.get("sample_count") or 0
         data["summary"] = data.get("summary") or "No Fanatics / Goldin / Heritage sold matched this copy."
     money_keys = ("suggested_cad","suggested_usd","raw_cad","psa6_cad","psa7_cad","psa8_cad","psa9_cad","psa10_cad","bgs9_cad","bgs95_cad","bgs10_cad","bgs_black_cad","sgc10_cad")
-    if not any(data.get(k) for k in money_keys) and ck.strip("|"):
+    if not any(data.get(k) for k in money_keys) and ck.strip("|") and not payload.get("auto") and not payload.get("force"):
         try:
             con = db()
             row = con.execute("SELECT data FROM comp_cache WHERE k=?", (ck,)).fetchone()
