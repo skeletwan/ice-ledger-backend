@@ -301,6 +301,7 @@
           <img class="brand-logo" src="/logo.jpg" alt="Clappers PC" />
         </div>
         <p class="muted" id="authLead">Sign in to your binder.</p>
+        <form id="authForm" action="#" method="post">
         <label>Email</label>
         <input id="email" type="email" autocomplete="username" />
         <label>Password</label>
@@ -317,20 +318,20 @@
           <label style="margin-top:14px"><input id="agreeLegal" type="checkbox" style="width:auto;margin-right:8px" /> I agree to the <a href="/terms#terms-of-service" target="_blank" rel="noopener">Terms</a>, <a href="/aup#acceptable-use-policy" target="_blank" rel="noopener">Acceptable Use</a>, and <a href="/privacy#privacy-policy" target="_blank" rel="noopener">Privacy Policy</a></label>
         </div>
         <div class="signin-actions">
-          <button id="loginBtn">Sign in</button>
+          <button type="submit" id="loginBtn">Sign in</button>
           <div class="auth-links">
             <button type="button" id="toSignup">Create account</button>
             <button type="button" id="showReset">Forgot password</button>
           </div>
         </div>
         <div class="signup-actions">
-          <button id="signupBtn">Create account</button>
+          <button type="submit" id="signupBtn">Create account</button>
           <div class="auth-links">
             <button type="button" id="toSignin">Already have an account</button>
           </div>
         </div>
         <div class="reset-only" id="resetBox">
-          <button class="ghost" id="resetSend">Email me a code</button>
+          <button type="button" class="ghost" id="resetSend">Email me a code</button>
           <label>Code from email</label>
           <input id="resetCode" autocomplete="one-time-code" />
           <label>New password</label>
@@ -338,11 +339,12 @@
             <input id="resetPw" type="password" autocomplete="new-password" />
             <button type="button" class="eye" data-eye="resetPw">Show</button>
           </div>
-          <button id="resetBtn">Set new password</button>
+          <button type="submit" id="resetBtn">Set new password</button>
           <div class="auth-links">
             <button type="button" id="resetBack">Back to sign in</button>
           </div>
         </div>
+        </form>
         <p class="status" id="authStatus"></p>
       </div>
     </div>
@@ -3177,24 +3179,35 @@ $("commentAlertOn") && ($("commentAlertOn").onchange = () => {
 $("plusBtn") && ($("plusBtn").onclick = async () => {
   try { await unlockPlus(); } catch(e) { if ($("plusNote")) $("plusNote").textContent = e.message; }
 });
-$("payBtn").onclick = async () => {
+async function startPlusCheckout(){
   try {
     const r = await fetch("/checkout", { headers:{ "x-token": token() } });
     const d = await r.json();
     if (d.url) { location.href = d.url; return; }
     show("set");
-    if ($("plusNote")) $("plusNote").textContent = "Stripe isn’t live yet.";
-  } catch(e) { $("quotaBox").textContent = e.message; $("quotaBox").className = "quota-chip err"; }
-};
-$("ripBtn") && ($("ripBtn").onclick = async () => {
+    youShow("youBill");
+    if ($("youRipNote")) $("youRipNote").textContent = d.note || "Stripe isn’t live yet. Use You → billing.";
+  } catch(e) {
+    if ($("youRipNote")) $("youRipNote").textContent = e.message;
+    if ($("quotaBox")) { $("quotaBox").textContent = e.message; $("quotaBox").className = "quota-chip err"; }
+  }
+}
+async function startRipCheckout(){
   try {
     const r = await fetch("/checkout?item=rip", { headers:{ "x-token": token() } });
     const d = await r.json();
     if (d.url) { location.href = d.url; return; }
-    if ($("ripNote")) $("ripNote").textContent = "Card pay isn’t live yet. Use a code, or ask support for one after you e-transfer.";
-    $("ripCode") && $("ripCode").focus();
-  } catch(e) { if ($("ripNote")) $("ripNote").textContent = e.message; }
-});
+    show("set");
+    youShow("youBill");
+    if ($("youRipNote")) $("youRipNote").textContent = d.note || "Card pay isn’t live yet. Redeem a code here.";
+  } catch(e) {
+    if ($("youRipNote")) $("youRipNote").textContent = e.message;
+  }
+}
+$("payBtn") && ($("payBtn").onclick = startPlusCheckout);
+$("youPayBtn") && ($("youPayBtn").onclick = startPlusCheckout);
+$("ripBtn") && ($("ripBtn").onclick = startRipCheckout);
+$("youRipBtn") && ($("youRipBtn").onclick = startRipCheckout);
 $("ripRedeem") && ($("ripRedeem").onclick = async () => {
   try {
     const d = await authPost("/rip/redeem", { code: ($("ripCode")&&$("ripCode").value) || "" });
@@ -3359,12 +3372,16 @@ function setAuthMode(mode){
   }
   if ($("authStatus")) { $("authStatus").className = "status"; $("authStatus").textContent = ""; }
 }
+function authEmail(){
+  return (($("email") && $("email").value) || "").trim().toLowerCase();
+}
 setAuthMode("signin");
 $("toSignup") && ($("toSignup").onclick = ev => { ev.preventDefault(); setAuthMode("signup"); });
 $("toSignin") && ($("toSignin").onclick = ev => { ev.preventDefault(); setAuthMode("signin"); });
 $("showReset") && ($("showReset").onclick = ev => { ev.preventDefault(); setAuthMode("reset"); });
 $("resetBack") && ($("resetBack").onclick = ev => { ev.preventDefault(); setAuthMode("signin"); });
-$("signupBtn").onclick = async () => {
+$("signupBtn") && ($("signupBtn").onclick = async ev => {
+  if (ev) ev.preventDefault();
   try {
     if (!$("agreeLegal") || !$("agreeLegal").checked) {
       flash("authStatus", "err", "Agree to the Terms and Privacy Policy first.");
@@ -3372,6 +3389,10 @@ $("signupBtn").onclick = async () => {
     }
     const pw = $("password").value || "";
     const pw2 = ($("password2") && $("password2").value) || "";
+    if (!authEmail() || authEmail().indexOf("@")<0) {
+      flash("authStatus", "err", "Enter the email you want on this account.");
+      return;
+    }
     if (pw.length < 6) {
       flash("authStatus", "err", "Password needs at least 6 characters.");
       return;
@@ -3380,33 +3401,46 @@ $("signupBtn").onclick = async () => {
       flash("authStatus", "err", "Password and confirm password have to match.");
       return;
     }
-    const d = await authPost("/signup", { email:$("email").value, password:pw });
+    const d = await authPost("/signup", { email: authEmail(), password:pw });
     setToken(d.token); showApp(); await pullCloud(); paintTicker(); renderBinder();
   } catch(e) { flash("authStatus", "err", e.message); }
-};
-$("loginBtn").onclick = async () => {
+});
+$("loginBtn") && ($("loginBtn").onclick = async ev => {
+  if (ev) ev.preventDefault();
   try {
-    const d = await authPost("/login", { email:$("email").value, password:$("password").value });
+    if (!authEmail() || !$("password").value) {
+      flash("authStatus", "err", "Email and password both needed.");
+      return;
+    }
+    const d = await authPost("/login", { email: authEmail(), password:$("password").value });
     setToken(d.token); showApp(); await pullCloud(); paintTicker(); renderBinder();
   } catch(e) { flash("authStatus", "err", e.message); }
-};
+});
+$("authForm") && ($("authForm").onsubmit = ev => {
+  ev.preventDefault();
+  const mode = (document.querySelector(".auth-card") && document.querySelector(".auth-card").getAttribute("data-mode")) || "signin";
+  if (mode==="signup" && $("signupBtn")) $("signupBtn").click();
+  else if (mode==="reset" && $("resetBtn")) $("resetBtn").click();
+  else if ($("loginBtn")) $("loginBtn").click();
+});
 $("resetSend") && ($("resetSend").onclick = async () => {
   try {
-    await authPost("/reset", { email: $("email").value });
+    await authPost("/reset", { email: authEmail() });
     flash("authStatus", "ok", "If that email has an account, a code is on the way.");
   } catch(e) { flash("authStatus", "err", e.message); }
 });
-$("resetBtn").onclick = async () => {
+$("resetBtn") && ($("resetBtn").onclick = async ev => {
+  if (ev) ev.preventDefault();
   try {
     const d = await authPost("/reset-confirm", {
-      email: $("email").value,
+      email: authEmail(),
       code: $("resetCode").value,
       password: $("resetPw").value
     });
     flash("authStatus", "ok", "Password updated. Signing you in…");
     setToken(d.token); showApp(); await pullCloud(); paintTicker(); renderBinder();
   } catch(e) { flash("authStatus", "err", e.message); }
-};
+});
 $("nSave") && ($("nSave").onclick = async () => {
   localStorage.setItem(NOTE, JSON.stringify({
     on: $("nOn").checked,
@@ -4303,9 +4337,7 @@ $("pubList") && ($("pubList").onclick = e => {
 });
 $("backPub") && ($("backPub").onclick = () => show("pub"));
 
-$("logoutBtn").onclick = () => { setToken(""); location.reload(); };
-$("youPayBtn") && ($("youPayBtn").onclick = () => $("payBtn") && $("payBtn").click());
-$("youRipBtn") && ($("youRipBtn").onclick = () => $("ripBtn") && $("ripBtn").click());
+$("logoutBtn") && ($("logoutBtn").onclick = () => { setToken(""); location.reload(); });
 $("youRipRedeem") && ($("youRipRedeem").onclick = async () => {
   try {
     const d = await authPost("/rip/redeem", { code: ($("youRipCode")&&$("youRipCode").value) || "" });

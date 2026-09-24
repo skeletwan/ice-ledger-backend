@@ -1361,7 +1361,7 @@ async def signup(payload: dict):
     except sqlite3.IntegrityError:
         con.close()
         raise HTTPException(409, "email already used")
-    uid = con.execute("SELECT id FROM users WHERE email=?", (email,)).fetchone()["id"]
+    uid = con.execute("SELECT id FROM users WHERE lower(email)=?", (email,)).fetchone()["id"]
     token = secrets.token_urlsafe(24)
     con.execute("INSERT INTO sessions(token,user_id,created) VALUES(?,?,?)",
                 (token, uid, time.strftime("%Y-%m-%dT%H:%M:%SZ")))
@@ -1374,7 +1374,7 @@ async def login(payload: dict):
     email = (payload.get("email") or "").strip().lower()
     pw = (payload.get("password") or "").strip()
     con = db()
-    row = con.execute("SELECT id,pw,suspended FROM users WHERE email=?", (email,)).fetchone()
+    row = con.execute("SELECT id,pw,suspended FROM users WHERE lower(email)=?", (email,)).fetchone()
     if not row:
         con.close()
         raise HTTPException(401, "no account with that email")
@@ -1523,7 +1523,7 @@ async def admin_grant_rip(payload: dict, request: Request, x_token: str | None =
     email = (payload.get("email") or "").strip().lower()
     scans = max(1, min(500, int(payload.get("scans") or RIP_SCANS)))
     con = db()
-    row = con.execute("SELECT id FROM users WHERE email=?", (email,)).fetchone()
+    row = con.execute("SELECT id FROM users WHERE lower(email)=?", (email,)).fetchone()
     if not row:
         con.close()
         raise HTTPException(404, "no account with that email")
@@ -1539,7 +1539,7 @@ async def reset_request(payload: dict):
     if "@" not in email:
         raise HTTPException(400, "enter the account email")
     con = db()
-    row = con.execute("SELECT id FROM users WHERE email=?", (email,)).fetchone()
+    row = con.execute("SELECT id FROM users WHERE lower(email)=?", (email,)).fetchone()
     if row:
         token = secrets.token_urlsafe(8).lower()
         con.execute("DELETE FROM resets WHERE email=?", (email,))
@@ -1594,7 +1594,7 @@ async def reset_confirm(payload: dict):
     if not row or row["token"] != code or int(time.time()) - int(row["created"]) > 1800:
         con.close()
         raise HTTPException(400, "code is wrong or expired")
-    user = con.execute("SELECT id FROM users WHERE email=?", (email,)).fetchone()
+    user = con.execute("SELECT id FROM users WHERE lower(email)=?", (email,)).fetchone()
     if not user:
         con.close()
         raise HTTPException(404, "no account with that email")
@@ -2666,7 +2666,7 @@ async def admin_lookup(q: str = "", request: Request = None, x_token: str | None
     con = db()
     row = None
     if "@" in raw:
-        row = con.execute("SELECT * FROM users WHERE email=?", (raw,)).fetchone()
+        row = con.execute("SELECT * FROM users WHERE lower(email)=?", (raw,)).fetchone()
     if not row:
         slug = re.sub(r"[^a-z0-9]", "", raw)
         row = con.execute("SELECT * FROM users WHERE slug=?", (slug,)).fetchone()
@@ -2747,7 +2747,7 @@ def _find_user(con, payload: dict):
     slug = re.sub(r"[^a-z0-9]", "", (payload.get("slug") or "").lower())
     row = None
     if email:
-        row = con.execute("SELECT id,email,slug FROM users WHERE email=?", (email,)).fetchone()
+        row = con.execute("SELECT id,email,slug FROM users WHERE lower(email)=?", (email,)).fetchone()
     if not row and slug:
         row = con.execute("SELECT id,email,slug FROM users WHERE slug=?", (slug,)).fetchone()
     return row
