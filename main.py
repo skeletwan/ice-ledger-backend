@@ -1021,7 +1021,7 @@ def search_queries(card: dict) -> list:
     parts = [player, _q_token(product)]
     use_year = bool(year) and (yg or not unique or "holo" in blob or "allure" in blob)
     if use_year:
-        parts.append(_season_q(year) or year[:4])
+        parts.append(year[:4])
 
     color = re.sub(r"/.*", "", par).strip()
     run = re.search(r"/\s*(\d{1,4})", par)
