@@ -794,15 +794,20 @@ def search_queries(card: dict) -> list:
     setish = ins or st
     if re.search(r"young guns|\byg\b", (ins + " " + st).lower()):
         setish = "Young Guns"
+    blob = f"{ins} {st} {par}".lower()
     parts = [player]
-    if year_short:
+    if year:
+        parts.append(year if "-" in year else year_short)
+    elif year_short:
         parts.append(year_short)
+    if st and ins and st.lower() not in ins.lower():
+        parts.append(f'"{st}"' if " " in st else st)
     if setish:
         parts.append(f'"{setish}"' if " " in setish else setish)
     if par:
         run = re.search(r"/\s*(\d{1,4})", par)
         color = re.sub(r"/.*", "", par).strip()
-        if color:
+        if color and color.lower() not in blob:
             parts.append(f'"{color}"' if " " in color else color)
         if run:
             parts.append("/" + run.group(1))
@@ -810,8 +815,21 @@ def search_queries(card: dict) -> list:
         parts.append("#" + num)
     q = " ".join(x for x in parts if x)
     q += " -(lot,checklist,reprint,jumbo,bundle,album)"
-    if not par:
-        q += " -(outburst,exclusives,acetate,canvas,\"high gloss\",superfractor)"
+    exclude = []
+    if "outburst" not in blob:
+        exclude.append("outburst")
+    if "exclusive" not in blob:
+        exclude.append("exclusives")
+    if "acetate" not in blob and "clear cut" not in blob:
+        exclude.append("acetate")
+    if "canvas" not in blob:
+        exclude.append("canvas")
+    if "high gloss" not in blob:
+        exclude.append('"high gloss"')
+    if "superfractor" not in blob:
+        exclude.append("superfractor")
+    if exclude:
+        q += " -(" + ",".join(exclude) + ")"
     return [q] if player else []
 
 def _clean_bucket(vals):
