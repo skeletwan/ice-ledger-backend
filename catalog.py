@@ -317,7 +317,7 @@ def catalog_parallel_terms(year="", set_name="", insert=""):
         for p in pars:
             name = re.sub(r"\s*/\s*.+$", "", p).strip()
             key = name.lower()
-            if not name or key in seen:
+            if not name or key in seen or key == "base":
                 continue
             if key in generic and "starquest" not in sl and "sizzle" not in sl and "sizzle" not in il:
                 continue

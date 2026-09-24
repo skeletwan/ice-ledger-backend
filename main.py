@@ -768,11 +768,13 @@ def _sale_fits(title: str, q: str, player: str, parallel: str = "", number: str 
     else:
         if re.search(r"/\s*(?:1|5|10|25|49|50|99|100|150|199|249|299|349|399|499|999)\b", t):
             return False
-        if any(flag in t for flag in (
+        extra = (
             "orange", "gold vinyl", "superfractor", "printing plate",
             "outburst", "extravagance", "canvas", "acetate", "clear cut",
             "red rainbow", "green parallel", "blue parallel", "pink",
-        )):
+            "future watch", "sizzle reel",
+        )
+        if any(flag in t and flag not in ql for flag in extra):
             return False
     num = re.sub(r"[^\d]", "", str(number or "").split("/")[0])
     if num and len(num) >= 3 and num not in t and re.search(r"#\s*\d+", t) and "young guns" not in ql:
@@ -786,108 +788,84 @@ def _code_num(num: str) -> str:
     return ""
 
 
+_GENERIC_PRODUCT = {
+    "base", "young guns", "series 1", "series 2", "series 3",
+    "extended", "upper deck", "hockey", "none", "n/a",
+}
+
+
+def _q_token(s: str) -> str:
+    s = (s or "").strip()
+    if not s:
+        return ""
+    return f'"{s}"' if " " in s else s
+
+
 def search_queries(card: dict) -> list:
+    """One boolean q the Card API expects: player + product + this parallel + not other parallels."""
     player = str(card.get("player") or "").strip()
+    if not player:
+        return []
     year = str(card.get("year") or "").strip()
-    year_short = year[:4] if year else ""
     ins = str(card.get("insert") or "").strip()
     st = str(card.get("set") or "").strip()
     par = str(card.get("parallel") or "").strip()
     if par.lower() in ("base", "none", "n/a"):
         par = ""
-    num = str(card.get("number") or "").strip()
-    num = re.sub(r"\s*\d+\s*/\s*\d+\s*", " ", num).strip()
-    num = re.sub(r"^#+", "", num)
-    setish = ins or st
-    if re.search(r"young guns|\byg\b", (ins + " " + st).lower()):
-        setish = "Young Guns"
-        named = False
-        parts = [player, '"Young Guns"']
-        if year:
-            parts.append(year if "-" in year else year_short)
-        if par:
-            run = re.search(r"/\s*(\d{1,4})", par)
-            color = re.sub(r"/.*", "", par).strip()
-            already = f"{ins} {st}".lower()
-            if color and color.lower() not in already and color.lower() not in ("base",):
-                parts.append(f'"{color}"' if " " in color else color)
-            if run:
-                parts.append("/" + run.group(1))
-        code = _code_num(num)
-        if code:
-            parts.append(code)
-        q = " ".join(x for x in parts if x)
-        q += " -(lot,checklist,reprint,jumbo,bundle,album)"
-        mine = f"{ins} {st} {par}".lower()
-        exclude = []
-        for name in catalog_parallel_terms(year, st or "Young Guns", "Young Guns"):
-            key = name.lower()
-            if key in mine or key == "young guns":
-                continue
-            token = f'"{name}"' if " " in name else name
-            if token not in exclude:
-                exclude.append(token)
-        if exclude:
-            q += " -(" + ",".join(exclude[:8]) + ")"
-        return [q] if player else []
+    num = re.sub(r"^#+", "", str(card.get("number") or "").strip())
     blob = f"{ins} {st} {par}".lower()
-    named = ins and len(ins) > 4 and ins.lower() not in (
-        "base", "young guns", "series 1", "series 2", "series 3", "extended", "upper deck"
-    )
-    parts = [player]
-    if named:
-        parts.append(f'"{ins}"' if " " in ins else ins)
-        if year:
-            parts.append(year if "-" in year else year_short)
-        if par:
-            run = re.search(r"/\s*(\d{1,4})", par)
-            color = re.sub(r"/.*", "", par).strip()
-            if color and color.lower() not in ins.lower():
-                parts.append(f'"{color}"' if " " in color else color)
-            if run:
-                parts.append("/" + run.group(1))
+    yg = bool(re.search(r"young guns|\byg\b", blob))
+    unique = bool(ins) and ins.lower() not in _GENERIC_PRODUCT and not yg
+
+    if yg:
+        product = "Young Guns"
+    elif unique:
+        product = ins
     else:
-        if year:
-            parts.append(year if "-" in year else year_short)
-        elif year_short:
-            parts.append(year_short)
-        if st and ins and st.lower() not in ins.lower():
-            parts.append(f'"{st}"' if " " in st else st)
-        if setish:
-            parts.append(f'"{setish}"' if " " in setish else setish)
-        if par:
-            run = re.search(r"/\s*(\d{1,4})", par)
-            color = re.sub(r"/.*", "", par).strip()
-            already = f"{ins} {st}".lower()
-            if color and color.lower() not in already:
-                parts.append(f'"{color}"' if " " in color else color)
-            if run:
-                parts.append("/" + run.group(1))
-        elif num:
-            parts.append("#" + num)
+        product = re.sub(r"^(upper deck|ud)\s+", "", st, flags=re.I).strip() or st
+
+    parts = [player, _q_token(product)]
+    use_year = bool(year) and (yg or not unique or "holo" in blob or "allure" in blob)
+    if use_year:
+        parts.append(year if "-" in year else year[:4])
+
+    color = re.sub(r"/.*", "", par).strip()
+    run = re.search(r"/\s*(\d{1,4})", par)
+    if color and color.lower() not in (product.lower(), "base", "parallel"):
+        parts.append(_q_token(color))
+    if run:
+        parts.append("/" + run.group(1))
+
     code = _code_num(num)
-    if code and code.lower() not in " ".join(parts).lower():
+    if code and (not unique or "holo" in blob or "renewed" in blob):
         parts.append(code)
+
     q = " ".join(x for x in parts if x)
     q += " -(lot,checklist,reprint,jumbo,bundle,album)"
-    mine = blob
+
+    mine = blob + " " + product.lower()
     exclude = []
-    for name in catalog_parallel_terms(year, st or setish, ins):
+    for name in catalog_parallel_terms(year, st or product, ins if unique else ( "Young Guns" if yg else ins)):
         key = name.lower()
-        if key in mine:
+        if key in mine or key in ("base", "young guns"):
             continue
-        token = f'"{name}"' if " " in name else name
-        if token not in exclude:
-            exclude.append(token)
+        tok = _q_token(name)
+        if tok and tok not in exclude:
+            exclude.append(tok)
+    if not yg:
+        exclude.append('"Young Guns"')
+    if "future watch" not in mine:
+        exclude.append('"Future Watch"')
     if "outburst" not in mine:
         exclude.append("outburst")
-    if "holofoil" in mine or "holo foil" in mine:
-        for extra in ('"Future Watch"', "limited"):
-            if extra.lower().strip('"') not in mine:
-                exclude.append(extra)
+    if "holo" not in mine:
+        exclude.append("holofoil")
+    # drop tokens already required in q
+    ql = q.lower()
+    exclude = [e for e in exclude if e.lower().strip('"') not in mine][:8]
     if exclude:
-        q += " -(" + ",".join(exclude[:8]) + ")"
-    return [q] if player else []
+        q += " -(" + ",".join(exclude) + ")"
+    return [q]
 
 def _clean_bucket(vals):
     vals = [v for v in vals if v and v >= 1]
@@ -1345,7 +1323,7 @@ async def comp(
     q = qs[0] if qs else " ".join(str(x) for x in [card.get("player"), ins or card.get("set"), card.get("year")] if x)
     api_hit = None
     for qtry in qs:
-        extra = await fetch_card_api(qtry, card.get("player") or "", ck, card.get("parallel") or "", card.get("number") or "", card.get("grader") or "", card.get("grade") or "")
+        extra = await fetch_card_api(qtry, card.get("player") or "", ck, card.get("parallel") or card.get("insert") or "", card.get("number") or "", card.get("grader") or "", card.get("grade") or "")
         if extra:
             api_hit = extra
             if extra.get("raw_cad") or extra.get("psa10_cad") or extra.get("sample_count"):
