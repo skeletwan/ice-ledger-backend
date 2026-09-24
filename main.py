@@ -8,6 +8,7 @@ from urllib.parse import urlparse, quote_plus
 from pathlib import Path
 from PIL import Image, ImageOps
 import httpx
+from catalog import ensure_catalog, catalog_matches, learn_card, catalog_stats
 
 XAI_API_KEY = os.environ.get("XAI_API_KEY", "")
 APP_SECRET = os.environ.get("APP_SECRET", "")
@@ -321,6 +322,22 @@ async def _jpeg_part(up: UploadFile, label: str):
     b64 = base64.b64encode(jpeg).decode("ascii")
     return {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}", "detail": "high"}}
 
+@app.get("/catalog/stats")
+async def catalog_stats_ep():
+    con = db()
+    ensure_catalog(con)
+    out = catalog_stats(con)
+    con.close()
+    return out
+
+@app.get("/catalog/search")
+async def catalog_search(q: str = "", year: str = "", player: str = ""):
+    con = db()
+    ensure_catalog(con)
+    hits = catalog_matches(con, {"player": player or q, "year": year, "set": q, "number": "", "parallel": "", "insert": q})
+    con.close()
+    return {"matches": hits}
+
 @app.post("/identify")
 async def identify(
     file: UploadFile = File(...),
@@ -483,6 +500,13 @@ async def identify(
         data["blocked"] = True
         label = data.get("sport") or "not hockey"
         data["notes"] = (data.get("notes") or "") + f" Clappers PC is hockey-only for now ({label})."
+    try:
+        con = db()
+        ensure_catalog(con)
+        data["matches"] = catalog_matches(con, data)
+        con.close()
+    except Exception:
+        data["matches"] = []
     return data
 
 
@@ -1018,6 +1042,7 @@ def init_db():
       created INTEGER NOT NULL
     )
     """)
+    ensure_catalog(con)
     con.commit()
     con.close()
 

@@ -279,6 +279,8 @@
     .item-meta { font-size:12px; color:var(--muted); line-height:1.3; }
     .item-ver { font-size:12px; color:var(--ice); font-weight:700; margin-top:2px; }
     .item-px { text-align:left; font-size:14px; font-weight:700; white-space:nowrap; margin-top:6px; padding:0; min-width:0; }
+    #catPicks { margin:8px 0 12px; display:flex; flex-direction:column; gap:6px; }
+    #catPicks button { margin:0; text-align:left; font-size:13px; padding:10px 12px; }
     .item.comment, .thread .item { padding:8px 10px; margin-bottom:6px; }
     .item.reply { margin-left:14px; padding:8px 10px; }
     .board-post { border-width:1px; padding:10px 12px; }
@@ -431,6 +433,7 @@
     <p class="status" id="resultStatus"></p>
     <div class="card" id="result">
       <div class="badge" id="badge"></div>
+      <div id="catPicks" class="hidden"></div>
       <p class="muted">Fix anything that’s off, then save.</p>
       <div class="grid">
         <div class="field" style="grid-column:1/-1"><label>Player</label><input id="f_player" /></div>
@@ -2127,6 +2130,7 @@ $("go").onclick = async () => {
     $("f_grader").value = d.grader || "Raw";
     $("f_grade").value = d.grade || "";
     $("f_cert").value = d.cert || "";
+    paintCatPicks(d.matches || []);
     if (d.hockey === false) {
       $("badge").textContent = "Not hockey — won’t save to binder";
       $("badge").className = "badge review";
@@ -2185,6 +2189,30 @@ function numOrNull(el){
   return v==="" ? null : +v;
 }
 
+function paintCatPicks(rows){
+  const box = $("catPicks");
+  if (!box) return;
+  if (!rows || !rows.length) { box.classList.add("hidden"); box.innerHTML = ""; return; }
+  box.classList.remove("hidden");
+  box.innerHTML = "<p class=\"muted\" style=\"margin:0 0 4px\">Closest checklist hits — tap one if it matches.</p>" + rows.map((m,i) =>
+    "<button type=\"button\" class=\"ghost\" data-cat=\""+i+"\">"+(m.label||"Match")+"</button>"
+  ).join("");
+  box.onclick = ev => {
+    const b = ev.target.closest("[data-cat]");
+    if (!b) return;
+    const m = rows[+b.getAttribute("data-cat")];
+    if (!m) return;
+    if (m.player) $("f_player").value = m.player;
+    if (m.year) $("f_year").value = m.year;
+    if (m.set) $("f_set").value = m.set;
+    if (m.number) $("f_number").value = m.number;
+    if (m.parallel) $("f_parallel").value = m.parallel;
+    if (m.insert) $("f_insert").value = m.insert;
+    if (m.team) $("f_team").value = m.team;
+    [...box.querySelectorAll("button")].forEach(x => x.style.borderColor = "");
+    b.style.borderColor = "var(--ice)";
+  };
+}
 function readCard(){
   return {
     player: $("f_player").value.trim(),
