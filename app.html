@@ -1139,7 +1139,7 @@ async function pullCloud(){
   const remote = data.cards || [];
   const local = load();
   const alive = v => { try { return v!=null && v!=="" && +v>=1; } catch(e){ return !!v; } };
-  const keep = ["comp","sysComp","rawComp","psa6Comp","psa7Comp","psa8Comp","psa9Comp","psa10Comp","bgs9Comp","bgs95Comp","bgs10Comp","bgsBlackComp","sgc10Comp","cost"];
+  const keep = ["comp","sysComp","rawComp","psa6Comp","psa7Comp","psa8Comp","psa9Comp","psa10Comp","bgs9Comp","bgs95Comp","bgs10Comp","bgsBlackComp","sgc10Comp","cost","histMap"];
   const map = {};
   local.concat(remote).forEach(c => {
     if (!c || !c.id) return;
@@ -1556,12 +1556,27 @@ function lastName(p){
 function pushCardHist(card){
   const v = binderCad(card);
   if (v==null || isNaN(+v)) return;
+  const k = gradeKey(card);
+  card.histMap = card.histMap || {};
+  const h = Array.isArray(card.histMap[k]) ? card.histMap[k].slice() : [];
   const day = localDay();
-  const h = Array.isArray(card.hist) ? card.hist : [];
   const last = h[h.length-1];
   if (last && last.d === day) last.v = +v;
   else h.push({ d: day, v: +v, t: new Date().toISOString() });
-  card.hist = h.slice(-400);
+  card.histMap[k] = h.slice(-400);
+  card.hist = card.histMap[k];
+}
+function gradeKey(c){
+  const g = String((c&&c.grader)||"Raw").toUpperCase();
+  const gr = String((c&&c.grade)||"").trim();
+  if (!g || g==="RAW") return "RAW";
+  return g+"|"+gr;
+}
+function cardHist(c){
+  if (!c) return [];
+  const k = gradeKey(c);
+  if (c.histMap && Array.isArray(c.histMap[k]) && c.histMap[k].length) return c.histMap[k];
+  return [];
 }
 function axisCash(v){
   const n = Math.abs(+v||0);
@@ -1655,7 +1670,7 @@ function sliceHist(h, r){
 }
 function paintCardSpark(card, elId, noteId){
   if (!localStorage.getItem(CRNG)) localStorage.setItem(CRNG, "7D");
-  let hist = sliceHist((card && card.hist) || [], cardRangeKey());
+  let hist = sliceHist(cardHist(card), cardRangeKey());
   if (!hist.length && card && binderCad(card) != null) hist = [{ v:+binderCad(card), d: localDay() }];
   const vals = hist.map(x => +x.v).filter(v => !isNaN(v));
   miniSpark(hist, elId || "cardSpark");
@@ -2856,7 +2871,7 @@ function copyValue(c){
   return n==null ? -1 : n;
 }
 function cardMove(c){
-  const hist = sliceHist((c && c.hist) || [], "7D");
+  const hist = sliceHist(cardHist(c), "7D");
   if (hist.length < 2) return null;
   const a = +hist[0].v, b = +hist[hist.length-1].v;
   if (!(a>0) || isNaN(b)) return null;

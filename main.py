@@ -570,6 +570,18 @@ def _usd_to_cad(n):
     except (TypeError, ValueError):
         return None
 
+def _sale_cad(item: dict):
+    try:
+        n = float(item.get("price"))
+    except (TypeError, ValueError):
+        return None
+    if n < 1 or n > 20000:
+        return None
+    cur = str(item.get("currency") or item.get("curr") or "USD").upper().replace("CDN", "CAD")
+    if cur in ("CAD", "C$", "CAN"):
+        return round(n, 2)
+    return _usd_to_cad(n)
+
 def _median(vals):
     vals = sorted(v for v in vals if v and v >= 1)
     if not vals:
@@ -578,10 +590,35 @@ def _median(vals):
     return vals[mid] if len(vals) % 2 else round((vals[mid - 1] + vals[mid]) / 2, 2)
 
 def _sale_bucket(item: dict) -> str | None:
-    grader = str(item.get("grader") or "").upper()
+    grader = str(item.get("grader") or "").upper().strip()
     grade = str(item.get("grade") or "").strip().lower()
     title = str(item.get("title") or "")
     blob = f"{grader} {grade} {title}".lower()
+    if grader in ("PSA",):
+        if grade.startswith("10"):
+            return "psa10_cad"
+        if grade.startswith("9") and "9.5" not in grade:
+            return "psa9_cad"
+        if grade.startswith("8"):
+            return "psa8_cad"
+        if grade.startswith("7"):
+            return "psa7_cad"
+        if grade.startswith("6"):
+            return "psa6_cad"
+    if grader in ("BGS", "BECKETT", "BECKETT GRADING SERVICES"):
+        if "black" in grade or re.search(r"black\s*label", blob):
+            return "bgs_black_cad"
+        if "9.5" in grade:
+            return "bgs95_cad"
+        if grade.startswith("10") or "pristine" in grade or "found" in grade:
+            return "bgs10_cad"
+        if grade.startswith("9"):
+            return "bgs9_cad"
+    if grader in ("SGC",) and (grade.startswith("10") or "10" in grade):
+        return "sgc10_cad"
+    if grader in ("", "RAW", "UNGRADED", "NONE", "N/A") and (not grade or grade in ("raw", "ungraded", "none")):
+        if not re.search(r"\b(psa|bgs|sgc|cgc)\b", title.lower()):
+            return "raw_cad"
     if "psa" in blob and re.search(r"\b10(\.0)?\b", blob) and "9.5" not in blob:
         return "psa10_cad"
     if "psa" in blob and re.search(r"\b9(\.0)?\b", blob) and "9.5" not in blob and not re.search(r"\b10\b", blob):
@@ -610,9 +647,37 @@ def _sale_bucket(item: dict) -> str | None:
 def _junk_title(title: str) -> bool:
     t = (title or "").lower()
     return bool(re.search(
-        r"\b(lot|lots|lot of|reprint|proxy|digital|nft|damaged|ripped|wholesale|5x|x5|10x|box break|spot)\b",
+        r"\b(lot|lots|lot of|reprint|proxy|digital|nft|damaged|ripped|creased|wholesale|5x|x5|10x|box break|spot|shipping only|pwe|sticker only|code only|digital code)\b",
         t,
     ))
+
+def _is_yg(card_or_q) -> bool:
+    s = ""
+    if isinstance(card_or_q, dict):
+        s = " ".join(str(card_or_q.get(k) or "") for k in ("insert","set","parallel","player"))
+    else:
+        s = str(card_or_q or "")
+    return bool(re.search(r"young guns|\byg\b", s.lower()))
+
+def _cache_worthy(data: dict, card: dict | None = None) -> bool:
+    if not isinstance(data, dict):
+        return False
+    raw = data.get("raw_cad")
+    try:
+        raw_n = float(data.get("raw_n") or 0)
+    except (TypeError, ValueError):
+        raw_n = 0
+    try:
+        raw_f = float(raw) if raw is not None else None
+    except (TypeError, ValueError):
+        raw_f = None
+    if raw_f is not None and raw_n <= 1 and raw_f < 8:
+        return False
+    keys = ("suggested_cad","raw_cad","psa6_cad","psa7_cad","psa8_cad","psa9_cad","psa10_cad","bgs9_cad","bgs95_cad","bgs10_cad","bgs_black_cad","sgc10_cad")
+    return any(data.get(k) for k in keys)
+
+def _drop_junk_raw(out: dict, q: str):
+    return out
 
 def _sale_fits(title: str, q: str, player: str) -> bool:
     t = (title or "").lower()
@@ -635,66 +700,79 @@ def _clean_bucket(vals):
             vals = [v for v in vals if v >= mid * 0.4]
     return vals
 
-async def fetch_card_api(q: str, player: str) -> dict | None:
-    if not CARD_API_KEY or not q:
-        return None
-    try:
-        async with httpx.AsyncClient(timeout=20) as client:
-            r = await client.get(
-                "https://www.thecardapi.com/api/v1/market/sales",
-                headers={"x-market-api-key": CARD_API_KEY},
-                params={"q": q, "limit": 25, "category": "sports"},
-            )
-        if r.status_code >= 400:
-            return None
-        body = r.json()
-    except Exception:
-        return None
+async def _card_api_rows(client, q: str, extra: dict) -> list:
+    params = {"q": q, "limit": 40, "category": "sports"}
+    params.update(extra or {})
+    r = await client.get(
+        "https://www.thecardapi.com/api/v1/market/sales",
+        headers={"x-market-api-key": CARD_API_KEY},
+        params=params,
+    )
+    if r.status_code >= 400:
+        return []
+    body = r.json()
     rows = body.get("data") if isinstance(body, dict) else body
-    if not isinstance(rows, list):
-        rows = []
-    buckets = {}
-    saw_slab = False
-    for item in rows:
-        title = str((item or {}).get("title") or "").lower()
-        if re.search(r"\b(psa|bgs|sgc|cgc)\b", title):
-            saw_slab = True
-    for item in rows:
+    return rows if isinstance(rows, list) else []
+
+def _ingest(rows, q, player, buckets, only_raw=None):
+    for item in rows or []:
         if not isinstance(item, dict):
             continue
         title = str(item.get("title") or "")
         if not _sale_fits(title, q, player):
             continue
-        try:
-            usd = float(item.get("price"))
-        except (TypeError, ValueError):
-            continue
-        if usd < 3 or usd > 20000:
+        cad = _sale_cad(item)
+        if not cad or cad < 3:
             continue
         key = _sale_bucket(item)
-        if not key:
-            continue
-        if key == "raw_cad" and saw_slab and not re.search(r"\b(raw|ungraded)\b", title.lower()):
-            continue
-        cad = _usd_to_cad(usd)
-        if not cad:
+        if only_raw is True:
+            if key and key != "raw_cad":
+                continue
+            key = "raw_cad"
+        elif only_raw is False:
+            if not key or key == "raw_cad":
+                continue
+        elif not key:
             continue
         buckets.setdefault(key, []).append(cad)
+
+async def fetch_card_api(q: str, player: str) -> dict | None:
+    if not CARD_API_KEY or not q:
+        return None
+    buckets = {}
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            raw_rows = await _card_api_rows(client, q, {"graded": "false"})
+            slab_rows = await _card_api_rows(client, q, {"graded": "true"})
+            if not raw_rows and not slab_rows:
+                mixed = await _card_api_rows(client, q, {})
+                _ingest(mixed, q, player, buckets, only_raw=None)
+            else:
+                _ingest(raw_rows, q, player, buckets, only_raw=True)
+                _ingest(slab_rows, q, player, buckets, only_raw=False)
+    except Exception:
+        return None
     if not buckets:
         return None
+    counts = {k: len(v) for k, v in buckets.items()}
     out = {k: _median(_clean_bucket(v)) for k, v in buckets.items()}
     out = {k: v for k, v in out.items() if v}
     raw = out.get("raw_cad")
     floor = max([out[k] for k in ("psa9_cad","psa10_cad","bgs95_cad","bgs10_cad") if out.get(k)] or [0])
     if raw and floor and raw >= floor * 0.85:
         out.pop("raw_cad", None)
+        counts.pop("raw_cad", None)
+    out = _drop_junk_raw(out, q)
+    if "raw_cad" not in out:
+        counts.pop("raw_cad", None)
     if not out:
         return None
     out = _order_grades(out)
+    out["raw_n"] = counts.get("raw_cad", 0)
     out["currency"] = "CAD"
-    out["sample_count"] = sum(len(v) for v in buckets.values())
+    out["sample_count"] = sum(counts.values())
     out["sources"] = ["thecardapi"]
-    out["summary"] = f"The Card API · {out['sample_count']} solds (USD×1.35)."
+    out["summary"] = f"The Card API · {out['sample_count']} solds (raw {out['raw_n']})."
     out["model"] = "card-api"
     return out
 
@@ -744,26 +822,21 @@ async def comp(
     check_cap()
     card = {k: payload.get(k) for k in ("player","year","set","number","parallel","insert","team","grader","grade","cert")}
     ck = "|".join(str(card.get(k) or "").strip().lower() for k in ("player","year","set","number","parallel","insert"))
+    day = time.strftime("%Y-%m-%d")
+    ck_day = f"{ck}|{day}"
     fresh = bool(payload.get("fresh"))
     if ck.strip("|") and not fresh:
         con = db()
-        row = con.execute("SELECT data, t FROM comp_cache WHERE k=?", (ck,)).fetchone()
+        row = con.execute("SELECT data, t FROM comp_cache WHERE k=?", (ck_day,)).fetchone()
+        if not row:
+            row = con.execute("SELECT data, t FROM comp_cache WHERE k=?", (ck,)).fetchone()
         con.close()
-        if row and (time.time() - float(row["t"])) < 2 * 86400:
+        if row and (time.time() - float(row["t"])) < 86400:
             try:
                 cached = json.loads(row["data"])
-                if isinstance(cached, dict):
-                    raw = cached.get("raw_cad") or cached.get("suggested_cad")
-                    ins = (card.get("insert") or "").lower()
-                    junk = False
-                    try:
-                        if "young guns" in ins and raw is not None and float(raw) < 25:
-                            junk = True
-                    except (TypeError, ValueError):
-                        junk = False
-                    if not junk:
-                        cached["cached"] = True
-                        return cached
+                if isinstance(cached, dict) and _cache_worthy(cached, card):
+                    cached["cached"] = True
+                    return cached
             except Exception:
                 pass
     def run_only(v):
@@ -784,6 +857,9 @@ async def comp(
         run if ("/" not in par and "/" not in ins) else None,
     ] if x)
     api_hit = await fetch_card_api(q, card.get("player") or "")
+    if not api_hit and card.get("player"):
+        q2 = " ".join(str(x) for x in [card.get("player"), ins or "Young Guns", card.get("set") or "Upper Deck", card.get("year")] if x)
+        api_hit = await fetch_card_api(q2, card.get("player") or "")
     text = ""
     used = COMP_MODEL
     err = None
@@ -972,18 +1048,27 @@ async def comp(
                 data["summary"] = (data.get("summary") or "") + " PSA 10 floored to stored PSA 9."
         except Exception:
             pass
-    if ck.strip("|") and any(data.get(k) for k in ("suggested_cad","raw_cad","psa6_cad","psa7_cad","psa8_cad","psa9_cad","psa10_cad","bgs9_cad","bgs95_cad","bgs10_cad","sgc10_cad")):
+    if ck.strip("|"):
+        data = _drop_junk_raw(data, q + " " + (card.get("insert") or ""))
         try:
-            con = db()
-            con.execute(
-                "INSERT OR REPLACE INTO comp_cache(k,data,t) VALUES(?,?,?)",
-                (ck, json.dumps(data), time.time()),
-            )
-            con.commit()
-            con.close()
-            spread_comp(ck, data)
-        except Exception:
-            pass
+            raw_f = float(data.get("raw_cad")) if data.get("raw_cad") is not None else None
+            raw_n = float(data.get("raw_n") or 0)
+        except (TypeError, ValueError):
+            raw_f, raw_n = None, 0
+        if raw_f is not None and raw_n <= 1 and raw_f < 8:
+            data.pop("raw_cad", None)
+        if _cache_worthy(data, card):
+            try:
+                con = db()
+                con.execute(
+                    "INSERT OR REPLACE INTO comp_cache(k,data,t) VALUES(?,?,?)",
+                    (ck_day, json.dumps(data), time.time()),
+                )
+                con.commit()
+                con.close()
+                spread_comp(ck, data)
+            except Exception:
+                pass
     return data
 
 def _card_fp(c: dict) -> str:
