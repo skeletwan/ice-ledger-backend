@@ -64,7 +64,7 @@
       box-shadow: 0 0 0 2px #ff2a00, 0 0 16px rgba(255,45,0,.7), 0 0 28px rgba(180,20,0,.45);
     }
     .item.grail.grail-new::after, article.grail-new::after {
-      animation: grail-burn 1.15s ease-in-out infinite;
+      animation: grail-burn 2.4s ease-in-out infinite;
     }
     .grail-tag {
       position:absolute; left:8px; top:8px; z-index:4;
@@ -78,7 +78,7 @@
     .brand { display:flex; align-items:center; }
     .brand-logo { height:28px; width:auto; display:block; }
     .auth-card .brand { justify-content:center; margin:12px 0 10px; }
-    .auth-card .brand-logo { height:52px; }
+    .auth-card .brand-logo { height:52px; border-radius:12px; overflow:hidden; }
     nav { display:flex; gap:8px; }
     nav button { width:auto; margin:0; padding:8px 12px; }
     .page { display:none; padding:16px 16px 40px; }
@@ -187,7 +187,7 @@
     button.ghost.ping { color:#7ef0d2; font-weight:800; box-shadow:inset 0 0 0 2px #7ef0d2; border-radius:10px; }
     .dock svg { width:20px; height:20px; stroke:currentColor; fill:none; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
     #tabFind.grail-new, #openGrails.grail-new {
-      animation: grail-burn 1.15s ease-in-out infinite;
+      animation: grail-burn 2.4s ease-in-out infinite;
       color:#ffb0a0;
     }
     .page { padding-bottom:120px; }
@@ -266,19 +266,19 @@
     .you-quiet { opacity:.85; }
     .filters { margin-top:8px; }
     .sec-label { margin:16px 0 8px; font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+    .item-top { display:grid; grid-template-columns:92px minmax(0,1fr); gap:10px; align-items:start; }
     .item-top > img { width:92px; height:128px; object-fit:contain; object-position:center; background:#10161c; }
-    .item-top > div:nth-child(2) { min-width:0; }
-    .thumb-well { width:92px; height:128px; border-radius:0; background:#10161c; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+    .item-top > div:nth-child(2) { min-width:0; padding-right:4px; }
+    .thumb-well { width:92px; height:128px; border-radius:0; background:#10161c; display:flex; align-items:center; justify-content:center; overflow:hidden; flex:0 0 92px; }
     .thumb-well.land { width:92px; height:64px; }
     .thumb-well img { width:100%; height:100%; object-fit:contain; object-position:center; background:transparent; border-radius:0; }
     .thumb-miss { font-size:9px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#7d93a3; text-align:center; padding:8px; }
-    .item-px { padding-bottom:2px; min-width:72px; }
-    .item { position:relative; }
+    .item { position:relative; padding:8px 10px; margin-bottom:8px; }
     .tier-tag { position:absolute; right:8px; bottom:8px; display:inline-block; margin:0; z-index:2; }
     .item h3 { margin:0 0 2px; font-size:15px; font-weight:650; }
     .item-meta { font-size:12px; color:var(--muted); line-height:1.3; }
     .item-ver { font-size:12px; color:var(--ice); font-weight:700; margin-top:2px; }
-    .item-px { text-align:right; font-size:13px; font-weight:700; white-space:nowrap; }
+    .item-px { text-align:left; font-size:14px; font-weight:700; white-space:nowrap; margin-top:6px; padding:0; min-width:0; }
     .item.comment, .thread .item { padding:8px 10px; margin-bottom:6px; }
     .item.reply { margin-left:14px; padding:8px 10px; }
     .board-post { border-width:1px; padding:10px 12px; }
@@ -577,7 +577,6 @@
     <button class="ghost" id="noteCatGrail">Grails</button>
     <button class="ghost" id="noteCatLike">Likes</button>
     <button class="ghost" id="noteCatComment">Comments</button>
-    <button class="ghost" id="noteCatMgmt">Clappers PC</button>
   </section>
   <section class="page" id="notesCatPage">
     <button class="ghost" id="backNotesHub">All alerts</button>
@@ -868,7 +867,7 @@
     <button class="ghost" id="modMailAll">Email everyone</button>
     <p class="muted" id="modMailNote"></p>
     <h3 style="font-size:15px;margin:16px 0 8px">In-app message</h3>
-    <p class="muted">Shows under Alerts as Clappers Management. Can also email.</p>
+    <p class="muted">Shows in You → From Clappers. Can also email.</p>
     <label>In-app text</label>
     <textarea id="modPushBody" rows="4" placeholder="Short notice from Clappers Management"></textarea>
     <div class="row2">
@@ -2661,9 +2660,9 @@ function cardRowHtml(c, qty, key){
   const open = qty>1 ? " data-copies=\""+String(key||cardKey(c)).replace(/"/g,"")+"\"" : " data-open=\""+c.id+"\"";
   return "<article class=\"item"+grailCls(c)+(tier?" tier-"+tier:"")+"\""+open+">"+
     "<div class=\"item-top\">"+thumbHtml(c)+"<div><h3>"+dash(c.player)+"</h3>"+
-    "<div class=\"item-meta\">"+dash(line)+"</div><div class=\"item-ver\">"+rowVersion(c)+"</div></div>"+
+    "<div class=\"item-meta\">"+dash(line)+"</div><div class=\"item-ver\">"+rowVersion(c)+"</div>"+
     priceCol(c, binderCad(c))+
-    "</div>"+
+    "</div></div>"+
     (qty>1?"<span class=\"qty-pill\">×"+qty+"</span>":"")+
     (cardLooksGrail(c)?"<span class=\"grail-tag\">Grail</span>":"")+
     (tier?"<span class=\"tier-tag "+tier+"\">"+tierLabel(tier)+"</span>":"")+
@@ -3495,7 +3494,7 @@ function pubCardHtml(c, qty, key){
   const open = qty>1 ? " data-copies=\""+String(key||cardKey(c)).replace(/"/g,"")+"\"" : " data-pub=\""+c.id+"\"";
   const line = [c.team,c.year,c.set,c.number?"#"+c.number:"",(!c.grader||c.grader==="Raw")?"Raw":[c.grader,c.grade].filter(Boolean).join(" ")].filter(Boolean).join(" · ");
   const val = publicCad(c) || (viewSlug===mySlug ? binderCad(c) : null) || asCad(c.comp);
-  return "<article class=\"item"+grailCls(c)+(pt?" tier-"+pt:"")+"\""+open+"><div class=\"item-top\">"+thumbHtml(c, viewSlug)+"<div><h3>"+(c.player||"—")+" <span class=\"heart\">♥ "+(c.likes||0)+"</span></h3><div class=\"item-meta\">"+line+"</div><div class=\"item-ver\">"+rowVersion(c)+"</div></div>"+priceCol(c, val)+"</div>"+(qty>1?"<span class=\"qty-pill\">×"+qty+"</span>":"")+(cardLooksGrail(c)?"<span class=\"grail-tag\">Grail</span>":"")+(pt?"<span class=\"tier-tag "+pt+"\">"+tierLabel(pt)+"</span>":"")+"</article>";
+  return "<article class=\"item"+grailCls(c)+(pt?" tier-"+pt:"")+"\""+open+"><div class=\"item-top\">"+thumbHtml(c, viewSlug)+"<div><h3>"+(c.player||"—")+" <span class=\"heart\">♥ "+(c.likes||0)+"</span></h3><div class=\"item-meta\">"+line+"</div><div class=\"item-ver\">"+rowVersion(c)+"</div>"+priceCol(c, val)+"</div></div>"+(qty>1?"<span class=\"qty-pill\">×"+qty+"</span>":"")+(cardLooksGrail(c)?"<span class=\"grail-tag\">Grail</span>":"")+(pt?"<span class=\"tier-tag "+pt+"\">"+tierLabel(pt)+"</span>":"")+"</article>";
 }
 function renderPubList(){
   const box = $("pubList");
@@ -4149,8 +4148,8 @@ $("feedList") && ($("feedList").onclick = ev => {
   openPublic(art.getAttribute("data-feed-slug"), art.getAttribute("data-feed-card"));
 });
 $("backNotesHub") && ($("backNotesHub").onclick = () => { show("notes"); paintNotesHub(); });
-["noteCatCard","noteCatBanner","noteCatGrail","noteCatLike","noteCatComment","noteCatMgmt"].forEach(id => {
-  $(id) && ($(id).onclick = () => openNoteCat(id==="noteCatLike"?"like":id==="noteCatComment"?"comment":id==="noteCatGrail"?"grail":id==="noteCatMgmt"?"mgmt":id==="noteCatBanner"?"banner":"card"));
+["noteCatCard","noteCatBanner","noteCatGrail","noteCatLike","noteCatComment"].forEach(id => {
+  $(id) && ($(id).onclick = () => openNoteCat(id==="noteCatLike"?"like":id==="noteCatComment"?"comment":id==="noteCatGrail"?"grail":id==="noteCatBanner"?"banner":"card"));
 });
 function paintFollow(){
   if (!$("followBtn") || !viewSlug) return;
@@ -4179,7 +4178,7 @@ async function refreshNotesBadge(){
     const mgmt = (d.notes||[]).some(x => !x.read && /clappers management/i.test(x.body||""));
     const social = (d.notes||[]).some(x => !x.read && !/clappers management/i.test(x.body||""));
     if ($("tabFind")) $("tabFind").classList.toggle("ping", social);
-    if ($("openNotes")) $("openNotes").classList.toggle("ping", n > 0);
+    if ($("openNotes")) $("openNotes").classList.toggle("ping", social);
     if ($("tabSet")) $("tabSet").classList.toggle("ping", mgmt);
     document.querySelectorAll("[data-you=youAlerts]").forEach(el => el.classList.toggle("ping", mgmt));
     const last = +(localStorage.getItem("ice-note-unread")||0);
@@ -4221,7 +4220,6 @@ async function paintNotesHub(){
   label("noteCatGrail", "Grails", "grail");
   label("noteCatLike", "Likes", "like");
   label("noteCatComment", "Comments", "comment");
-  label("noteCatMgmt", "Clappers PC", "mgmt");
 }
 async function openNoteCat(kind){
   const titles = { card:"New cards", banner:"Banners", grail:"Grails", like:"Likes", comment:"Comments", mgmt:"Clappers Management" };
