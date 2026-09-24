@@ -1425,7 +1425,6 @@ async def comp(
             con = db()
             like = pl + "|" + (yr + "|" if yr else "")
             con.execute("DELETE FROM comp_cache WHERE k LIKE ?", (like + "%",))
-            con.execute("DELETE FROM house_solds WHERE fp LIKE ?", (like + "%",))
             con.commit()
             con.close()
         except Exception:
@@ -1622,11 +1621,17 @@ async def comp(
         if pick is not None:
             data["suggested_cad"] = pick
     if not any(data.get(k) for k in money_keys):
-        data["raw_cad"] = 1
-        data["suggested_cad"] = 1
-        data["sample_count"] = data.get("sample_count") or 0
-        data["summary"] = data.get("summary") or "No solds in the lookback; $1 floor."
-        data["floor"] = True
+        prior = pack_house(ck) if ck.strip("|") else None
+        if prior and any(prior.get(k) for k in money_keys):
+            data = prior
+            data["cached"] = True
+            data["summary"] = (data.get("summary") or "") + " Kept last baseline; no solds in this 14-day window."
+        else:
+            data["raw_cad"] = 1
+            data["suggested_cad"] = 1
+            data["sample_count"] = data.get("sample_count") or 0
+            data["summary"] = data.get("summary") or "No solds in the lookback; $1 floor."
+            data["floor"] = True
     data = _order_grades(data)
     data["model"] = used
     data["card"] = card
