@@ -561,7 +561,7 @@ def _order_grades(data: dict) -> dict:
             else:
                 floor = v
     climb(("raw_cad","psa6_cad","psa7_cad","psa8_cad","psa9_cad","psa10_cad"))
-    climb(("bgs9_cad","bgs95_cad","bgs10_cad"))
+    climb(("bgs9_cad","bgs95_cad","bgs10_cad","bgs_black_cad"))
     return data
 
 def _usd_to_cad(n):
@@ -592,6 +592,8 @@ def _sale_bucket(item: dict) -> str | None:
         return "psa7_cad"
     if "psa" in blob and re.search(r"\b6(\.0)?\b", blob):
         return "psa6_cad"
+    if "bgs" in blob and re.search(r"black\s*label|blacklabel", blob):
+        return "bgs_black_cad"
     if "bgs" in blob and "9.5" in blob:
         return "bgs95_cad"
     if "bgs" in blob and re.search(r"\b10\b", blob):
@@ -652,6 +654,11 @@ async def fetch_card_api(q: str, player: str) -> dict | None:
     if not isinstance(rows, list):
         rows = []
     buckets = {}
+    saw_slab = False
+    for item in rows:
+        title = str((item or {}).get("title") or "").lower()
+        if re.search(r"\b(psa|bgs|sgc|cgc)\b", title):
+            saw_slab = True
     for item in rows:
         if not isinstance(item, dict):
             continue
@@ -666,6 +673,8 @@ async def fetch_card_api(q: str, player: str) -> dict | None:
             continue
         key = _sale_bucket(item)
         if not key:
+            continue
+        if key == "raw_cad" and saw_slab and not re.search(r"\b(raw|ungraded)\b", title.lower()):
             continue
         cad = _usd_to_cad(usd)
         if not cad:
@@ -833,6 +842,7 @@ async def comp(
             "bgs9": "bgs9_cad", "bgs 9": "bgs9_cad",
             "bgs95": "bgs95_cad", "bgs 9.5": "bgs95_cad",
             "bgs10": "bgs10_cad", "bgs 10": "bgs10_cad", "found 10": "bgs10_cad", "pristine": "bgs10_cad",
+            "bgs black": "bgs_black_cad", "black label": "bgs_black_cad", "bgs black label": "bgs_black_cad",
             "sgc10": "sgc10_cad", "sgc 10": "sgc10_cad",
         }
         for k, v in grades.items():
@@ -850,6 +860,7 @@ async def comp(
         (r"BGS\s*9\.5[^0-9]{0,12}(?:CAD|USD|C\$|US\$|\$)\s*([0-9]{1,5}(?:\.[0-9]{1,2})?)", "bgs95_cad"),
         (r"BGS\s*9(?:\.0)?[^0-9.]{0,12}(?:CAD|USD|C\$|US\$|\$)\s*([0-9]{1,5}(?:\.[0-9]{1,2})?)", "bgs9_cad"),
         (r"BGS\s*10[^0-9]{0,12}(?:CAD|USD|C\$|US\$|\$)\s*([0-9]{1,5}(?:\.[0-9]{1,2})?)", "bgs10_cad"),
+        (r"(?:BGS\s*)?Black\s*Label[^0-9]{0,12}(?:CAD|USD|C\$|US\$|\$)\s*([0-9]{1,5}(?:\.[0-9]{1,2})?)", "bgs_black_cad"),
         (r"(?:Found|Pristine)\s*10[^0-9]{0,12}(?:CAD|USD|C\$|US\$|\$)\s*([0-9]{1,5}(?:\.[0-9]{1,2})?)", "bgs10_cad"),
         (r"SGC\s*10[^0-9]{0,12}(?:CAD|USD|C\$|US\$|\$)\s*([0-9]{1,5}(?:\.[0-9]{1,2})?)", "sgc10_cad"),
         (r"(?:raw|ungraded)[^0-9]{0,16}(?:CAD|USD|C\$|US\$|\$)\s*([0-9]{1,5}(?:\.[0-9]{1,2})?)", "raw_cad"),
@@ -859,7 +870,7 @@ async def comp(
             if m:
                 data[dest] = m.group(1)
 
-    for key in ("suggested_cad", "suggested_usd", "raw_cad", "psa6_cad", "psa7_cad", "psa8_cad", "psa9_cad", "psa10_cad", "bgs9_cad", "bgs95_cad", "bgs10_cad", "sgc10_cad", "low", "high"):
+    for key in ("suggested_cad", "suggested_usd", "raw_cad", "psa6_cad", "psa7_cad", "psa8_cad", "psa9_cad", "psa10_cad", "bgs9_cad", "bgs95_cad", "bgs10_cad", "bgs_black_cad", "sgc10_cad", "low", "high"):
         n = _as_price(data.get(key))
         if n is None:
             data[key] = None
@@ -876,7 +887,7 @@ async def comp(
         data["needs_review"] = True
         data["sample_count"] = data.get("sample_count") or 0
         data["summary"] = data.get("summary") or "No Fanatics / Goldin / Heritage sold matched this copy."
-    money_keys = ("suggested_cad","suggested_usd","raw_cad","psa6_cad","psa7_cad","psa8_cad","psa9_cad","psa10_cad","bgs9_cad","bgs95_cad","bgs10_cad","sgc10_cad")
+    money_keys = ("suggested_cad","suggested_usd","raw_cad","psa6_cad","psa7_cad","psa8_cad","psa9_cad","psa10_cad","bgs9_cad","bgs95_cad","bgs10_cad","bgs_black_cad","sgc10_cad")
     if not any(data.get(k) for k in money_keys) and ck.strip("|"):
         try:
             con = db()
@@ -910,6 +921,8 @@ async def comp(
             pick = data.get("psa9_cad")
         elif g == "PSA" and gr.startswith("8"):
             pick = data.get("psa8_cad")
+        elif g == "BGS" and re.search(r"black", gr):
+            pick = data.get("bgs_black_cad")
         elif g == "BGS" and "9.5" in gr:
             pick = data.get("bgs95_cad")
         elif g == "SGC" and gr.startswith("10"):
@@ -993,6 +1006,8 @@ def _copy_sold(c: dict, data: dict):
         return data.get("psa7_cad")
     if g == "PSA" and gr.startswith("6"):
         return data.get("psa6_cad")
+    if g == "BGS" and "black" in gr:
+        return data.get("bgs_black_cad")
     if g == "BGS" and "9.5" in gr:
         return data.get("bgs95_cad")
     if g == "BGS" and gr.startswith("9"):
@@ -1018,6 +1033,7 @@ def spread_comp(ck: str, data: dict):
         ("bgs9_cad", "bgs9Comp", "BGS 9"),
         ("bgs95_cad", "bgs95Comp", "BGS 9.5"),
         ("bgs10_cad", "bgs10Comp", "BGS 10"),
+        ("bgs_black_cad", "bgsBlackComp", "BGS Black"),
         ("sgc10_cad", "sgc10Comp", "SGC 10"),
     )
     for r in rows:
@@ -1035,6 +1051,21 @@ def spread_comp(ck: str, data: dict):
                 continue
             if v < 1:
                 continue
+            if src == "raw_cad":
+                try:
+                    ten = float(data.get("psa10_cad"))
+                    if ten and v >= ten * 0.9:
+                        continue
+                except (TypeError, ValueError):
+                    pass
+            old = None
+            try:
+                old = float(c.get(field))
+            except (TypeError, ValueError):
+                old = None
+            if old is not None and old >= 1:
+                if old >= 20 and v < old * 0.4:
+                    continue
             c[field] = v
             book[label] = v
         copy = _copy_sold(c, data)
@@ -1043,9 +1074,15 @@ def spread_comp(ck: str, data: dict):
         except (TypeError, ValueError):
             copy = None
         if copy is not None and copy >= 1:
-            c["sysComp"] = copy
-            c["comp"] = copy
-            c["compAt"] = now
+            oldc = None
+            try:
+                oldc = float(c.get("comp"))
+            except (TypeError, ValueError):
+                oldc = None
+            if not (oldc is not None and oldc >= 20 and copy < oldc * 0.4):
+                c["sysComp"] = copy
+                c["comp"] = copy
+                c["compAt"] = now
         c["book"] = book
         con.execute("UPDATE cards SET data=? WHERE id=?", (json.dumps(c), r["id"]))
     con.commit()
@@ -1984,7 +2021,7 @@ async def upsert_card(payload: dict, request: Request, x_token: str | None = Hea
                 if _card_fp(o) == fp:
                     old = o
                     break
-    keep = ("comp","sysComp","rawComp","psa6Comp","psa7Comp","psa8Comp","psa9Comp","psa10Comp","bgs9Comp","bgs95Comp","bgs10Comp","sgc10Comp","book","compAt")
+    keep = ("comp","sysComp","rawComp","psa6Comp","psa7Comp","psa8Comp","psa9Comp","psa10Comp","bgs9Comp","bgs95Comp","bgs10Comp","bgsBlackComp","sgc10Comp","book","compAt")
     def _alive(v):
         try:
             return v is not None and v != "" and float(v) >= 1

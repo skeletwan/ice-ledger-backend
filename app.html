@@ -471,7 +471,7 @@
         </div>
         <div class="field"><label>Grade</label>
           <select id="f_grade">
-            <option>10</option><option>9.5</option><option>9</option><option>8.5</option><option>8</option><option>7</option><option>6</option><option>5</option>
+            <option>10</option><option>Black</option><option>9.5</option><option>9</option><option>8.5</option><option>8</option><option>7</option><option>6</option><option>5</option>
           </select>
         </div>
       </div>
@@ -496,11 +496,11 @@
           <input id="psaPickVal" type="number" step="0.01" />
         </div>
         <div>
-          <label>BGS <select id="bgsPick" style="width:auto;display:inline;padding:4px 8px;margin:0"><option>10</option><option>9.5</option><option>9</option></select></label>
+          <label>BGS <select id="bgsPick" style="width:auto;display:inline;padding:4px 8px;margin:0"><option>10</option><option>Black</option><option>9.5</option><option>9</option></select></label>
           <input id="bgsPickVal" type="number" step="0.01" />
         </div>
         <div>
-          <label>SGC <select id="sgcPick" style="width:auto;display:inline;padding:4px 8px;margin:0"><option>10</option><option>9.5</option><option>9</option></select></label>
+          <label>SGC <select id="sgcPick" style="width:auto;display:inline;padding:4px 8px;margin:0"><option>10</option><option>Black</option><option>9.5</option><option>9</option></select></label>
           <input id="sgcPickVal" type="number" step="0.01" />
         </div>
       </div>
@@ -511,7 +511,7 @@
       <input id="psa10Comp" type="hidden" />
       <input id="bgs9Comp" type="hidden" />
       <input id="bgs95Comp" type="hidden" />
-      <input id="bgs10Comp" type="hidden" />
+      <input id="bgs10Comp" type="hidden" /><input id="bgsBlackComp" type="hidden" />
       <input id="sgc10Comp" type="hidden" />
       <label>Notes</label>
       <textarea id="notes" rows="2"></textarea>
@@ -682,7 +682,7 @@
         <option>Raw</option><option>PSA</option><option>BGS</option><option>SGC</option><option>CGC</option><option>SMA</option>
       </select>
       <select id="pgNum">
-        <option>10</option><option>9.5</option><option>9</option><option>8.5</option><option>8</option><option>7</option><option>6</option>
+        <option>10</option><option>Black</option><option>9.5</option><option>9</option><option>8.5</option><option>8</option><option>7</option><option>6</option>
       </select>
     </div>
     <div class="val" style="margin-top:8px"><b id="pubPick">—</b><span id="pubPickLbl">Raw sold</span></div>
@@ -956,7 +956,7 @@
         <option>Raw</option><option>PSA</option><option>BGS</option><option>SGC</option><option>CGC</option><option>SMA</option>
       </select>
       <select id="gNum">
-        <option>10</option><option>9.5</option><option>9</option><option>8.5</option><option>8</option><option>7</option><option>6</option>
+        <option>10</option><option>Black</option><option>9.5</option><option>9</option><option>8.5</option><option>8</option><option>7</option><option>6</option>
       </select>
     </div>
     <div class="val" style="margin-top:8px"><b id="vPick">—</b><span id="vPickLbl">Raw sold</span></div>
@@ -1138,13 +1138,27 @@ async function pullCloud(){
   const data = await r.json();
   const remote = data.cards || [];
   const local = load();
+  const alive = v => { try { return v!=null && v!=="" && +v>=1; } catch(e){ return !!v; } };
+  const keep = ["comp","sysComp","rawComp","psa6Comp","psa7Comp","psa8Comp","psa9Comp","psa10Comp","bgs9Comp","bgs95Comp","bgs10Comp","bgsBlackComp","sgc10Comp","cost"];
   const map = {};
   local.concat(remote).forEach(c => {
     if (!c || !c.id) return;
     const slim = Object.assign({}, c);
     if (slim.photo && String(slim.photo).length > 200000) slim.photo = "";
     delete slim.scan;
-    map[c.id] = Object.assign(map[c.id]||{}, slim);
+    const prev = map[c.id] || {};
+    const out = Object.assign({}, prev, slim);
+    keep.forEach(k => {
+      if (!alive(slim[k]) && alive(prev[k])) out[k] = prev[k];
+    });
+    const pb = (prev.book && typeof prev.book==="object") ? prev.book : {};
+    const sb = (slim.book && typeof slim.book==="object") ? slim.book : {};
+    const book = Object.assign({}, pb);
+    Object.keys(sb).forEach(k => { if (alive(sb[k])) book[k] = sb[k]; else if (alive(pb[k])) book[k] = pb[k]; });
+    Object.keys(pb).forEach(k => { if (!alive(book[k]) && alive(pb[k])) book[k] = pb[k]; });
+    out.book = book;
+    if (Array.isArray(prev.hist) && (!slim.hist || slim.hist.length < prev.hist.length)) out.hist = prev.hist;
+    map[c.id] = out;
   });
   try { localStorage.setItem(KEY, JSON.stringify(Object.values(map))); }
   catch(e) {
@@ -2337,7 +2351,7 @@ function lockSave(ready, label){
 function paintGradeLooks(){
   const map = {
     psa: { "10":"psa10Comp","9":"psa9Comp","8":"psa8Comp","7":"psa7Comp","6":"psa6Comp" },
-    bgs: { "10":"bgs10Comp","9.5":"bgs95Comp","9":"bgs9Comp" },
+    bgs: { "10":"bgs10Comp","Black":"bgsBlackComp","9.5":"bgs95Comp","9":"bgs9Comp" },
     sgc: { "10":"sgc10Comp","9.5":"sgc10Comp","9":"sgc10Comp" }
   };
   [["psaPick","psaPickVal","psa"],["bgsPick","bgsPickVal","bgs"],["sgcPick","sgcPickVal","sgc"]].forEach(row => {
@@ -2349,7 +2363,7 @@ function bindGradeLooks(){
   ["psaPick","bgsPick","sgcPick"].forEach(id => { $(id) && ($(id).onchange = paintGradeLooks); });
   const map = {
     psa: { "10":"psa10Comp","9":"psa9Comp","8":"psa8Comp","7":"psa7Comp","6":"psa6Comp" },
-    bgs: { "10":"bgs10Comp","9.5":"bgs95Comp","9":"bgs9Comp" },
+    bgs: { "10":"bgs10Comp","Black":"bgsBlackComp","9.5":"bgs95Comp","9":"bgs9Comp" },
     sgc: { "10":"sgc10Comp","9.5":"sgc10Comp","9":"sgc10Comp" }
   };
   [["psaPickVal","psaPick","psa"],["bgsPickVal","bgsPick","bgs"],["sgcPickVal","sgcPick","sgc"]].forEach(row => {
@@ -2361,7 +2375,7 @@ function bindGradeLooks(){
 }
 bindGradeLooks();
 function clearCompFields(){
-  ["comp","rawComp","psa6Comp","psa7Comp","psa8Comp","psa9Comp","psa10Comp","bgs9Comp","bgs95Comp","bgs10Comp","sgc10Comp","psaPickVal","bgsPickVal","sgcPickVal","e_raw","e_psa8","e_psa9","e_psa10"].forEach(id => { if ($(id)) $(id).value = ""; });
+  ["comp","rawComp","psa6Comp","psa7Comp","psa8Comp","psa9Comp","psa10Comp","bgs9Comp","bgs95Comp","bgs10Comp","bgsBlackComp","sgc10Comp","psaPickVal","bgsPickVal","sgcPickVal","e_raw","e_psa8","e_psa9","e_psa10"].forEach(id => { if ($(id)) $(id).value = ""; });
   if ($("psaPick")) $("psaPick").value = "10";
   if ($("bgsPick")) $("bgsPick").value = "10";
   if ($("sgcPick")) $("sgcPick").value = "10";
@@ -2377,6 +2391,7 @@ function soldForCopy(c){
   if (g === "PSA" && /^8/.test(gr)) return c.psa8_cad != null ? c.psa8_cad : null;
   if (g === "PSA" && /^7/.test(gr)) return c.psa7_cad != null ? c.psa7_cad : null;
   if (g === "PSA" && /^6/.test(gr)) return c.psa6_cad != null ? c.psa6_cad : null;
+  if (g === "BGS" && /black/i.test(gr)) return c.bgs_black_cad != null ? c.bgs_black_cad : null;
   if (g === "BGS" && /found|pristine|^10(\b|\.0)/i.test(gr)) return c.bgs10_cad != null ? c.bgs10_cad : null;
   if (g === "BGS" && /9\.5/.test(gr)) return c.bgs95_cad != null ? c.bgs95_cad : null;
   if (g === "SGC" && /(^|\s)10(\b|\.0)|gem/i.test(gr)) return c.sgc10_cad != null ? c.sgc10_cad : null;
@@ -2413,7 +2428,7 @@ async function lookupComp(){
       c.raw_cad = saved.rawComp; c.suggested_cad = saved.comp || saved.sysComp || saved.rawComp;
       c.psa6_cad = saved.psa6Comp; c.psa7_cad = saved.psa7Comp; c.psa8_cad = saved.psa8Comp;
       c.psa9_cad = saved.psa9Comp; c.psa10_cad = saved.psa10Comp;
-      c.bgs9_cad = saved.bgs9Comp; c.bgs95_cad = saved.bgs95Comp; c.bgs10_cad = saved.bgs10Comp;
+      c.bgs9_cad = saved.bgs9Comp; c.bgs95_cad = saved.bgs95Comp; c.bgs10_cad = saved.bgs10Comp; c.bgs_black_cad = saved.bgsBlackComp;
       c.sgc10_cad = saved.sgc10Comp;
       c.cached = true;
       c.summary = (c.summary||"") + " Kept sold already in your binder.";
@@ -2444,6 +2459,7 @@ async function lookupComp(){
   put("bgs9Comp", c.bgs9_cad);
   put("bgs95Comp", c.bgs95_cad);
   put("bgs10Comp", c.bgs10_cad);
+  put("bgsBlackComp", c.bgs_black_cad);
   put("sgc10Comp", c.sgc10_cad);
   if ($("psaPick")) $("psaPick").value = "10";
   if ($("bgsPick")) $("bgsPick").value = "10";
@@ -2541,6 +2557,7 @@ async function saveToBinder(ev){
     bgs9Comp: numOrNull("bgs9Comp"),
     bgs95Comp: numOrNull("bgs95Comp"),
     bgs10Comp: numOrNull("bgs10Comp"),
+    bgsBlackComp: numOrNull("bgsBlackComp"),
     sgc10Comp: numOrNull("sgc10Comp"),
     book: {
       Raw: numOrNull("rawComp"),
@@ -2552,6 +2569,7 @@ async function saveToBinder(ev){
       "BGS 9": numOrNull("bgs9Comp"),
       "BGS 9.5": numOrNull("bgs95Comp"),
       "BGS 10": numOrNull("bgs10Comp"),
+      "BGS Black": numOrNull("bgsBlackComp"),
       "SGC 10": numOrNull("sgc10Comp")
     },
     compAt: comp==null ? null : new Date().toISOString(),
@@ -2614,6 +2632,7 @@ function bookOf(c){
   if (c.bgs9Comp!=null) b["BGS 9"] = c.bgs9Comp;
   if (c.bgs95Comp!=null) b["BGS 9.5"] = c.bgs95Comp;
   if (c.bgs10Comp!=null) b["BGS 10"] = c.bgs10Comp;
+  if (c.bgsBlackComp!=null) b["BGS Black"] = c.bgsBlackComp;
   if (c.sgc10Comp!=null) b["SGC 10"] = c.sgc10Comp;
   return b;
 }
@@ -2755,6 +2774,7 @@ function binderCad(c){
   if (g==="PSA" && gr.startsWith("7")) return asCad(bookGet(c,"PSA","7")) || asCad(c.psa7Comp);
   if (g==="PSA" && gr.startsWith("6")) return asCad(bookGet(c,"PSA","6")) || asCad(c.psa6Comp);
   if (g==="BGS" && gr.indexOf("9.5")>=0) return asCad(bookGet(c,"BGS","9.5")) || asCad(c.bgs95Comp);
+  if (g==="BGS" && /black/i.test(gr)) return asCad(bookGet(c,"BGS","Black")) || asCad(c.bgsBlackComp);
   if (g==="BGS" && gr.startsWith("10")) return asCad(bookGet(c,"BGS","10")) || asCad(c.bgs10Comp);
   if (g==="BGS" && gr.startsWith("9")) return asCad(bookGet(c,"BGS","9")) || asCad(c.bgs9Comp);
   if (g==="SGC" && gr.startsWith("10")) return asCad(bookGet(c,"SGC","10")) || asCad(c.sgc10Comp);
@@ -2781,6 +2801,7 @@ function soldForCopyFromApi(card, d){
   }
   if (g==="BGS") {
     if (gr.indexOf("9.5")>=0) return d.bgs95_cad;
+    if (/black/i.test(gr)) return d.bgs_black_cad;
     if (gr.startsWith("10")) return d.bgs10_cad;
     if (gr.startsWith("9")) return d.bgs9_cad;
   }
@@ -3137,15 +3158,8 @@ function orderGrades(card){
     });
   };
   climb([["Raw","rawComp"],["PSA 6","psa6Comp"],["PSA 7","psa7Comp"],["PSA 8","psa8Comp"],["PSA 9","psa9Comp"],["PSA 10","psa10Comp"]]);
-  climb([["BGS 9","bgs9Comp"],["BGS 9.5","bgs95Comp"],["BGS 10","bgs10Comp"]]);
+  climb([["BGS 9","bgs9Comp"],["BGS 9.5","bgs95Comp"],["BGS 10","bgs10Comp"],["BGS Black","bgsBlackComp"]]);
   card.book = b;
-  const raw = keepMoney(card.rawComp, b.Raw);
-  const ten = keepMoney(card.psa10Comp, b["PSA 10"]);
-  if (raw && ten && raw >= ten * 0.9) {
-    card.rawComp = null;
-    delete b.Raw;
-    if (!card.grader || card.grader === "Raw") card.comp = null;
-  }
   return card;
 }
 function keepMoney(next, prev){
@@ -3159,6 +3173,8 @@ function keepMoney(next, prev){
   return null;
 }
 function applyCompObj(card, c){
+  c = c || {};
+  if (c.raw_cad != null && c.psa10_cad != null && +c.raw_cad >= +c.psa10_cad * 0.9) c.raw_cad = null;
   const rawCard = !card.grader || card.grader === "Raw";
   if (c.raw_cad != null) card.rawComp = keepMoney(c.raw_cad, card.rawComp);
   if (c.psa6_cad != null) card.psa6Comp = keepMoney(c.psa6_cad, card.psa6Comp);
@@ -3169,6 +3185,7 @@ function applyCompObj(card, c){
   if (c.bgs9_cad != null) card.bgs9Comp = keepMoney(c.bgs9_cad, card.bgs9Comp);
   if (c.bgs95_cad != null) card.bgs95Comp = keepMoney(c.bgs95_cad, card.bgs95Comp);
   if (c.bgs10_cad != null) card.bgs10Comp = keepMoney(c.bgs10_cad, card.bgs10Comp);
+  if (c.bgs_black_cad != null) card.bgsBlackComp = keepMoney(c.bgs_black_cad, card.bgsBlackComp);
   if (c.sgc10_cad != null) card.sgc10Comp = keepMoney(c.sgc10_cad, card.sgc10Comp);
   const prev = card.book || {};
   card.book = Object.assign({}, prev);
@@ -3182,20 +3199,16 @@ function applyCompObj(card, c){
     ["BGS 9", c.bgs9_cad, card.bgs9Comp],
     ["BGS 9.5", c.bgs95_cad, card.bgs95Comp],
     ["BGS 10", c.bgs10_cad, card.bgs10Comp],
+    ["BGS Black", c.bgs_black_cad, card.bgsBlackComp],
     ["SGC 10", c.sgc10_cad, card.sgc10Comp]
   ].forEach(row => {
     const held = keepMoney(row[1], prev[row[0]] != null ? prev[row[0]] : row[2]);
     if (held != null) card.book[row[0]] = held;
   });
-  if (rawCard) {
-    card.comp = card.rawComp != null ? card.rawComp : null;
+  const copy = rawCard ? (c.raw_cad != null ? c.raw_cad : card.rawComp) : soldForCopyFromApi(card, c);
+  if (copy != null && +copy >= 1) {
+    card.comp = keepMoney(copy, card.comp);
     card.sysComp = card.comp;
-  } else {
-    const copy = soldForCopyFromApi(card, c);
-    if (copy != null && +copy >= 1) {
-      card.comp = keepMoney(copy, card.comp);
-      card.sysComp = card.comp;
-    }
   }
   card.compAt = new Date().toISOString();
   orderGrades(card);
