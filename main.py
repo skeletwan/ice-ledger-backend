@@ -690,7 +690,29 @@ def _cache_worthy(data: dict, card: dict | None = None) -> bool:
 def _drop_junk_raw(out: dict, q: str):
     return out
 
-def _sale_fits(title: str, q: str, player: str) -> bool:
+PAR_FLAGS = (
+    "gold", "orange", "red", "blue", "green", "purple", "pink", "black", "silver",
+    "rainbow", "ice", "canvas", "acetate", "outburst", "extravagance", "exclusive",
+    "high gloss", "spectrum", "superfractor", "printing plate", "clear cut",
+    "die-cut", "die cut", "holographic", "precious metal", "pmg", "jade", "emerald",
+    "sapphire", "ruby", "bronze", "platinum", "yellow", "teal",
+)
+
+def _par_need(parallel: str) -> list:
+    p = re.sub(r"\s+", " ", (parallel or "").strip().lower())
+    if not p or p in ("base", "none", "n/a"):
+        return []
+    need = []
+    run = re.search(r"/\s*(\d{1,4})", p)
+    color = re.sub(r"/.*", "", p).strip()
+    color = re.sub(r"[^a-z0-9 /]+", " ", color).strip()
+    if color and color not in ("parallel", "color"):
+        need.append(color)
+    if run:
+        need.append("/" + run.group(1))
+    return need
+
+def _sale_fits(title: str, q: str, player: str, parallel: str = "", number: str = "") -> bool:
     t = (title or "").lower()
     parts = (player or "").strip().split()
     last = parts[-1].lower() if parts else ""
@@ -712,32 +734,51 @@ def _sale_fits(title: str, q: str, player: str) -> bool:
             return False
     if "jumbo" not in ql and "jumbo" in t:
         return False
+    need = _par_need(parallel)
+    if need:
+        for n in need:
+            if n.startswith("/"):
+                if not re.search(r"/\s*" + re.escape(n[1:]) + r"\b", t):
+                    return False
+            elif n not in t:
+                return False
+    num = re.sub(r"[^\d]", "", str(number or "").split("/")[0])
+    if num and len(num) >= 2 and num not in ("10", "20", "23", "24"):
+        if num not in t:
+            return False
+    if not need:
+        if any(flag in t for flag in PAR_FLAGS if flag not in ql):
+            if re.search(r"/\s*\d{1,4}\b", t) or any(flag in t for flag in (
+                "orange", "red rainbow", "gold vinyl", "superfractor", "printing plate",
+                "outburst", "extravagance", "canvas", "acetate", "clear cut",
+            )):
+                return False
     return True
 
 def search_queries(card: dict) -> list:
     player = str(card.get("player") or "").strip()
-    last = player.split()[-1] if player else ""
     year = str(card.get("year") or "").strip()
     year_short = year[:4] if year else ""
     ins = str(card.get("insert") or "").strip()
     st = str(card.get("set") or "").strip()
     par = str(card.get("parallel") or "").strip()
+    if par.lower() in ("base", "none", "n/a"):
+        par = ""
     num = str(card.get("number") or "").strip()
     num = re.sub(r"\s*\d+\s*/\s*\d+\s*", " ", num).strip()
-    out = []
-    for bits in (
-        [player, ins or st, year_short, par],
-        [player, year_short],
-        [player, ins or st],
-        [player, num, year_short] if num else None,
-        [last, ins or st, year_short],
-    ):
-        if not bits:
-            continue
-        q = " ".join(str(x) for x in bits if x)
-        if q and q not in out:
-            out.append(q)
-    return out[:5]
+    num = re.sub(r"^#+", "", num)
+    setish = ins or st
+    if re.search(r"young guns|\byg\b", (ins + " " + st).lower()) and "young guns" not in setish.lower():
+        setish = (setish + " Young Guns").strip()
+    q = " ".join(x for x in [player, year_short, setish, par, ("#" + num) if num else ""] if x)
+    out = [q] if q else []
+    if par and player:
+        out.append(" ".join(x for x in [player, par, year_short, setish] if x))
+    seen = []
+    for item in out:
+        if item and item not in seen:
+            seen.append(item)
+    return seen[:2]
 
 def _clean_bucket(vals):
     vals = [v for v in vals if v and v >= 1]
@@ -948,12 +989,12 @@ def load_house_solds(fp: str) -> dict:
         return {}
     return buckets
 
-def _ingest(rows, q, player, buckets, only_raw=None, sales=None):
+def _ingest(rows, q, player, buckets, only_raw=None, sales=None, parallel="", number=""):
     for item in rows or []:
         if not isinstance(item, dict):
             continue
         title = str(item.get("title") or "")
-        if not _sale_fits(title, q, player):
+        if not _sale_fits(title, q, player, parallel, number):
             continue
         cad = _sale_cad(item)
         if not cad or cad < 1:
@@ -1004,7 +1045,7 @@ async def _card_api_rows(client, q: str, extra: dict) -> list:
             break
     return rows
 
-async def fetch_card_api(q: str, player: str, fp: str = "") -> dict | None:
+async def fetch_card_api(q: str, player: str, fp: str = "", parallel: str = "", number: str = "") -> dict | None:
     if not CARD_API_KEY or not q:
         return None
     buckets = {}
@@ -1014,9 +1055,9 @@ async def fetch_card_api(q: str, player: str, fp: str = "") -> dict | None:
             raw_rows = await _card_api_rows(client, q, {"graded": "false"})
             slab_rows = await _card_api_rows(client, q, {"graded": "true"})
             mixed = await _card_api_rows(client, q, {})
-            _ingest(raw_rows, q, player, buckets, only_raw=True, sales=sales)
-            _ingest(slab_rows, q, player, buckets, only_raw=False, sales=sales)
-            _ingest(mixed, q, player, buckets, only_raw=None, sales=sales)
+            _ingest(raw_rows, q, player, buckets, only_raw=True, sales=sales, parallel=parallel, number=number)
+            _ingest(slab_rows, q, player, buckets, only_raw=False, sales=sales, parallel=parallel, number=number)
+            _ingest(mixed, q, player, buckets, only_raw=None, sales=sales, parallel=parallel, number=number)
     except Exception:
         return None
     if fp:
@@ -1212,7 +1253,7 @@ async def comp(
     q = qs[0] if qs else " ".join(str(x) for x in [card.get("player"), ins or card.get("set"), card.get("year")] if x)
     api_hit = None
     for qtry in qs:
-        extra = await fetch_card_api(qtry, card.get("player") or "", ck)
+        extra = await fetch_card_api(qtry, card.get("player") or "", ck, card.get("parallel") or "", card.get("number") or "")
         if extra:
             api_hit = extra
             if extra.get("raw_cad") or extra.get("psa10_cad") or extra.get("sample_count"):
