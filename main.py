@@ -8,7 +8,7 @@ from urllib.parse import urlparse, quote_plus
 from pathlib import Path
 from PIL import Image, ImageOps
 import httpx
-from catalog import ensure_catalog, catalog_matches, learn_card, catalog_stats
+from catalog import ensure_catalog, catalog_matches, vote_card, catalog_stats
 
 XAI_API_KEY = os.environ.get("XAI_API_KEY", "")
 APP_SECRET = os.environ.get("APP_SECRET", "")
@@ -499,7 +499,7 @@ async def identify(
         data["needs_review"] = True
         data["blocked"] = True
         label = data.get("sport") or "not hockey"
-        data["notes"] = (data.get("notes") or "") + f" Clappers PC is hockey-only for now ({label})."
+        data["notes"] = (data.get("notes") or "") + " Not a hockey card. Clappers PC only catalogs pro hockey."
     try:
         con = db()
         ensure_catalog(con)
@@ -511,29 +511,36 @@ async def identify(
 
 
 COMP_MODEL = os.environ.get("COMP_MODEL", "grok-4-1-fast-non-reasoning")
-COMP_PROMPT = """You may use AT MOST ONE web_search. Put the Card line below in that search as-is (add "sold" if needed). Do not change it to a different grade or drop patch/auto/parallel.
-Search recent SOLD / completed hockey card sales for THAT exact copy only.
-Prefer public sold results and Fanatics Collect auction history. Do not scrape eBay. Do not use 130point.
-Card: {card}
+COMP_PROMPT = """You may use AT MOST ONE web_search.
+Search this exact string (do not drop player, year, set, card #, /print-run, or parallel):
+{card}
+Only look at public SOLD / completed lots on Fanatics Collect, Goldin Auctions, and Heritage Auctions.
+Do not scrape eBay. Do not open 130point. Do not use asking prices or live bids.
+From THAT ONE search, fill every grade you actually see for this same player / year / set / number / parallel. Prefer the newest sold date. Ignore a 2022 lot if a 2025–2026 sold exists. Leave a grade null if you did not see a sold of that grade. Do not guess. Do not copy raw into PSA 10 or PSA 9 into PSA 10.
+Print run is /249 not 047/249.
 Return ONLY JSON, no markdown:
 {{
   "suggested_cad": number|null,
-  "suggested_usd": number|null,
+  "raw_cad": number|null,
+  "psa6_cad": number|null,
+  "psa7_cad": number|null,
+  "psa8_cad": number|null,
+  "psa9_cad": number|null,
+  "psa10_cad": number|null,
+  "bgs9_cad": number|null,
+  "bgs95_cad": number|null,
+  "bgs10_cad": number|null,
+  "sgc10_cad": number|null,
   "low": number|null,
   "high": number|null,
-  "currency": "CAD"|"USD"|null,
+  "currency": "CAD"|null,
   "sample_count": number,
-  "confidence": number,
   "needs_review": boolean,
   "summary": string,
   "sources": [string]
 }}
-suggested_cad is the median sold CAD for this exact copy (same player AND year AND set AND card number AND parallel/insert AND grade).
-If the search hits a different player, set, number, or parallel, set suggested_cad to null and needs_review true. Do not invent a number from a cousin card (other year, other insert, raw vs slab, base vs patch).
-Ignore lots, team sets, wax, digital, and asking prices.
-If the card is PSA 10, suggested_cad MUST be a PSA 10 sold, not raw. PSA 10 should not come in below a PSA 9 of the same card. If BGS 9.5 / SGC 10, same rule.
-Only use sold sale prices. Never use the card number, year, print run, or cert as a price.
-Convert USD to CAD at 1.35.
+suggested_cad is the sold that matches the scanned copy's grader/grade when present, else raw_cad. Convert USD at 1.35.
+Never use the card number, year, print run, or cert as a price.
 """
 
 def _extract_response_text(body: dict) -> str:
@@ -581,13 +588,13 @@ async def comp(
         raise HTTPException(500, "XAI_API_KEY not set on server")
     check_cap()
     card = {k: payload.get(k) for k in ("player","year","set","number","parallel","insert","team","grader","grade","cert")}
-    ck = "|".join(str(card.get(k) or "").strip().lower() for k in ("player","year","set","number","parallel","insert","grader","grade"))
+    ck = "|".join(str(card.get(k) or "").strip().lower() for k in ("player","year","set","number","parallel","insert"))
     fresh = bool(payload.get("fresh"))
     if ck.strip("|") and not fresh:
         con = db()
         row = con.execute("SELECT data, t FROM comp_cache WHERE k=?", (ck,)).fetchone()
         con.close()
-        if row and (time.time() - float(row["t"])) < 7 * 86400:
+        if row and (time.time() - float(row["t"])) < 2 * 86400:
             try:
                 cached = json.loads(row["data"])
                 if isinstance(cached, dict):
@@ -596,14 +603,24 @@ async def comp(
             except Exception:
                 pass
     def run_only(v):
-        return re.sub(r"\b\d+\s*/\s*(\d+)\b", r"/\1", str(v or ""))
+        s = re.sub(r"\b\d+\s*/\s*(\d+)\b", r"/\1", str(v or ""))
+        s = re.sub(r"\b\d+\s+of\s+(\d+)\b", r"/\1", s, flags=re.I)
+        return s
+    num = str(card.get("number") or "").strip()
+    run = ""
+    m = re.search(r"(\d+)\s*/\s*(\d+)", num)
+    if m:
+        run = "/" + m.group(2)
+        num = re.sub(r"\s*\d+\s*/\s*\d+\s*", " ", num).strip()
+    par = run_only(card.get("parallel"))
+    ins = run_only(card.get("insert"))
     bits = [
         card.get("year"), card.get("player"), card.get("set"),
-        ("#"+str(card.get("number"))) if card.get("number") else None,
-        run_only(card.get("insert")), run_only(card.get("parallel")),
-        None if not card.get("grader") or card.get("grader")=="Raw" else str(card.get("grader"))+" "+str(card.get("grade") or ""),
-        "raw" if (not card.get("grader") or card.get("grader")=="Raw") else None,
-        "hockey card sold",
+        ("#"+num) if num else None,
+        ins, par,
+        run if ("/" not in par and "/" not in ins) else None,
+        "sold",
+        "Fanatics Collect OR Goldin OR Heritage",
     ]
     label = " ".join(str(x) for x in bits if x)
     headers = {"Authorization": f"Bearer {XAI_API_KEY}", "Content-Type": "application/json"}
@@ -650,9 +667,12 @@ async def comp(
     if isinstance(grades, dict):
         alias = {
             "raw": "raw_cad", "raw_cad": "raw_cad",
+            "psa6": "psa6_cad", "psa 6": "psa6_cad",
+            "psa7": "psa7_cad", "psa 7": "psa7_cad",
             "psa8": "psa8_cad", "psa 8": "psa8_cad",
             "psa9": "psa9_cad", "psa 9": "psa9_cad",
             "psa10": "psa10_cad", "psa 10": "psa10_cad",
+            "bgs9": "bgs9_cad", "bgs 9": "bgs9_cad",
             "bgs95": "bgs95_cad", "bgs 9.5": "bgs95_cad",
             "bgs10": "bgs10_cad", "bgs 10": "bgs10_cad", "found 10": "bgs10_cad", "pristine": "bgs10_cad",
             "sgc10": "sgc10_cad", "sgc 10": "sgc10_cad",
@@ -667,7 +687,10 @@ async def comp(
         (r"PSA\s*10[^0-9]{0,12}(?:CAD|USD|C\$|US\$|\$)\s*([0-9]{1,5}(?:\.[0-9]{1,2})?)", "psa10_cad"),
         (r"PSA\s*9(?:\.0)?[^0-9.]{0,12}(?:CAD|USD|C\$|US\$|\$)\s*([0-9]{1,5}(?:\.[0-9]{1,2})?)", "psa9_cad"),
         (r"PSA\s*8(?:\.0)?[^0-9.]{0,12}(?:CAD|USD|C\$|US\$|\$)\s*([0-9]{1,5}(?:\.[0-9]{1,2})?)", "psa8_cad"),
+        (r"PSA\s*7(?:\.0)?[^0-9.]{0,12}(?:CAD|USD|C\$|US\$|\$)\s*([0-9]{1,5}(?:\.[0-9]{1,2})?)", "psa7_cad"),
+        (r"PSA\s*6(?:\.0)?[^0-9.]{0,12}(?:CAD|USD|C\$|US\$|\$)\s*([0-9]{1,5}(?:\.[0-9]{1,2})?)", "psa6_cad"),
         (r"BGS\s*9\.5[^0-9]{0,12}(?:CAD|USD|C\$|US\$|\$)\s*([0-9]{1,5}(?:\.[0-9]{1,2})?)", "bgs95_cad"),
+        (r"BGS\s*9(?:\.0)?[^0-9.]{0,12}(?:CAD|USD|C\$|US\$|\$)\s*([0-9]{1,5}(?:\.[0-9]{1,2})?)", "bgs9_cad"),
         (r"BGS\s*10[^0-9]{0,12}(?:CAD|USD|C\$|US\$|\$)\s*([0-9]{1,5}(?:\.[0-9]{1,2})?)", "bgs10_cad"),
         (r"(?:Found|Pristine)\s*10[^0-9]{0,12}(?:CAD|USD|C\$|US\$|\$)\s*([0-9]{1,5}(?:\.[0-9]{1,2})?)", "bgs10_cad"),
         (r"SGC\s*10[^0-9]{0,12}(?:CAD|USD|C\$|US\$|\$)\s*([0-9]{1,5}(?:\.[0-9]{1,2})?)", "sgc10_cad"),
@@ -678,7 +701,7 @@ async def comp(
             if m:
                 data[dest] = m.group(1)
 
-    for key in ("suggested_cad", "suggested_usd", "raw_cad", "psa8_cad", "psa9_cad", "psa10_cad", "bgs95_cad", "bgs10_cad", "sgc10_cad", "low", "high"):
+    for key in ("suggested_cad", "suggested_usd", "raw_cad", "psa6_cad", "psa7_cad", "psa8_cad", "psa9_cad", "psa10_cad", "bgs9_cad", "bgs95_cad", "bgs10_cad", "sgc10_cad", "low", "high"):
         n = _as_price(data.get(key))
         if n is None:
             data[key] = None
@@ -691,13 +714,10 @@ async def comp(
         v = _as_price(m)
         if v is not None and not _looks_like_card_no(v):
             nums.append(v)
-    if data.get("suggested_cad") is None and data.get("suggested_usd") is None and nums:
-        mid = sorted(nums)[len(nums)//2]
-        data["suggested_cad"] = round(mid, 2)
-        data["low"] = data.get("low") or min(nums)
-        data["high"] = data.get("high") or max(nums)
+    if data.get("suggested_cad") is None and data.get("suggested_usd") is None:
         data["needs_review"] = True
-        data["summary"] = data.get("summary") or f"Estimated from sold text around ${mid:.0f}"
+        data["sample_count"] = data.get("sample_count") or 0
+        data["summary"] = data.get("summary") or "No Fanatics / Goldin / Heritage sold matched this copy."
     data["model"] = used
     data["card"] = card
     if err and not data.get("suggested_cad") and not data.get("suggested_usd"):
@@ -738,7 +758,7 @@ async def comp(
                 data["summary"] = (data.get("summary") or "") + " PSA 10 floored to stored PSA 9."
         except Exception:
             pass
-    if ck.strip("|") and (data.get("suggested_cad") or data.get("raw_cad") or data.get("psa10_cad")):
+    if ck.strip("|") and any(data.get(k) for k in ("suggested_cad","raw_cad","psa6_cad","psa7_cad","psa8_cad","psa9_cad","psa10_cad","bgs9_cad","bgs95_cad","bgs10_cad","sgc10_cad")):
         try:
             con = db()
             con.execute(
@@ -747,32 +767,78 @@ async def comp(
             )
             con.commit()
             con.close()
-            sug = data.get("suggested_cad") or data.get("suggested_usd")
-            if sug is not None:
-                spread_comp(ck, float(sug))
+            spread_comp(ck, data)
         except Exception:
             pass
     return data
 
-def _card_ck(c: dict) -> str:
+def _card_fp(c: dict) -> str:
     def n(v):
         return str(v or "").strip().lower()
-    return "|".join(n(c.get(k)) for k in ("player","year","set","number","parallel","insert","grader","grade"))
+    return "|".join(n(c.get(k)) for k in ("player","year","set","number","parallel","insert"))
 
-def spread_comp(ck: str, sug: float):
+def _copy_sold(c: dict, data: dict):
+    g = str(c.get("grader") or "Raw").upper()
+    gr = str(c.get("grade") or "").strip()
+    if g in ("", "RAW") or not gr:
+        return data.get("raw_cad") or data.get("suggested_cad")
+    if g == "PSA" and gr.startswith("10"):
+        return data.get("psa10_cad") or data.get("suggested_cad")
+    if g == "PSA" and gr.startswith("9"):
+        return data.get("psa9_cad") or data.get("suggested_cad")
+    if g == "PSA" and gr.startswith("8"):
+        return data.get("psa8_cad") or data.get("suggested_cad")
+    if g == "PSA" and gr.startswith("7"):
+        return data.get("psa7_cad") or data.get("suggested_cad")
+    if g == "PSA" and gr.startswith("6"):
+        return data.get("psa6_cad") or data.get("suggested_cad")
+    if g == "BGS" and "9.5" in gr:
+        return data.get("bgs95_cad") or data.get("suggested_cad")
+    if g == "BGS" and gr.startswith("9"):
+        return data.get("bgs9_cad") or data.get("suggested_cad")
+    if g == "BGS" and gr.startswith("10"):
+        return data.get("bgs10_cad") or data.get("suggested_cad")
+    if g == "SGC" and gr.startswith("10"):
+        return data.get("sgc10_cad") or data.get("suggested_cad")
+    return data.get("suggested_cad")
+
+def spread_comp(ck: str, data: dict):
+    """Push latest house solds onto every saved copy of this card."""
     con = db()
     rows = con.execute("SELECT id, data FROM cards").fetchall()
+    now = time.strftime("%Y-%m-%dT%H:%M:%SZ")
+    fields = (
+        ("raw_cad", "rawComp", "Raw"),
+        ("psa6_cad", "psa6Comp", "PSA 6"),
+        ("psa7_cad", "psa7Comp", "PSA 7"),
+        ("psa8_cad", "psa8Comp", "PSA 8"),
+        ("psa9_cad", "psa9Comp", "PSA 9"),
+        ("psa10_cad", "psa10Comp", "PSA 10"),
+        ("bgs9_cad", "bgs9Comp", "BGS 9"),
+        ("bgs95_cad", "bgs95Comp", "BGS 9.5"),
+        ("bgs10_cad", "bgs10Comp", "BGS 10"),
+        ("sgc10_cad", "sgc10Comp", "SGC 10"),
+    )
     for r in rows:
         try:
             c = json.loads(r["data"])
         except Exception:
             continue
-        if _card_ck(c) != ck:
+        if _card_fp(c) != ck:
             continue
-        c["sysComp"] = sug
-        old = c.get("comp")
-        if old in (None, ""):
-            c["comp"] = sug
+        book = c.get("book") if isinstance(c.get("book"), dict) else {}
+        for src, field, label in fields:
+            v = data.get(src)
+            if v is None:
+                continue
+            c[field] = v
+            book[label] = v
+        copy = _copy_sold(c, data)
+        if copy is not None:
+            c["sysComp"] = copy
+            c["comp"] = copy
+        c["book"] = book
+        c["compAt"] = now
         con.execute("UPDATE cards SET data=? WHERE id=?", (json.dumps(c), r["id"]))
     con.commit()
     con.close()
@@ -1425,11 +1491,11 @@ async def usage(request: Request, x_token: str | None = Header(default=None)):
 async def book_refresh(payload: dict, request: Request, x_token: str | None = Header(default=None)):
     uid = require_user(request, x_token)
     card = {k: payload.get(k) for k in ("player","year","set","number","parallel","insert","team","grader","grade","cert")}
-    ck = "|".join(str(card.get(k) or "").strip().lower() for k in ("player","year","set","number","parallel","insert","grader","grade"))
+    ck = "|".join(str(card.get(k) or "").strip().lower() for k in ("player","year","set","number","parallel","insert"))
     con = db()
     row = con.execute("SELECT data, t FROM comp_cache WHERE k=?", (ck,)).fetchone()
     con.close()
-    if row and (time.time() - float(row["t"])) < 7 * 86400:
+    if row and (time.time() - float(row["t"])) < 2 * 86400:
         try:
             cached = json.loads(row["data"])
             cached["cached"] = True
@@ -1687,6 +1753,10 @@ async def upsert_card(payload: dict, request: Request, x_token: str | None = Hea
         "INSERT OR REPLACE INTO cards(id,user_id,data) VALUES(?,?,?)",
         (cid, uid, json.dumps(card)),
     )
+    try:
+        vote_card(con, uid, card)
+    except Exception:
+        pass
     if not existed:
         owner = con.execute("SELECT slug, display FROM users WHERE id=?", (uid,)).fetchone()
         slug = (owner["slug"] if owner else "") or ""

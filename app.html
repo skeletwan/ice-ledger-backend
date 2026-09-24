@@ -260,8 +260,7 @@
     .you-group { display:flex; flex-direction:column; gap:6px; margin:0 0 18px; }
     .you-group button, .you-group a.btn { margin:0; padding:11px 12px; }
     .you-quiet { margin-top:8px; padding-top:12px; border-top:1px solid var(--line); }
-    body.result-on #saveBtn { position:fixed; left:12px; right:12px; bottom:calc(64px + env(safe-area-inset-bottom)); z-index:15; margin:0; }
-    body.result-on #resultPage { padding-bottom:180px; }
+    body.result-on #resultPage { padding-bottom:40px; }
     #likeBtn, #followBtn { width:auto; padding:8px 14px; }
     .you-quiet { opacity:.85; }
     .filters { margin-top:8px; }
@@ -298,9 +297,27 @@
     #reportUserBtn { padding:4px 8px; font-size:11px; }
     .shot-ui span { font-size:11px; font-weight:600; color:var(--muted); }
     .shot-file { position:absolute; width:1px; height:1px; opacity:0; overflow:hidden; clip:rect(0,0,0,0); }
-    #go { margin-top:16px; padding:16px; font-size:17px; letter-spacing:.02em; border-radius:14px; background:linear-gradient(180deg,#3db4d8,#2a86a8); box-shadow:0 8px 24px rgba(47,158,196,.28); }
-    body.scan-ready #go { position:fixed; left:12px; right:12px; bottom:calc(64px + env(safe-area-inset-bottom)); z-index:15; margin:0; }
-    body.scan-ready #scanPage { padding-bottom:180px; }
+    #go { margin-top:16px; padding:16px; font-size:17px; letter-spacing:.02em; border-radius:14px; background:linear-gradient(180deg,#3db4d8,#2a86a8); box-shadow:0 8px 24px rgba(47,158,196,.28); box-sizing:border-box; }
+    body.scan-ready #go {
+      position:fixed;
+      left:16px;
+      right:16px;
+      width:auto;
+      bottom:calc(72px + env(safe-area-inset-bottom));
+      z-index:18;
+      margin:0;
+    }
+    body.scan-ready #status:not(:empty) {
+      position:fixed;
+      left:16px;
+      right:16px;
+      bottom:calc(136px + env(safe-area-inset-bottom));
+      z-index:19;
+      margin:0;
+      background:#071016;
+      box-shadow:0 0 0 8px #071016, 0 -12px 28px #071016;
+    }
+    body.scan-ready #scanPage { padding-bottom:240px; }
     .banner { display:none; margin:0 0 12px; padding:12px 14px; border-radius:12px; background:#173445; border:1px solid #2f6f86; color:var(--ice); font-weight:700; font-size:14px; }
     .banner.on { display:block; }
     .banner.wait { animation: pulse 1.2s ease-in-out infinite; }
@@ -424,9 +441,9 @@
         <button type="button" class="primary" id="liveUse">Use photo</button>
       </div>
     </div>
+    <p class="status" id="status"></p>
     <button id="go" class="primary" disabled>Identify card</button>
     <button class="ghost hidden" id="resumeId">Resume this card</button>
-    <p class="status" id="status"></p>
   </section>
   <section class="page" id="resultPage">
     <button class="ghost" id="backScan">New scan</button>
@@ -462,14 +479,19 @@
         <a class="ghost btn" id="pt130" target="_blank" rel="noopener">Fanatics sold</a>
         <a class="ghost btn hidden" id="psa" target="_blank" rel="noopener">PSA cert</a>
       </div>
-      <input id="rawComp" type="hidden" />
-      <input id="psa8Comp" type="hidden" />
-      <input id="psa9Comp" type="hidden" />
-      <input id="psa10Comp" type="hidden" />
-      <input id="bgs95Comp" type="hidden" />
-      <input id="bgs10Comp" type="hidden" />
-      <input id="sgc10Comp" type="hidden" />
       <p class="muted" id="compNote"></p>
+      <div class="px" id="gradeComps">
+        <div><label>Raw</label><input id="rawComp" type="number" step="0.01" /></div>
+        <div><label>PSA 6</label><input id="psa6Comp" type="number" step="0.01" /></div>
+        <div><label>PSA 7</label><input id="psa7Comp" type="number" step="0.01" /></div>
+        <div><label>PSA 8</label><input id="psa8Comp" type="number" step="0.01" /></div>
+        <div><label>PSA 9</label><input id="psa9Comp" type="number" step="0.01" /></div>
+        <div><label>PSA 10</label><input id="psa10Comp" type="number" step="0.01" /></div>
+        <div><label>BGS 9</label><input id="bgs9Comp" type="number" step="0.01" /></div>
+        <div><label>BGS 9.5</label><input id="bgs95Comp" type="number" step="0.01" /></div>
+        <div><label>BGS 10</label><input id="bgs10Comp" type="number" step="0.01" /></div>
+        <div><label>SGC 10</label><input id="sgc10Comp" type="number" step="0.01" /></div>
+      </div>
       <label>Notes</label>
       <textarea id="notes" rows="2"></textarea>
       <div class="banner" id="compBanner">Looking up solds…</div>
@@ -660,7 +682,7 @@
         <option>CGC</option><option>TAG</option><option>HGA</option><option>ISA</option><option>ACE</option>
       </select>
       <select id="pgNum">
-        <option>10</option><option>9.5</option><option>9</option><option>8.5</option><option>8</option><option>7</option>
+        <option>10</option><option>9.5</option><option>9</option><option>8.5</option><option>8</option><option>7</option><option>6</option>
       </select>
     </div>
     <div class="val" style="margin-top:8px"><b id="pubPick">—</b><span id="pubPickLbl">Pick grader + grade</span></div>
@@ -936,7 +958,7 @@
         <option>CGC</option><option>TAG</option><option>HGA</option><option>ISA</option><option>ACE</option>
       </select>
       <select id="gNum">
-        <option>10</option><option>9.5</option><option>9</option><option>8.5</option><option>8</option><option>7</option>
+        <option>10</option><option>9.5</option><option>9</option><option>8.5</option><option>8</option><option>7</option><option>6</option>
       </select>
     </div>
     <div class="val" style="margin-top:8px"><b id="vPick">—</b><span id="vPickLbl">Pick grader + grade</span></div>
@@ -1635,9 +1657,18 @@ function scheduleDaily(){
     scheduleDaily();
   }, next - now);
 }
+function runOnly(v){
+  return String(v||"").replace(/\b\d+\s*\/\s*(\d+)\b/g, "/$1").replace(/\b\d+\s*of\s*(\d+)\b/gi, "/$1");
+}
 function qstr(d){
+  let num = String(d.number||"").trim();
+  let run = "";
+  const m = num.match(/(\d+)\s*\/\s*(\d+)/);
+  if (m) { run = "/"+m[2]; num = num.replace(m[0], "").trim(); }
+  const par = runOnly(d.parallel||"");
+  const ins = runOnly(d.insert||"");
   const grade = (!d.grader || d.grader==="Raw") ? "raw" : [d.grader, d.grade].filter(Boolean).join(" ");
-  return encodeURIComponent([d.year,d.player,"hockey",d.set,d.number,d.insert,d.parallel,grade].filter(Boolean).join(" "));
+  return encodeURIComponent([d.year,d.player,"hockey",d.set,num,ins,par,(!par.includes("/") && !ins.includes("/") ? run : ""),grade].filter(Boolean).join(" "));
 }
 function daysAgo(iso){
   if (!iso) return null;
@@ -2132,16 +2163,16 @@ $("go").onclick = async () => {
     $("f_cert").value = d.cert || "";
     paintCatPicks(d.matches || []);
     if (d.hockey === false) {
-      $("badge").textContent = "Not hockey — won’t save to binder";
+      $("badge").textContent = "Not a hockey card";
       $("badge").className = "badge review";
-      $("status").textContent = "That’s a " + (d.sport || "non-hockey") + " card. Clappers PC only saves hockey right now.";
+      $("status").textContent = "Clappers PC is a pro hockey book. This scan won’t save.";
       $("status").className = "status warn";
       lockSave(true, "Save to binder");
       $("result").classList.remove("hidden");
       window.idPending = true;
       paintResume();
       show("result");
-      setCompBanner("bad", "Hockey only for now. Other sports / Pokemon will get their own binders later.");
+      setCompBanner("bad", "Not a hockey card. Only NHL / pro hockey belongs in this community.");
       return;
     }
     lockSave(false, "Waiting on solds…");
@@ -2245,7 +2276,7 @@ function lockSave(ready, label){
   });
 }
 function clearCompFields(){
-  ["comp","rawComp","psa8Comp","psa9Comp","psa10Comp","bgs95Comp","bgs10Comp","sgc10Comp","e_raw","e_psa8","e_psa9","e_psa10"].forEach(id => { if ($(id)) $(id).value = ""; });
+  ["comp","rawComp","psa6Comp","psa7Comp","psa8Comp","psa9Comp","psa10Comp","bgs9Comp","bgs95Comp","bgs10Comp","sgc10Comp","e_raw","e_psa8","e_psa9","e_psa10"].forEach(id => { if ($(id)) $(id).value = ""; });
   window.lastSysComp = null;
   if ($("compNote")) $("compNote").textContent = "";
 }
@@ -2256,6 +2287,8 @@ function soldForCopy(c){
   if (g === "PSA" && /^10/.test(gr)) return c.psa10_cad != null ? c.psa10_cad : c.suggested_cad;
   if (g === "PSA" && /^9/.test(gr)) return c.psa9_cad != null ? c.psa9_cad : c.suggested_cad;
   if (g === "PSA" && /^8/.test(gr)) return c.psa8_cad != null ? c.psa8_cad : c.suggested_cad;
+  if (g === "PSA" && /^7/.test(gr)) return c.psa7_cad != null ? c.psa7_cad : c.suggested_cad;
+  if (g === "PSA" && /^6/.test(gr)) return c.psa6_cad != null ? c.psa6_cad : c.suggested_cad;
   if (g === "BGS" && /found|pristine|^10(\b|\.0)/i.test(gr)) return c.bgs10_cad != null ? c.bgs10_cad : c.suggested_cad;
   if (g === "BGS" && /9\.5/.test(gr)) return c.bgs95_cad != null ? c.bgs95_cad : c.suggested_cad;
   if (g === "SGC" && /(^|\s)10(\b|\.0)|gem/i.test(gr)) return c.sgc10_cad != null ? c.sgc10_cad : c.suggested_cad;
@@ -2289,9 +2322,12 @@ async function lookupComp(){
   }
   function put(id, v){ if (v != null && $(id)) $(id).value = v; }
   put("rawComp", c.raw_cad); put("e_raw", c.raw_cad);
+  put("psa6Comp", c.psa6_cad);
+  put("psa7Comp", c.psa7_cad);
   put("psa8Comp", c.psa8_cad); put("e_psa8", c.psa8_cad);
   put("psa9Comp", c.psa9_cad); put("e_psa9", c.psa9_cad);
   put("psa10Comp", c.psa10_cad); put("e_psa10", c.psa10_cad);
+  put("bgs9Comp", c.bgs9_cad);
   put("bgs95Comp", c.bgs95_cad);
   put("bgs10Comp", c.bgs10_cad);
   put("sgc10Comp", c.sgc10_cad);
@@ -2379,17 +2415,23 @@ async function saveToBinder(ev){
     cost: numOrNull("cost"),
     comp: comp,
     rawComp: numOrNull("rawComp"),
+    psa6Comp: numOrNull("psa6Comp"),
+    psa7Comp: numOrNull("psa7Comp"),
     psa8Comp: numOrNull("psa8Comp"),
     psa9Comp: numOrNull("psa9Comp"),
     psa10Comp: numOrNull("psa10Comp"),
+    bgs9Comp: numOrNull("bgs9Comp"),
     bgs95Comp: numOrNull("bgs95Comp"),
     bgs10Comp: numOrNull("bgs10Comp"),
     sgc10Comp: numOrNull("sgc10Comp"),
     book: {
       Raw: numOrNull("rawComp"),
+      "PSA 6": numOrNull("psa6Comp"),
+      "PSA 7": numOrNull("psa7Comp"),
       "PSA 8": numOrNull("psa8Comp"),
       "PSA 9": numOrNull("psa9Comp"),
       "PSA 10": numOrNull("psa10Comp"),
+      "BGS 9": numOrNull("bgs9Comp"),
       "BGS 9.5": numOrNull("bgs95Comp"),
       "BGS 10": numOrNull("bgs10Comp"),
       "SGC 10": numOrNull("sgc10Comp")
@@ -2441,9 +2483,12 @@ function versionLine(c){
 function bookOf(c){
   const b = Object.assign({}, c.book || {});
   if (c.rawComp!=null && b.Raw==null) b.Raw = c.rawComp;
+  if (c.psa6Comp!=null) b["PSA 6"] = c.psa6Comp;
+  if (c.psa7Comp!=null) b["PSA 7"] = c.psa7Comp;
   if (c.psa8Comp!=null) b["PSA 8"] = c.psa8Comp;
   if (c.psa9Comp!=null) b["PSA 9"] = c.psa9Comp;
   if (c.psa10Comp!=null) b["PSA 10"] = c.psa10Comp;
+  if (c.bgs9Comp!=null) b["BGS 9"] = c.bgs9Comp;
   if (c.bgs95Comp!=null) b["BGS 9.5"] = c.bgs95Comp;
   if (c.bgs10Comp!=null) b["BGS 10"] = c.bgs10Comp;
   if (c.sgc10Comp!=null) b["SGC 10"] = c.sgc10Comp;

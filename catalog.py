@@ -99,6 +99,24 @@ def ensure_catalog(con: sqlite3.Connection):
     con.execute("CREATE INDEX IF NOT EXISTS cat_player ON catalog(player)")
     con.execute("CREATE INDEX IF NOT EXISTS cat_set ON catalog(set_name)")
     con.execute("CREATE INDEX IF NOT EXISTS cat_year ON catalog(year)")
+    con.execute(
+        """
+        CREATE TABLE IF NOT EXISTS catalog_votes (
+          user_id INTEGER NOT NULL,
+          fp TEXT NOT NULL,
+          year TEXT,
+          set_name TEXT,
+          insert_name TEXT,
+          parallel TEXT,
+          player TEXT,
+          number TEXT,
+          team TEXT,
+          created TEXT,
+          PRIMARY KEY (user_id, fp)
+        )
+        """
+    )
+    con.execute("CREATE INDEX IF NOT EXISTS cat_votes_fp ON catalog_votes(fp)")
     n = con.execute("SELECT COUNT(*) AS n FROM catalog WHERE source='seed'").fetchone()
     count = n["n"] if n else 0
     if count:
@@ -118,38 +136,57 @@ def ensure_catalog(con: sqlite3.Connection):
     )
 
 
-def learn_card(con: sqlite3.Connection, card: dict):
+def _fp(player, year, set_name, number, par, ins):
+    return "|".join([
+        _tok(player),
+        _tok(year),
+        _tok(set_name),
+        _tok(number),
+        _tok(par) or "base",
+        _tok(ins),
+    ])
+
+
+def vote_card(con: sqlite3.Connection, user_id: int, card: dict):
+    """One vote per user per fingerprint. Two distinct users promote it to catalog."""
+    if not user_id:
+        return
     player = (card.get("player") or "").strip()
     year = (card.get("year") or "").strip()
     set_name = (card.get("set") or "").strip()
-    if len(player) < 2 or len(set_name) < 2:
+    if len(player) < 3 or len(set_name) < 2:
+        return
+    if not re.search(r"[a-zA-Z]", player):
         return
     number = (card.get("number") or "").strip()
     par = (card.get("parallel") or "").strip() or "Base"
     ins = (card.get("insert") or "").strip()
     team = (card.get("team") or "").strip()
+    fp = _fp(player, year, set_name, number, par, ins)
+    now = time.strftime("%Y-%m-%dT%H:%M:%SZ")
+    con.execute(
+        """INSERT OR REPLACE INTO catalog_votes(user_id,fp,year,set_name,insert_name,parallel,player,number,team,created)
+           VALUES(?,?,?,?,?,?,?,?,?,?)""",
+        (user_id, fp, year, set_name, ins, par, player, number, team, now),
+    )
+    n = con.execute("SELECT COUNT(*) AS n FROM catalog_votes WHERE fp=?", (fp,)).fetchone()["n"]
+    if n < 2:
+        return
     hit = con.execute(
-        """SELECT id FROM catalog WHERE lower(player)=? AND year=? AND lower(set_name)=? AND ifnull(number,'')=? AND lower(ifnull(parallel,''))=? LIMIT 1""",
+        """SELECT id FROM catalog WHERE lower(ifnull(player,''))=? AND year=? AND lower(set_name)=?
+           AND ifnull(number,'')=? AND lower(ifnull(parallel,''))=? LIMIT 1""",
         (player.lower(), year, set_name.lower(), number, par.lower()),
     ).fetchone()
     if hit:
         return
     con.execute(
         "INSERT INTO catalog(year,brand,set_name,insert_name,parallel,player,number,team,print_run,source,created) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-        (
-            year,
-            "",
-            set_name,
-            ins,
-            par,
-            player,
-            number,
-            team,
-            "",
-            "learned",
-            time.strftime("%Y-%m-%dT%H:%M:%SZ"),
-        ),
+        (year, "", set_name, ins, par, player, number, team, "", "voted", now),
     )
+
+
+def learn_card(con: sqlite3.Connection, card: dict):
+    return
 
 
 def catalog_matches(con: sqlite3.Connection, data: dict, limit: int = 3):
@@ -227,5 +264,6 @@ def catalog_matches(con: sqlite3.Connection, data: dict, limit: int = 3):
 def catalog_stats(con: sqlite3.Connection):
     tot = con.execute("SELECT COUNT(*) AS n FROM catalog").fetchone()["n"]
     seed = con.execute("SELECT COUNT(*) AS n FROM catalog WHERE source='seed'").fetchone()["n"]
-    learned = con.execute("SELECT COUNT(*) AS n FROM catalog WHERE source='learned'").fetchone()["n"]
-    return {"rows": tot, "seed": seed, "learned": learned}
+    voted = con.execute("SELECT COUNT(*) AS n FROM catalog WHERE source='voted'").fetchone()["n"]
+    pending = con.execute("SELECT COUNT(DISTINCT fp) AS n FROM catalog_votes").fetchone()["n"]
+    return {"rows": tot, "seed": seed, "voted": voted, "pending": pending}
