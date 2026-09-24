@@ -1129,7 +1129,7 @@ def init_db():
         con.execute("ALTER TABLE users ADD COLUMN slug TEXT")
     except sqlite3.OperationalError:
         pass
-    for col, spec in (("display", "TEXT"), ("hue", "TEXT"), ("bio", "TEXT"), ("avatar", "TEXT"), ("cropx", "TEXT"), ("cropy", "TEXT"), ("cropz", "TEXT"), ("avatar_hidden", "INTEGER NOT NULL DEFAULT 0"), ("credits", "INTEGER NOT NULL DEFAULT 0"), ("credit_month", "TEXT"), ("credit_until", "TEXT"), ("plus_until", "TEXT"), ("cycle_start", "TEXT"), ("suspended", "INTEGER NOT NULL DEFAULT 0"), ("socials", "TEXT")):
+    for col, spec in (("display", "TEXT"), ("hue", "TEXT"), ("bio", "TEXT"), ("avatar", "TEXT"), ("cropx", "TEXT"), ("cropy", "TEXT"), ("cropz", "TEXT"), ("avatar_hidden", "INTEGER NOT NULL DEFAULT 0"), ("credits", "INTEGER NOT NULL DEFAULT 0"), ("credit_month", "TEXT"), ("credit_until", "TEXT"), ("plus_until", "TEXT"), ("cycle_start", "TEXT"), ("suspended", "INTEGER NOT NULL DEFAULT 0"), ("socials", "TEXT"), ("last_book_auto", "TEXT")):
         try:
             con.execute(f"ALTER TABLE users ADD COLUMN {col} {spec}")
         except sqlite3.OperationalError:
@@ -1524,14 +1524,19 @@ def usage_of(uid: int):
     bonus = bonus_of(uid)
     monthly_left = max(0, cap - used)
     reset_at = (parse_ts(prow["plus_until"] if prow else None) if plan == "plus" else end) or end
-    return {
+    out = {
         "used": used, "cap": cap, "bonus": bonus,
         "left": monthly_left + bonus,
         "book_used": bused, "book_cap": bcap, "book_left": max(0, bcap - bused),
         "plan": plan, "month": m,
         "reset_at": reset_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "rip_scans": RIP_SCANS, "rip_price": RIP_PRICE,
+        "operator": is_operator(uid),
     }
+    if is_operator(uid):
+        out["book_cap"] = 9999
+        out["book_left"] = 9999
+    return out
 
 def bump_usage(uid: int):
     m = month_key(uid)
@@ -1550,6 +1555,13 @@ def bump_usage(uid: int):
             con.execute("UPDATE users SET credits=MAX(0, IFNULL(credits,0)-1) WHERE id=?", (uid,))
     con.commit()
     con.close()
+
+def toronto_day() -> str:
+    try:
+        from zoneinfo import ZoneInfo
+        return datetime.now(ZoneInfo("America/Toronto")).strftime("%Y-%m-%d")
+    except Exception:
+        return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 def bump_book(uid: int):
     m = month_key(uid)
@@ -1637,9 +1649,25 @@ async def book_refresh(payload: dict, request: Request, x_token: str | None = He
         except Exception:
             pass
     u = usage_of(uid)
-    if u["book_left"] <= 0:
-        raise HTTPException(402, "book refresh cap reached — upgrade")
-    bump_book(uid)
+    auto = bool(payload.get("auto"))
+    if is_operator(uid):
+        pass
+    elif auto and plan_of(uid) == "plus":
+        today = toronto_day()
+        con2 = db()
+        prev = con2.execute("SELECT last_book_auto FROM users WHERE id=?", (uid,)).fetchone()
+        last = (prev["last_book_auto"] if prev else "") or ""
+        if last != today:
+            try:
+                con2.execute("UPDATE users SET last_book_auto=? WHERE id=?", (today, uid))
+                con2.commit()
+            except sqlite3.OperationalError:
+                pass
+        con2.close()
+    else:
+        if u["book_left"] <= 0:
+            raise HTTPException(402, "book refresh cap reached — upgrade")
+        bump_book(uid)
     return await comp(payload, payload.get("secret"), x_token)
 
 @app.get("/checkout")

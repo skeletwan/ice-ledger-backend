@@ -3063,14 +3063,18 @@ function localDay(){
   const d = new Date();
   return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
 }
-async function refreshBookNow(){
+async function refreshBookNow(auto){
   const note = $("bookNote");
   const btn = $("refreshBook");
   const day = localDay();
-  if (localStorage.getItem("ice-book-day") === day) {
+  const owner = !!window.lastOp;
+  const plus = window.lastPlan === "plus";
+  auto = !!auto;
+  if (!owner && !auto && localStorage.getItem("ice-book-day") === day) {
     note.textContent = "Already ran Refresh book today. Come back tomorrow.";
     return;
   }
+  if (!owner && auto && localStorage.getItem("ice-book-auto") === day) return;
   if (btn && btn.dataset.busy === "1") return;
   if (btn) { btn.dataset.busy = "1"; btn.disabled = true; }
   const cards = load();
@@ -3079,8 +3083,17 @@ async function refreshBookNow(){
     const age = c.compAt ? (now - new Date(c.compAt).getTime())/86400000 : 99;
     const val = +c.comp || +c.cost || 25;
     return { c, score: age * Math.log(val+10), age };
-  }).filter(x => x.age >= 1).sort((a,b) => b.score - a.score);
-  const batch = scored.slice(0, 8);
+  }).filter(x => owner || auto || x.age >= 1).sort((a,b) => b.score - a.score);
+  const seen = {};
+  const uniq = [];
+  scored.forEach(row => {
+    const c = row.c;
+    const fp = [c.player,c.year,c.set,c.number,c.parallel,c.insert].map(v => String(v||"").toLowerCase()).join("|");
+    if (seen[fp]) return;
+    seen[fp] = 1;
+    uniq.push(row);
+  });
+  const batch = (owner || auto) ? uniq : uniq.slice(0, 8);
   if (!batch.length) {
     note.textContent = "Nothing stale enough (needs ~1 day since last comp).";
     btn.dataset.busy = "0"; btn.disabled = false; return;
@@ -3101,6 +3114,7 @@ async function refreshBookNow(){
         method:"POST",
         headers:{ "Content-Type":"application/json", "x-token": token() },
         body: JSON.stringify({
+          auto: auto || owner,
           player:card.player, year:card.year, set:card.set, number:card.number,
           parallel:card.parallel, insert:card.insert, team:card.team,
           grader:card.grader, grade:card.grade, cert:card.cert
@@ -3131,9 +3145,10 @@ async function refreshBookNow(){
   document.body.classList.remove("book-pulse");
   $("bookBar") && $("bookBar").classList.remove("book-pulse");
   $("quotes") && $("quotes").classList.remove("book-pulse");
-  if (ok) localStorage.setItem("ice-book-day", day);
+  if (ok && !owner) localStorage.setItem("ice-book-day", day);
+  if (ok && auto) localStorage.setItem("ice-book-auto", day);
   note.textContent = ok
-    ? ("Updated "+ok+" card"+(ok===1?"":"s")+". Book point saved for today.")
+    ? ("Updated "+ok+" card"+(ok===1?"":"s")+"."+(owner?"":" Book point saved for today."))
     : "Refresh ran but no new solds landed. Ticker still uses current binder total.";
   paintTicker();
   btn.textContent = "Refresh book";
@@ -3142,11 +3157,11 @@ async function refreshBookNow(){
 }
 $("refreshBook") && ($("refreshBook").onclick = () => refreshBookNow());
 async function maybeAutoBook(){
-  if (window.lastPlan !== "plus") return;
-  if (localStorage.getItem("ice-book-day") === localDay()) return;
+  if (window.lastPlan !== "plus" && !window.lastOp) return;
+  if (localStorage.getItem("ice-book-auto") === localDay()) return;
   if (!load().length) return;
   if ($("bookNote")) $("bookNote").textContent = "Refreshing book";
-  await refreshBookNow();
+  await refreshBookNow(true);
 }
 function noteKind(n){
   const b = (n.body||"").toLowerCase();
@@ -3209,8 +3224,10 @@ async function refreshUsage(){
   if (!r.ok) return;
   const u = await r.json();
   window.lastPlan = u.plan || "free";
+  window.lastOp = !!u.operator;
   const bonus = u.bonus ? " + "+u.bonus+" extra" : "";
-  const line = (u.plan==="plus"?"Clappers+":"Free")+" · "+u.left+" IDs left"+bonus+" · "+(u.book_left??"?")+" book refreshes";
+  const books = u.operator ? "unlimited book refreshes" : ((u.book_left??"?")+" book refreshes");
+  const line = (u.plan==="plus"?"Clappers+":"Free")+" · "+u.left+" IDs left"+bonus+" · "+books;
   if ($("quotaBox")) {
     $("quotaBox").textContent = line;
     $("quotaBox").className = "quota-chip " + (u.left<=0 ? "err" : (u.left<=3 ? "warn" : "ok"));
@@ -3733,6 +3750,7 @@ async function loadMe(){
     if ($("pCropZ")) $("pCropZ").value = d.cropz || "100";
     paintProfile(d.display || "Collector", d.hue || "#8fd4ee", myAvatar);
     if ($("ownerToolsBtn")) $("ownerToolsBtn").classList.toggle("hidden", !d.operator);
+    window.lastOp = !!d.operator;
     if (d.operator) loadRipCodes();
     loadBanners();
     loadCommunity();
