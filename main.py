@@ -726,6 +726,31 @@ def _sale_when(item: dict) -> str:
             pass
     return ""
 
+def scrub_house_raw(fp: str):
+    """Drop raw solds that are a tiny fraction of a real slab for the same card."""
+    if not fp:
+        return
+    try:
+        con = db()
+        slabs = [
+            float(r["cad"])
+            for r in con.execute(
+                "SELECT cad FROM house_solds WHERE fp=? AND bucket IN ('psa9_cad','psa10_cad','bgs95_cad','bgs10_cad')",
+                (fp,),
+            )
+        ]
+        hi = max(slabs) if slabs else 0
+        if hi >= 40:
+            con.execute(
+                "DELETE FROM house_solds WHERE fp=? AND bucket='raw_cad' AND cad < ?",
+                (fp, hi * 0.12),
+            )
+        con.execute("DELETE FROM comp_cache WHERE k LIKE ?", (fp + "%",))
+        con.commit()
+        con.close()
+    except Exception:
+        pass
+
 def save_house_solds(fp: str, rows: list):
     if not fp or not rows:
         return
@@ -767,9 +792,13 @@ def house_series(fp: str) -> dict:
     for bucket, days in by.items():
         series = []
         for d in sorted(days):
-            mid = _median(_clean_bucket(days[d]) or days[d])
-            if mid:
-                series.append({"d": d, "v": mid})
+            vals = days[d]
+            mid = _median(_clean_bucket(vals) or vals)
+            if not mid:
+                continue
+            if series and len(vals) <= 1 and mid < series[-1]["v"] * 0.4:
+                continue
+            series.append({"d": d, "v": mid})
         if series:
             out[bucket] = series
     return out
@@ -803,6 +832,14 @@ def house_day_close(fp: str):
             continue
         vals = days[use]
         mid = _median(_clean_bucket(vals) or vals)
+        prior = None
+        older = sorted(k for k in days if k < use)
+        if older:
+            prior = _median(_clean_bucket(days[older[-1]]) or days[older[-1]])
+        if prior and len(vals) <= 1 and mid and mid < prior * 0.4:
+            mid = prior
+            use = older[-1]
+            vals = days[use]
         if mid:
             out[bucket] = mid
             counts[bucket] = len(vals)
@@ -903,10 +940,6 @@ async def fetch_card_api(q: str, player: str, fp: str = "") -> dict | None:
     if not out:
         return None
     raw = out.get("raw_cad")
-    floor = max([out[k] for k in ("psa9_cad","psa10_cad","bgs95_cad","bgs10_cad") if out.get(k)] or [0])
-    if raw and floor and raw >= floor * 0.85:
-        out.pop("raw_cad", None)
-        counts.pop("raw_cad", None)
     if not out:
         return None
     out = _order_grades(out)
@@ -969,21 +1002,6 @@ async def comp(
     ck = "|".join(str(card.get(k) or "").strip().lower() for k in ("player","year","set","number","parallel","insert"))
     day = time.strftime("%Y-%m-%d")
     ck_day = f"{ck}|{day}"
-    fresh = bool(payload.get("fresh"))
-    if ck.strip("|") and not fresh:
-        con = db()
-        row = con.execute("SELECT data, t FROM comp_cache WHERE k=?", (ck_day,)).fetchone()
-        if not row:
-            row = con.execute("SELECT data, t FROM comp_cache WHERE k=?", (ck,)).fetchone()
-        con.close()
-        if row and (time.time() - float(row["t"])) < 86400:
-            try:
-                cached = json.loads(row["data"])
-                if isinstance(cached, dict) and _cache_worthy(cached, card):
-                    cached["cached"] = True
-                    return cached
-            except Exception:
-                pass
     def run_only(v):
         s = re.sub(r"\b\d+\s*/\s*(\d+)\b", r"/\1", str(v or ""))
         s = re.sub(r"\b\d+\s+of\s+(\d+)\b", r"/\1", s, flags=re.I)
@@ -1221,21 +1239,9 @@ async def comp(
     if ck.strip("|"):
         data = _drop_junk_raw(data, q + " " + (card.get("insert") or ""))
         try:
-            raw_f = float(data.get("raw_cad")) if data.get("raw_cad") is not None else None
-        except (TypeError, ValueError):
-            raw_f = None
-        if _cache_worthy(data, card):
-            try:
-                con = db()
-                con.execute(
-                    "INSERT OR REPLACE INTO comp_cache(k,data,t) VALUES(?,?,?)",
-                    (ck_day, json.dumps(data), time.time()),
-                )
-                con.commit()
-                con.close()
-                spread_comp(ck, data)
-            except Exception:
-                pass
+            spread_comp(ck, data)
+        except Exception:
+            pass
     return data
 
 def _card_fp(c: dict) -> str:
