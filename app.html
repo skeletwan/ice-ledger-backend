@@ -79,6 +79,7 @@
     .brand-logo { height:28px; width:auto; display:block; }
     .auth-card .brand { justify-content:center; margin:12px 0 10px; }
     .auth-card .brand-logo { height:52px; border-radius:12px; overflow:hidden; }
+    .auth-tag { text-align:center; color:var(--ice); font-size:15px; font-weight:650; margin:0 0 12px; }
     nav { display:flex; gap:8px; }
     nav button { width:auto; margin:0; padding:8px 12px; }
     .page { display:none; padding:16px 16px 40px; }
@@ -334,7 +335,8 @@
         <div class="brand">
           <img class="brand-logo" src="/logo.jpg" alt="Clappers PC" />
         </div>
-        <p class="muted" id="authLead">Your exclusive hockey card community.</p>
+        <p class="auth-tag">Your exclusive hockey card community.</p>
+        <p class="muted" id="authLead">Sign in to your binder.</p>
         <form id="authForm" action="#" method="post">
         <label>Email</label>
         <input id="email" type="email" autocomplete="username" />
