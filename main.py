@@ -544,7 +544,25 @@ suggested_cad is the sold that matches the scanned copy's grader/grade when pres
 Never use the card number, year, print run, or cert as a price.
 """
 
-def _usd_to_cad(n):
+def _order_grades(data: dict) -> dict:
+    if not isinstance(data, dict):
+        return data
+    def climb(keys):
+        floor = None
+        for k in keys:
+            try:
+                v = float(data.get(k))
+            except (TypeError, ValueError):
+                continue
+            if v < 1:
+                continue
+            if floor is not None and v < floor:
+                data[k] = floor
+            else:
+                floor = v
+    climb(("raw_cad","psa6_cad","psa7_cad","psa8_cad","psa9_cad","psa10_cad"))
+    climb(("bgs9_cad","bgs95_cad","bgs10_cad"))
+    return data
     try:
         return round(float(n) * 1.35, 2)
     except (TypeError, ValueError):
@@ -624,6 +642,11 @@ async def fetch_card_api(q: str, player: str) -> dict | None:
     if not buckets:
         return None
     out = {k: _median(v) for k, v in buckets.items()}
+    raw = out.get("raw_cad")
+    floor = max([out[k] for k in ("psa9_cad","psa10_cad","bgs95_cad","bgs10_cad") if out.get(k)] or [0])
+    if raw and floor and raw >= floor * 0.85:
+        out.pop("raw_cad", None)
+    out = _order_grades(out)
     out["currency"] = "CAD"
     out["sample_count"] = sum(len(v) for v in buckets.values())
     out["sources"] = ["thecardapi"]
@@ -712,10 +735,11 @@ async def comp(
     used = COMP_MODEL
     err = None
     data = {}
+    skip_web = bool(payload.get("skip_web") or payload.get("auto"))
     if api_hit:
         data = api_hit
         used = "card-api"
-    elif XAI_API_KEY:
+    elif XAI_API_KEY and not skip_web:
         label = q + " sold Fanatics Collect OR Goldin OR Heritage"
         headers = {"Authorization": f"Bearer {XAI_API_KEY}", "Content-Type": "application/json"}
         prompt = COMP_PROMPT.format(card=label)
@@ -842,9 +866,15 @@ async def comp(
             pick = data.get("psa9_cad")
         elif g == "PSA" and gr.startswith("8"):
             pick = data.get("psa8_cad")
+        elif g == "BGS" and "9.5" in gr:
+            pick = data.get("bgs95_cad")
+        elif g == "SGC" and gr.startswith("10"):
+            pick = data.get("sgc10_cad")
         else:
-            pick = data.get("raw_cad") or data.get("psa10_cad")
-        data["suggested_cad"] = pick
+            pick = data.get("raw_cad")
+        if pick is not None:
+            data["suggested_cad"] = pick
+    data = _order_grades(data)
     data["model"] = used
     data["card"] = card
     if err and not data.get("suggested_cad") and not data.get("suggested_usd"):
@@ -1650,24 +1680,6 @@ async def book_refresh(payload: dict, request: Request, x_token: str | None = He
             pass
     u = usage_of(uid)
     auto = bool(payload.get("auto"))
-    if is_operator(uid):
-        pass
-    elif auto and plan_of(uid) == "plus":
-        today = toronto_day()
-        con2 = db()
-        prev = con2.execute("SELECT last_book_auto FROM users WHERE id=?", (uid,)).fetchone()
-        last = (prev["last_book_auto"] if prev else "") or ""
-        if last != today:
-            try:
-                con2.execute("UPDATE users SET last_book_auto=? WHERE id=?", (today, uid))
-                con2.commit()
-            except sqlite3.OperationalError:
-                pass
-        con2.close()
-    else:
-        if u["book_left"] <= 0:
-            raise HTTPException(402, "book refresh cap reached — upgrade")
-        bump_book(uid)
     return await comp(payload, payload.get("secret"), x_token)
 
 @app.get("/checkout")

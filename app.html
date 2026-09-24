@@ -161,6 +161,10 @@
     #pubSet, #setFilter { margin-bottom:8px; }
     .hero img { width:auto; max-width:100%; max-height:320px; height:auto; object-fit:contain; display:inline-block; background:transparent; vertical-align:middle; }
     .vals { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:12px 0; }
+    .gbook { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:12px 0 4px; }
+    .gbook .gcell { background:#18232d; border:1px solid var(--line); border-radius:10px; padding:8px 10px; display:flex; justify-content:space-between; gap:8px; align-items:baseline; }
+    .gbook .gcell span { color:var(--muted); font-size:11px; }
+    .gbook .gcell b { font-size:14px; }
     .val { background:#0e171e; border:1px solid var(--line); border-radius:12px; padding:10px; text-align:center; }
     .val b { display:block; font-size:18px; }
     .val span { font-size:11px; color:var(--muted); text-transform:uppercase; }
@@ -519,7 +523,7 @@
   <section class="page" id="bindPage">
     <div class="book-head">
       <div class="bookbar" id="bookBar"></div>
-      <button class="ghost" id="refreshBook">Refresh book</button>
+      <button class="ghost hidden" id="refreshBook">Refresh book</button>
     </div>
     <p class="muted" id="bookNote"></p>
     <p class="muted" id="valueNote"></p>
@@ -671,8 +675,8 @@
     </div>
     <div class="vals">
       <div class="val"><b id="pubHold">—</b><span>This copy</span></div>
-      <div class="val"><b id="pubRaw">—</b><span>Raw</span></div>
     </div>
+    <div class="gbook" id="pubGrades"></div>
     <h3 style="font-size:14px;margin:16px 0 8px">Comments</h3>
     <div id="pubComments"></div>
     <textarea id="pubBody" rows="2" placeholder="Comment"></textarea>
@@ -946,9 +950,9 @@
     <p class="muted" id="dLine"></p>
     <div class="vals">
       <div class="val"><b id="vHold">—</b><span>This copy</span></div>
-      <div class="val"><b id="vRaw">—</b><span>Raw</span></div>
       <div class="val"><b id="vPaid">—</b><span>Paid</span></div>
     </div>
+    <div class="gbook" id="dGrades"></div>
     <h3 style="font-size:14px;margin:16px 0 8px">Comments</h3>
     <div id="ownComments"></div>
     <textarea id="ownBody" rows="2" placeholder="Comment"></textarea>
@@ -2565,6 +2569,11 @@ function versionLine(c){
 }
 function bookOf(c){
   const b = Object.assign({}, c.book || {});
+  if (b["PSA|6"]!=null && b["PSA 6"]==null) b["PSA 6"] = b["PSA|6"];
+  if (b["PSA|7"]!=null && b["PSA 7"]==null) b["PSA 7"] = b["PSA|7"];
+  if (b["PSA|8"]!=null && b["PSA 8"]==null) b["PSA 8"] = b["PSA|8"];
+  if (b["PSA|9"]!=null && b["PSA 9"]==null) b["PSA 9"] = b["PSA|9"];
+  if (b["PSA|10"]!=null && b["PSA 10"]==null) b["PSA 10"] = b["PSA|10"];
   if (c.rawComp!=null && b.Raw==null) b.Raw = c.rawComp;
   if (c.psa6Comp!=null) b["PSA 6"] = c.psa6Comp;
   if (c.psa7Comp!=null) b["PSA 7"] = c.psa7Comp;
@@ -2576,6 +2585,14 @@ function bookOf(c){
   if (c.bgs10Comp!=null) b["BGS 10"] = c.bgs10Comp;
   if (c.sgc10Comp!=null) b["SGC 10"] = c.sgc10Comp;
   return b;
+}
+function paintGradeBook(c, boxId){
+  const box = $(boxId);
+  if (!box) return;
+  orderGrades(c||{});
+  const b = bookOf(c||{});
+  const rows = [["Raw", b.Raw],["PSA 6", b["PSA 6"]],["PSA 7", b["PSA 7"]],["PSA 8", b["PSA 8"]],["PSA 9", b["PSA 9"]],["PSA 10", b["PSA 10"]],["BGS 9", b["BGS 9"]],["BGS 9.5", b["BGS 9.5"]],["BGS 10", b["BGS 10"]],["SGC 10", b["SGC 10"]]];
+  box.innerHTML = rows.map(r => "<div class=\"gcell\"><span>"+r[0]+"</span><b>"+money(r[1])+"</b></div>").join("");
 }
 function bookGet(c, svc, num){
   const b = bookOf(c);
@@ -2624,17 +2641,7 @@ async function lookupSoldFor(c, noteId, after){
   }
 }
 function applyCompToCard(c, d, sug){
-  if (sug != null && !isNaN(sug)) {
-    c.comp = sug;
-    c.sysComp = sug;
-  }
-  if (d.raw_cad != null) c.rawComp = d.raw_cad;
-  c.book = c.book || {};
-  if (d.raw_cad != null) c.book.Raw = d.raw_cad;
-  if (d.psa10_cad != null) c.book["PSA|10"] = d.psa10_cad;
-  if (d.psa9_cad != null) c.book["PSA|9"] = d.psa9_cad;
-  if (d.psa8_cad != null) c.book["PSA|8"] = d.psa8_cad;
-  pushCardHist(c);
+  applyCompObj(c, d || {});
   return c;
 }
 function openDetail(id){
@@ -2655,7 +2662,7 @@ function openDetail(id){
   const holdLbl = $("vHold") && $("vHold").nextElementSibling;
   if (holdLbl) holdLbl.textContent = (!c.grader || c.grader==="Raw") ? "This copy · Raw" : ("This copy · "+[c.grader,c.grade].filter(Boolean).join(" "));
   $("vPaid").textContent = money(c.cost);
-  $("vRaw").textContent = money(bookGet(c,"Raw",""));
+  paintGradeBook(c, "dGrades");
   paintCardSpark(c);
   paintGradePick();
   $("dNotes").textContent = c.notes || "";
@@ -3039,24 +3046,69 @@ $("dDel").onclick = () => {
   if (token()) fetch("/cards/"+openId, { method:"DELETE", headers:{ "x-token": token() } });
   show("bind");
 };
+function orderGrades(card){
+  if (!card) return card;
+  const b = card.book || {};
+  const climb = rows => {
+    let floor = null;
+    rows.forEach(row => {
+      const k = row[0], f = row[1];
+      let v = keepMoney(card[f], b[k]);
+      if (v == null) return;
+      if (floor != null && v < floor) v = floor;
+      floor = v;
+      card[f] = v;
+      b[k] = v;
+    });
+  };
+  climb([["Raw","rawComp"],["PSA 6","psa6Comp"],["PSA 7","psa7Comp"],["PSA 8","psa8Comp"],["PSA 9","psa9Comp"],["PSA 10","psa10Comp"]]);
+  climb([["BGS 9","bgs9Comp"],["BGS 9.5","bgs95Comp"],["BGS 10","bgs10Comp"]]);
+  card.book = b;
+  return card;
+}
+function keepMoney(next, prev){
+  const n = (next==null || next==="") ? null : +next;
+  if (n != null && !isNaN(n) && n >= 1) return n;
+  const p = (prev==null || prev==="") ? null : +prev;
+  if (p != null && !isNaN(p) && p >= 1) return p;
+  return null;
+}
 function applyCompObj(card, c){
   const rawCard = !card.grader || card.grader === "Raw";
   let sug = c.suggested_cad != null ? c.suggested_cad : c.suggested_usd;
   if (rawCard && c.raw_cad != null) sug = c.raw_cad;
   if (sug == null && c.low != null && c.high != null) sug = Math.round((+c.low + +c.high)/2);
-  if (sug != null) card.comp = sug;
-  if (rawCard && sug != null) card.rawComp = sug;
-  else if (c.raw_cad != null) card.rawComp = c.raw_cad;
-  if (c.psa8_cad != null) card.psa8Comp = c.psa8_cad;
-  if (c.psa9_cad != null) card.psa9Comp = c.psa9_cad;
-  if (c.psa10_cad != null) card.psa10Comp = c.psa10_cad;
-  card.book = Object.assign({}, card.book||{}, {
-    Raw: c.raw_cad ?? card.rawComp,
-    "PSA 8": c.psa8_cad ?? card.psa8Comp,
-    "PSA 9": c.psa9_cad ?? card.psa9Comp,
-    "PSA 10": c.psa10_cad ?? card.psa10Comp
+  if (sug != null && +sug >= 1) card.comp = keepMoney(sug, card.comp);
+  if (c.raw_cad != null) card.rawComp = keepMoney(c.raw_cad, card.rawComp);
+  else if (rawCard && sug != null && c.psa9_cad == null && c.psa10_cad == null) card.rawComp = keepMoney(sug, card.rawComp);
+  if (c.psa6_cad != null) card.psa6Comp = keepMoney(c.psa6_cad, card.psa6Comp);
+  if (c.psa7_cad != null) card.psa7Comp = keepMoney(c.psa7_cad, card.psa7Comp);
+  if (c.psa8_cad != null) card.psa8Comp = keepMoney(c.psa8_cad, card.psa8Comp);
+  if (c.psa9_cad != null) card.psa9Comp = keepMoney(c.psa9_cad, card.psa9Comp);
+  if (c.psa10_cad != null) card.psa10Comp = keepMoney(c.psa10_cad, card.psa10Comp);
+  if (c.bgs9_cad != null) card.bgs9Comp = keepMoney(c.bgs9_cad, card.bgs9Comp);
+  if (c.bgs95_cad != null) card.bgs95Comp = keepMoney(c.bgs95_cad, card.bgs95Comp);
+  if (c.bgs10_cad != null) card.bgs10Comp = keepMoney(c.bgs10_cad, card.bgs10Comp);
+  if (c.sgc10_cad != null) card.sgc10Comp = keepMoney(c.sgc10_cad, card.sgc10Comp);
+  const prev = card.book || {};
+  card.book = Object.assign({}, prev);
+  [
+    ["Raw", c.raw_cad, card.rawComp],
+    ["PSA 6", c.psa6_cad, card.psa6Comp],
+    ["PSA 7", c.psa7_cad, card.psa7Comp],
+    ["PSA 8", c.psa8_cad, card.psa8Comp],
+    ["PSA 9", c.psa9_cad, card.psa9Comp],
+    ["PSA 10", c.psa10_cad, card.psa10Comp],
+    ["BGS 9", c.bgs9_cad, card.bgs9Comp],
+    ["BGS 9.5", c.bgs95_cad, card.bgs95Comp],
+    ["BGS 10", c.bgs10_cad, card.bgs10Comp],
+    ["SGC 10", c.sgc10_cad, card.sgc10Comp]
+  ].forEach(row => {
+    const held = keepMoney(row[1], prev[row[0]] != null ? prev[row[0]] : row[2]);
+    if (held != null) card.book[row[0]] = held;
   });
   card.compAt = new Date().toISOString();
+  orderGrades(card);
   pushCardHist(card);
 }
 function localDay(){
@@ -3093,28 +3145,27 @@ async function refreshBookNow(auto){
     seen[fp] = 1;
     uniq.push(row);
   });
-  const batch = (owner || auto) ? uniq : uniq.slice(0, 8);
+  const batch = uniq;
   if (!batch.length) {
     note.textContent = "Nothing stale enough (needs ~1 day since last comp).";
     btn.dataset.busy = "0"; btn.disabled = false; return;
   }
-  note.textContent = "Refreshing book";
-  document.body.classList.add("book-pulse");
-  $("bookBar") && $("bookBar").classList.add("book-pulse");
-  $("quotes") && $("quotes").classList.add("book-pulse");
+  note.textContent = "Updating…";
+  show("bind");
   if (btn) btn.textContent = "Updating…";
   let ok = 0;
   let i = 0;
   for (const row of batch) {
     const card = row.c;
     i++;
-    if (note) note.textContent = "Refreshing book";
+    if (note) note.textContent = "Updating…";
     try {
       let r = await fetch("/book-refresh", {
         method:"POST",
         headers:{ "Content-Type":"application/json", "x-token": token() },
         body: JSON.stringify({
           auto: auto || owner,
+          skip_web: true,
           player:card.player, year:card.year, set:card.set, number:card.number,
           parallel:card.parallel, insert:card.insert, team:card.team,
           grader:card.grader, grade:card.grade, cert:card.cert
@@ -3131,7 +3182,7 @@ async function refreshBookNow(auto){
           })
         });
       }
-      if (r.status === 402) { note.textContent = "Book refresh cap hit. Clappers+ is 30 per 30 days."; break; }
+      if (r.status === 402) { note.textContent = "Could not refresh that card. Continuing."; continue; }
       if (!r.ok) continue;
       applyCompObj(card, await r.json());
       ok++;
@@ -3142,9 +3193,6 @@ async function refreshBookNow(auto){
   paintTicker();
   renderBinder();
   refreshUsage();
-  document.body.classList.remove("book-pulse");
-  $("bookBar") && $("bookBar").classList.remove("book-pulse");
-  $("quotes") && $("quotes").classList.remove("book-pulse");
   if (ok && !owner) localStorage.setItem("ice-book-day", day);
   if (ok && auto) localStorage.setItem("ice-book-auto", day);
   note.textContent = ok
@@ -3160,7 +3208,7 @@ async function maybeAutoBook(){
   if (window.lastPlan !== "plus" && !window.lastOp) return;
   if (localStorage.getItem("ice-book-auto") === localDay()) return;
   if (!load().length) return;
-  if ($("bookNote")) $("bookNote").textContent = "Refreshing book";
+  if ($("bookNote")) $("bookNote").textContent = "Updating…";
   await refreshBookNow(true);
 }
 function noteKind(n){
@@ -3225,8 +3273,9 @@ async function refreshUsage(){
   const u = await r.json();
   window.lastPlan = u.plan || "free";
   window.lastOp = !!u.operator;
+  if ($("refreshBook")) $("refreshBook").classList.toggle("hidden", !u.operator);
   const bonus = u.bonus ? " + "+u.bonus+" extra" : "";
-  const books = u.operator ? "unlimited book refreshes" : ((u.book_left??"?")+" book refreshes");
+  const books = (u.operator || u.plan==="plus") ? "daily book update" : "book follows scans";
   const line = (u.plan==="plus"?"Clappers+":"Free")+" · "+u.left+" IDs left"+bonus+" · "+books;
   if ($("quotaBox")) {
     $("quotaBox").textContent = line;
@@ -3750,6 +3799,7 @@ async function loadMe(){
     if ($("pCropZ")) $("pCropZ").value = d.cropz || "100";
     paintProfile(d.display || "Collector", d.hue || "#8fd4ee", myAvatar);
     if ($("ownerToolsBtn")) $("ownerToolsBtn").classList.toggle("hidden", !d.operator);
+    if ($("refreshBook")) $("refreshBook").classList.toggle("hidden", !d.operator);
     window.lastOp = !!d.operator;
     if (d.operator) loadRipCodes();
     loadBanners();
@@ -4059,7 +4109,7 @@ function openPubCard(c){
   if ($("pubHold")) $("pubHold").textContent = money(c.comp);
   const pubLbl = $("pubHold") && $("pubHold").nextElementSibling;
   if (pubLbl) pubLbl.textContent = (!c.grader || c.grader==="Raw") ? "This copy · Raw" : ("This copy · "+[c.grader,c.grade].filter(Boolean).join(" "));
-  if ($("pubRaw")) $("pubRaw").textContent = money((c.book&&c.book.Raw)!=null?c.book.Raw:c.comp);
+  paintGradeBook(c, "pubGrades");
   paintPubGradePick();
   show("pubDetail");
   paintCardSpark(c, "pubSpark", "pubTrendNote");
