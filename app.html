@@ -679,7 +679,7 @@
     <label>Grade lookup</label>
     <div class="row2">
       <select id="pgSvc">
-        <option>Raw</option><option>PSA</option><option>BGS</option><option>SGC</option><option>CGC</option><option>SMA</option>
+        <option>Raw</option><option>PSA</option><option>BGS</option><option>SGC</option><option>KSA</option><option>CGC</option><option>SMA</option>
       </select>
       <select id="pgNum">
         <option>10</option><option>Black</option><option>9.5</option><option>9</option><option>8.5</option><option>8</option><option>7</option><option>6</option>
@@ -953,7 +953,7 @@
     <label>Grade lookup</label>
     <div class="row2">
       <select id="gSvc">
-        <option>Raw</option><option>PSA</option><option>BGS</option><option>SGC</option><option>CGC</option><option>SMA</option>
+        <option>Raw</option><option>PSA</option><option>BGS</option><option>SGC</option><option>KSA</option><option>CGC</option><option>SMA</option>
       </select>
       <select id="gNum">
         <option>10</option><option>Black</option><option>9.5</option><option>9</option><option>8.5</option><option>8</option><option>7</option><option>6</option>
@@ -2801,6 +2801,9 @@ function binderCad(c){
   if (g==="BGS" && gr.startsWith("10")) return asCad(bookGet(c,"BGS","10")) || asCad(c.bgs10Comp);
   if (g==="BGS" && gr.startsWith("9")) return asCad(bookGet(c,"BGS","9")) || asCad(c.bgs9Comp);
   if (g==="SGC" && gr.startsWith("10")) return asCad(bookGet(c,"SGC","10")) || asCad(c.sgc10Comp);
+  if (g==="KSA" && gr.indexOf("9.5")>=0) return asCad(bookGet(c,"KSA","9.5")) || asCad(c.ksa95Comp);
+  if (g==="KSA" && gr.startsWith("10")) return asCad(bookGet(c,"KSA","10")) || asCad(c.ksa10Comp);
+  if (g==="KSA" && gr.startsWith("9")) return asCad(bookGet(c,"KSA","9")) || asCad(c.ksa9Comp);
   if (!g || g==="RAW") {
     const raw = asCad(c.rawComp) || asCad(bookGet(c,"Raw",""));
     const ten = asCad(bookGet(c,"PSA","10")) || asCad(c.psa10Comp);
@@ -2829,6 +2832,11 @@ function soldForCopyFromApi(card, d){
     if (gr.startsWith("9")) return d.bgs9_cad;
   }
   if (g==="SGC" && gr.startsWith("10")) return d.sgc10_cad;
+  if (g==="KSA") {
+    if (gr.indexOf("9.5")>=0) return d.ksa95_cad;
+    if (gr.startsWith("10")) return d.ksa10_cad;
+    if (gr.startsWith("9")) return d.ksa9_cad;
+  }
   return null;
 }
 function publicCad(c){
@@ -3187,6 +3195,7 @@ function orderGrades(card){
   };
   climb([["Raw","rawComp"],["PSA 6","psa6Comp"],["PSA 7","psa7Comp"],["PSA 8","psa8Comp"],["PSA 9","psa9Comp"],["PSA 10","psa10Comp"]]);
   climb([["BGS 9","bgs9Comp"],["BGS 9.5","bgs95Comp"],["BGS 10","bgs10Comp"],["BGS Black","bgsBlackComp"]]);
+  climb([["KSA 9","ksa9Comp"],["KSA 9.5","ksa95Comp"],["KSA 10","ksa10Comp"]]);
   card.book = b;
   return card;
 }
@@ -3202,6 +3211,19 @@ function keepMoney(next, prev){
 function applyCompObj(card, c){
   c = c || {};
   if (c.raw_cad != null && c.psa10_cad != null && +c.raw_cad >= +c.psa10_cad * 0.9) c.raw_cad = null;
+  const fromHist = {
+    raw_cad: "raw_cad", psa6_cad:"psa6_cad", psa7_cad:"psa7_cad", psa8_cad:"psa8_cad",
+    psa9_cad:"psa9_cad", psa10_cad:"psa10_cad", bgs9_cad:"bgs9_cad", bgs95_cad:"bgs95_cad",
+    bgs10_cad:"bgs10_cad", bgs_black_cad:"bgs_black_cad", sgc10_cad:"sgc10_cad",
+    ksa9_cad:"ksa9_cad", ksa95_cad:"ksa95_cad", ksa10_cad:"ksa10_cad"
+  };
+  const days = c.hist_days || {};
+  Object.keys(fromHist).forEach(k => {
+    if (c[k] != null) return;
+    const pts = days[k];
+    if (pts && pts.length && pts[pts.length-1] && pts[pts.length-1].v != null)
+      c[k] = pts[pts.length-1].v;
+  });
   const rawCard = !card.grader || card.grader === "Raw";
   if (c.raw_cad != null) card.rawComp = keepMoney(c.raw_cad, card.rawComp);
   if (c.psa6_cad != null) card.psa6Comp = keepMoney(c.psa6_cad, card.psa6Comp);
@@ -3214,6 +3236,9 @@ function applyCompObj(card, c){
   if (c.bgs10_cad != null) card.bgs10Comp = keepMoney(c.bgs10_cad, card.bgs10Comp);
   if (c.bgs_black_cad != null) card.bgsBlackComp = keepMoney(c.bgs_black_cad, card.bgsBlackComp);
   if (c.sgc10_cad != null) card.sgc10Comp = keepMoney(c.sgc10_cad, card.sgc10Comp);
+  if (c.ksa9_cad != null) card.ksa9Comp = keepMoney(c.ksa9_cad, card.ksa9Comp);
+  if (c.ksa95_cad != null) card.ksa95Comp = keepMoney(c.ksa95_cad, card.ksa95Comp);
+  if (c.ksa10_cad != null) card.ksa10Comp = keepMoney(c.ksa10_cad, card.ksa10Comp);
   const prev = card.book || {};
   card.book = Object.assign({}, prev);
   [
@@ -3227,11 +3252,24 @@ function applyCompObj(card, c){
     ["BGS 9.5", c.bgs95_cad, card.bgs95Comp],
     ["BGS 10", c.bgs10_cad, card.bgs10Comp],
     ["BGS Black", c.bgs_black_cad, card.bgsBlackComp],
-    ["SGC 10", c.sgc10_cad, card.sgc10Comp]
+    ["SGC 10", c.sgc10_cad, card.sgc10Comp],
+    ["KSA 9", c.ksa9_cad, card.ksa9Comp],
+    ["KSA 9.5", c.ksa95_cad, card.ksa95Comp],
+    ["KSA 10", c.ksa10_cad, card.ksa10Comp]
   ].forEach(row => {
     const held = keepMoney(row[1], prev[row[0]] != null ? prev[row[0]] : row[2]);
     if (held != null) card.book[row[0]] = held;
   });
+  if (card.rawComp != null) card.book.Raw = card.rawComp;
+  if (card.psa9Comp != null) card.book["PSA 9"] = card.psa9Comp;
+  if (card.psa10Comp != null) card.book["PSA 10"] = card.psa10Comp;
+  if (card.bgs9Comp != null) card.book["BGS 9"] = card.bgs9Comp;
+  if (card.bgs95Comp != null) card.book["BGS 9.5"] = card.bgs95Comp;
+  if (card.bgs10Comp != null) card.book["BGS 10"] = card.bgs10Comp;
+  if (card.sgc10Comp != null) card.book["SGC 10"] = card.sgc10Comp;
+  if (card.ksa9Comp != null) card.book["KSA 9"] = card.ksa9Comp;
+  if (card.ksa95Comp != null) card.book["KSA 9.5"] = card.ksa95Comp;
+  if (card.ksa10Comp != null) card.book["KSA 10"] = card.ksa10Comp;
   const copy = rawCard ? (c.raw_cad != null ? c.raw_cad : card.rawComp) : soldForCopyFromApi(card, c);
   if (copy != null && +copy >= 1) {
     card.comp = keepMoney(copy, card.comp);

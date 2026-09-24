@@ -616,6 +616,13 @@ def _sale_bucket(item: dict) -> str | None:
             return "bgs9_cad"
     if grader in ("SGC",) and (grade.startswith("10") or "10" in grade):
         return "sgc10_cad"
+    if grader in ("KSA", "KIDDLEY'S", "KIDDLEY"):
+        if "9.5" in grade or "95" in grade:
+            return "ksa95_cad"
+        if grade.startswith("10"):
+            return "ksa10_cad"
+        if grade.startswith("9"):
+            return "ksa9_cad"
     if grader in ("", "RAW", "UNGRADED", "NONE", "N/A") and (not grade or grade in ("raw", "ungraded", "none")):
         if not re.search(r"\b(psa|bgs|sgc|cgc)\b", title.lower()):
             return "raw_cad"
@@ -637,6 +644,12 @@ def _sale_bucket(item: dict) -> str | None:
         return "bgs10_cad"
     if "bgs" in blob and re.search(r"\b9(\.0)?\b", blob):
         return "bgs9_cad"
+    if "ksa" in blob and "9.5" in blob:
+        return "ksa95_cad"
+    if "ksa" in blob and re.search(r"\b10\b", blob):
+        return "ksa10_cad"
+    if "ksa" in blob and re.search(r"\b9(\.0)?\b", blob):
+        return "ksa9_cad"
     if "sgc" in blob and re.search(r"\b10\b", blob):
         return "sgc10_cad"
     if grader in ("", "RAW", "UNGRADED") or " raw" in f" {blob}" or "ungraded" in blob:
@@ -1070,6 +1083,12 @@ def _copy_bucket(card: dict) -> str:
         return "bgs9_cad"
     if g == "SGC" and gr.startswith("10"):
         return "sgc10_cad"
+    if g == "KSA" and "9.5" in gr:
+        return "ksa95_cad"
+    if g == "KSA" and gr.startswith("10"):
+        return "ksa10_cad"
+    if g == "KSA" and gr.startswith("9"):
+        return "ksa9_cad"
     return "raw_cad"
 
 def attach_hist_copy(data: dict, card: dict) -> dict:
