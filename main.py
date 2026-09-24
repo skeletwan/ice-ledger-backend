@@ -795,24 +795,32 @@ def search_queries(card: dict) -> list:
     if re.search(r"young guns|\byg\b", (ins + " " + st).lower()):
         setish = "Young Guns"
     blob = f"{ins} {st} {par}".lower()
+    named = ins and len(ins) > 4 and ins.lower() not in (
+        "base", "young guns", "series 1", "series 2", "series 3", "extended", "upper deck"
+    )
     parts = [player]
-    if year:
-        parts.append(year if "-" in year else year_short)
-    elif year_short:
-        parts.append(year_short)
-    if st and ins and st.lower() not in ins.lower():
-        parts.append(f'"{st}"' if " " in st else st)
-    if setish:
-        parts.append(f'"{setish}"' if " " in setish else setish)
-    if par:
-        run = re.search(r"/\s*(\d{1,4})", par)
-        color = re.sub(r"/.*", "", par).strip()
-        if color and color.lower() not in blob:
-            parts.append(f'"{color}"' if " " in color else color)
-        if run:
-            parts.append("/" + run.group(1))
-    elif num:
-        parts.append("#" + num)
+    if named:
+        parts.append(f'"{ins}"' if " " in ins else ins)
+        if year:
+            parts.append(year if "-" in year else year_short)
+    else:
+        if year:
+            parts.append(year if "-" in year else year_short)
+        elif year_short:
+            parts.append(year_short)
+        if st and ins and st.lower() not in ins.lower():
+            parts.append(f'"{st}"' if " " in st else st)
+        if setish:
+            parts.append(f'"{setish}"' if " " in setish else setish)
+        if par:
+            run = re.search(r"/\s*(\d{1,4})", par)
+            color = re.sub(r"/.*", "", par).strip()
+            if color and color.lower() not in blob:
+                parts.append(f'"{color}"' if " " in color else color)
+            if run:
+                parts.append("/" + run.group(1))
+        elif num:
+            parts.append("#" + num)
     q = " ".join(x for x in parts if x)
     q += " -(lot,checklist,reprint,jumbo,bundle,album)"
     exclude = []

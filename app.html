@@ -2687,10 +2687,22 @@ function bookGet(c, svc, num){
   if (svc==="Raw") return b.Raw;
   return b[svc+" "+num];
 }
+function gradeNums(svc){
+  if (svc==="BGS") return ["Black","10","9.5","9","8.5","8","7","6"];
+  return ["10","9.5","9","8.5","8","7","6"];
+}
+function fillGradeNums(sel, svc, keep){
+  if (!sel) return;
+  const opts = gradeNums(svc);
+  const want = (keep && opts.indexOf(keep)>=0) ? keep : opts[0];
+  sel.innerHTML = opts.map(n => "<option"+(n===want?" selected":"")+">"+n+"</option>").join("");
+}
 function paintGradePick(){
   const c = load().find(x => x.id===openId);
   if (!c) return;
-  const svc = $("gSvc").value, num = $("gNum").value;
+  const svc = $("gSvc").value;
+  fillGradeNums($("gNum"), svc, $("gNum") && $("gNum").value);
+  const num = $("gNum").value;
   const v = bookGet(c, svc, num);
   $("vPick").textContent = money(v);
   $("vPickLbl").textContent = svc==="Raw" ? "Raw sold" : (svc+" "+num+" sold");
@@ -2699,6 +2711,7 @@ function paintGradePick(){
 function paintPubGradePick(){
   if (!viewCard || !$("pubPick")) return;
   const svc = ($("pgSvc")&&$("pgSvc").value) || "Raw";
+  fillGradeNums($("pgNum"), svc, $("pgNum") && $("pgNum").value);
   const num = ($("pgNum")&&$("pgNum").value) || "10";
   const v = bookGet(viewCard, svc, num);
   $("pubPick").textContent = money(v);
