@@ -816,6 +816,19 @@ def _par_need(parallel: str) -> list:
         need.append("/" + run.group(1))
     return need
 
+def _phrase_in_title(phrase: str, t: str) -> bool:
+    p = re.sub(r"\s+", " ", (phrase or "").strip().lower())
+    if not p:
+        return True
+    if p in t:
+        return True
+    words = [w for w in p.split() if w and w not in ("the", "ud")]
+    if len(words) >= 2 and all(re.search(rf"\b{re.escape(w)}\b", t) for w in words):
+        return True
+    if p == "exclusives" and "ud exclusives" in t:
+        return True
+    return False
+
 SET_KEYS = (
     "young guns", "allure", "splendor", "premier", "artifacts", "the cup",
     "black diamond", "series 1", "series 2", "series 3", "extended",
@@ -823,6 +836,30 @@ SET_KEYS = (
     "metal universe", "fleer ultra", "skybox", "starquest", "choice reserve",
     "canvas", "ice premieres",
 )
+
+SET_ALIASES = {
+    "young guns": (r"young guns", r"\byg\b"),
+    "series 1": (r"series\s*1", r"\bs1\b", r"\bser\.?\s*1\b", r"\bud\s*s1\b"),
+    "series 2": (r"series\s*2", r"\bs2\b", r"\bser\.?\s*2\b", r"\bud\s*s2\b"),
+    "series 3": (r"series\s*3", r"\bs3\b", r"\bser\.?\s*3\b", r"\bud\s*s3\b"),
+    "extended": (r"extended", r"\bext\b"),
+    "sp authentic": (r"sp authentic", r"\bspa\b", r"\bsp-?a\b", r"sp auth"),
+    "sp game used": (r"sp game used", r"\bspgu\b", r"spgu"),
+    "o-pee-chee": (r"o-pee-chee", r"\bopc\b", r"opeechee"),
+    "the cup": (r"the cup", r"\bcup\b"),
+    "ice premieres": (r"ice premieres", r"ice premiere"),
+    "choice reserve": (r"choice reserve", r"reserve"),
+}
+
+def _set_in_title(key: str, t: str) -> bool:
+    if key == "young guns" and re.search(r"young guns|\byg\b", t):
+        return True
+    if key in t:
+        return True
+    for rx in SET_ALIASES.get(key, ()):
+        if re.search(rx, t, flags=re.I):
+            return True
+    return False
 
 def _sale_fits(title: str, q: str, player: str, parallel: str = "", number: str = "") -> bool:
     t = (title or "").lower()
@@ -848,22 +885,13 @@ def _sale_fits(title: str, q: str, player: str, parallel: str = "", number: str 
     ql = required
     years = re.findall(r"\b((?:19|20)\d{2})\b", required)
     if years:
-        ok_year = False
-        for y in years:
-            if y in t or re.search(rf"\b{y[2:]}\s*[-/]\s*\d{{2}}\b", t):
-                ok_year = True
-                break
-        if not ok_year and re.search(r"\b(?:19|20)\d{2}\b", t):
+        season = years[0] + "-" + (years[1][2:] if len(years) > 1 else str(int(years[0]) + 1)[2:])
+        titled = bool(re.search(r"\b(?:19|20)\d{2}\b", t) or re.search(r"\b\d{2}\s*[-/]\s*\d{2}\b", t))
+        if titled and not _season_hit(t, season) and not _season_hit(t, years[0]):
             return False
     hits = [k for k in SET_KEYS if k in ql]
     if hits:
-        ok_set = False
-        for k in hits:
-            if k == "young guns" and re.search(r"young guns|\byg\b", t):
-                ok_set = True
-            elif k in t:
-                ok_set = True
-        if not ok_set:
+        if not any(_set_in_title(k, t) for k in hits):
             return False
     if "young guns" in ql or " yg" in f" {ql}":
         if not re.search(r"young guns|\byg\b", t):
@@ -884,7 +912,7 @@ def _sale_fits(title: str, q: str, player: str, parallel: str = "", number: str 
             if n.startswith("/"):
                 if not re.search(r"/\s*" + re.escape(n[1:]) + r"\b", t):
                     return False
-            elif n not in t and not (n == "exclusives" and "ud exclusives" in t):
+            elif not _phrase_in_title(n, t):
                 return False
         if "exclusives" not in ql and re.search(r"exclusive", t) and "exclusives" not in " ".join(need):
             return False
@@ -920,6 +948,46 @@ _GENERIC_PRODUCT = {
 }
 
 
+def _season_years(year: str) -> list:
+    y = (year or "").strip()
+    m = re.match(r"((?:19|20)\d{2})\s*[-/]\s*(\d{2,4})", y)
+    if m:
+        a = m.group(1)
+        b = m.group(2)
+        if len(b) == 2:
+            b = a[:2] + b
+        return [a, b]
+    if re.match(r"(?:19|20)\d{2}$", y[:4] or ""):
+        a = y[:4]
+        return [a, str(int(a) + 1)]
+    return []
+
+
+def _season_hit(title: str, year: str) -> bool:
+    t = (title or "").lower()
+    ys = _season_years(year)
+    if not ys:
+        return True
+    a, b = ys[0], ys[1] if len(ys) > 1 else str(int(ys[0]) + 1)
+    s1, s2 = a[2:], b[2:]
+    if a in t or b in t:
+        return True
+    if re.search(rf"\b{s1}\s*[-/]\s*{s2}\b", t):
+        return True
+    if re.search(rf"\b{a}\s*[-/]\s*{s2}\b", t) or re.search(rf"\b{a}\s*[-/]\s*{b}\b", t):
+        return True
+    return False
+
+
+def _season_q(year: str) -> str:
+    ys = _season_years(year)
+    if not ys:
+        return ""
+    a, b = ys[0], ys[1] if len(ys) > 1 else str(int(ys[0]) + 1)
+    s1, s2 = a[2:], b[2:]
+    return f'({a},{b},"{s1}/{s2}","{s1}-{s2}","{a}-{s2}")'
+
+
 def _q_token(s: str) -> str:
     s = (s or "").strip()
     if not s:
@@ -953,7 +1021,7 @@ def search_queries(card: dict) -> list:
     parts = [player, _q_token(product)]
     use_year = bool(year) and (yg or not unique or "holo" in blob or "allure" in blob)
     if use_year:
-        parts.append(year[:4])
+        parts.append(_season_q(year) or year[:4])
 
     color = re.sub(r"/.*", "", par).strip()
     run = re.search(r"/\s*(\d{1,4})", par)
@@ -1256,7 +1324,7 @@ async def fetch_card_api(q: str, player: str, fp: str = "", parallel: str = "", 
             _ingest(mixed, q, player, buckets, only_raw=None, sales=sales, parallel=parallel, number=number)
     except Exception:
         return None
-    if fp:
+    if fp and sales:
         save_house_solds(fp, sales)
         out, counts, when = house_day_close(fp)
         if not out:
