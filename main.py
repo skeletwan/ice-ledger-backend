@@ -563,6 +563,8 @@ def _order_grades(data: dict) -> dict:
     climb(("raw_cad","psa6_cad","psa7_cad","psa8_cad","psa9_cad","psa10_cad"))
     climb(("bgs9_cad","bgs95_cad","bgs10_cad"))
     return data
+
+def _usd_to_cad(n):
     try:
         return round(float(n) * 1.35, 2)
     except (TypeError, ValueError):
@@ -603,10 +605,37 @@ def _sale_bucket(item: dict) -> str | None:
             return "raw_cad"
     return None
 
+def _junk_title(title: str) -> bool:
+    t = (title or "").lower()
+    return bool(re.search(
+        r"\b(lot|lots|lot of|reprint|proxy|digital|nft|damaged|ripped|wholesale|5x|x5|10x|box break|spot)\b",
+        t,
+    ))
+
+def _sale_fits(title: str, q: str, player: str) -> bool:
+    t = (title or "").lower()
+    last = (player or "").strip().split()[-1].lower() if player else ""
+    if last and last not in t:
+        return False
+    if _junk_title(title):
+        return False
+    ql = (q or "").lower()
+    if "young guns" in ql or " yg" in f" {ql}":
+        if not re.search(r"young guns|\byg\b", t):
+            return False
+    return True
+
+def _clean_bucket(vals):
+    vals = [v for v in vals if v and v >= 1]
+    if len(vals) >= 3:
+        mid = _median(vals)
+        if mid:
+            vals = [v for v in vals if v >= mid * 0.4]
+    return vals
+
 async def fetch_card_api(q: str, player: str) -> dict | None:
     if not CARD_API_KEY or not q:
         return None
-    last = (player or "").strip().split()[-1].lower() if player else ""
     try:
         async with httpx.AsyncClient(timeout=20) as client:
             r = await client.get(
@@ -627,25 +656,31 @@ async def fetch_card_api(q: str, player: str) -> dict | None:
         if not isinstance(item, dict):
             continue
         title = str(item.get("title") or "")
-        if last and last not in title.lower():
+        if not _sale_fits(title, q, player):
             continue
         try:
             usd = float(item.get("price"))
         except (TypeError, ValueError):
             continue
-        if usd < 1 or usd > 20000:
+        if usd < 3 or usd > 20000:
             continue
         key = _sale_bucket(item)
         if not key:
             continue
-        buckets.setdefault(key, []).append(_usd_to_cad(usd))
+        cad = _usd_to_cad(usd)
+        if not cad:
+            continue
+        buckets.setdefault(key, []).append(cad)
     if not buckets:
         return None
-    out = {k: _median(v) for k, v in buckets.items()}
+    out = {k: _median(_clean_bucket(v)) for k, v in buckets.items()}
+    out = {k: v for k, v in out.items() if v}
     raw = out.get("raw_cad")
     floor = max([out[k] for k in ("psa9_cad","psa10_cad","bgs95_cad","bgs10_cad") if out.get(k)] or [0])
     if raw and floor and raw >= floor * 0.85:
         out.pop("raw_cad", None)
+    if not out:
+        return None
     out = _order_grades(out)
     out["currency"] = "CAD"
     out["sample_count"] = sum(len(v) for v in buckets.values())
@@ -709,8 +744,17 @@ async def comp(
             try:
                 cached = json.loads(row["data"])
                 if isinstance(cached, dict):
-                    cached["cached"] = True
-                    return cached
+                    raw = cached.get("raw_cad") or cached.get("suggested_cad")
+                    ins = (card.get("insert") or "").lower()
+                    junk = False
+                    try:
+                        if "young guns" in ins and raw is not None and float(raw) < 25:
+                            junk = True
+                    except (TypeError, ValueError):
+                        junk = False
+                    if not junk:
+                        cached["cached"] = True
+                        return cached
             except Exception:
                 pass
     def run_only(v):

@@ -182,8 +182,7 @@
     .book-head #refreshBook { width:auto; flex:0 0 auto; margin:0; padding:10px 12px; }
     .bookbar button { width:100%; text-align:left; background:#121c26; border:1px solid var(--line); border-radius:12px; padding:10px 12px; }
     .bookbar b { font-size:22px; }
-    .book-pulse, .book-pulse b, .book-pulse .qs b { animation: bookPulse 1s ease-in-out infinite; }
-    @keyframes bookPulse { 50% { opacity:.4; } }
+    .bookbar { height:8px; }
     .dock { position:fixed; left:0; right:0; bottom:0; z-index:20; display:none; grid-template-columns:repeat(4,1fr); gap:0; background:#0c141b; border-top:1px solid var(--line); padding:8px 6px calc(8px + env(safe-area-inset-bottom)); }
     body.dock-on .dock { display:grid; }
     .dock button { width:auto; margin:0; padding:6px 4px 4px; font-size:10px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; background:transparent; color:#6d8494; border:0; border-radius:12px; }
@@ -676,14 +675,16 @@
     <div class="vals">
       <div class="val"><b id="pubHold">—</b><span>This copy</span></div>
     </div>
-    <div class="gbook" id="pubGrades"></div>
-    <h3 style="font-size:14px;margin:16px 0 8px">Comments</h3>
-    <div id="pubComments"></div>
-    <textarea id="pubBody" rows="2" placeholder="Comment"></textarea>
-    <button id="pubPost">Post</button>
-    <p class="status" id="pubCStatus"></p>
-    <button type="button" class="ghost" id="pubMktBtn">Market</button>
-    <div id="pubMarket" class="hidden">
+    <label>Grade lookup</label>
+    <div class="row2">
+      <select id="pgSvc">
+        <option>Raw</option><option>PSA</option><option>BGS</option><option>SGC</option><option>CGC</option><option>SMA</option>
+      </select>
+      <select id="pgNum">
+        <option>10</option><option>9.5</option><option>9</option><option>8.5</option><option>8</option><option>7</option><option>6</option>
+      </select>
+    </div>
+    <div class="val" style="margin-top:8px"><b id="pubPick">—</b><span id="pubPickLbl">Raw sold</span></div>
     <div class="mini-trend">
       <div class="ranges" id="pubRanges">
         <button data-cr="7D">7D</button>
@@ -696,17 +697,14 @@
       <div class="mini-trend-top"><span class="mini-last" id="pubTrendVal">—</span><span class="mini-chg flat" id="pubTrendNote"></span></div>
       <svg class="mini-spark" id="pubSpark" viewBox="0 0 300 86" preserveAspectRatio="none"></svg>
     </div>
-    <label>Look up another grade</label>
-    <div class="row2">
-      <select id="pgSvc">
-        <option>Raw</option><option>PSA</option><option>BGS</option><option>SGC</option><option>CGC</option><option>SMA</option>
-        <option>CGC</option><option>TAG</option><option>HGA</option><option>ISA</option><option>ACE</option>
-      </select>
-      <select id="pgNum">
-        <option>10</option><option>9.5</option><option>9</option><option>8.5</option><option>8</option><option>7</option><option>6</option>
-      </select>
-    </div>
-    <div class="val" style="margin-top:8px"><b id="pubPick">—</b><span id="pubPickLbl">Pick grader + grade</span></div>
+    <div class="gbook" id="pubGrades"></div>
+    <h3 style="font-size:14px;margin:16px 0 8px">Comments</h3>
+    <div id="pubComments"></div>
+    <textarea id="pubBody" rows="2" placeholder="Comment"></textarea>
+    <button id="pubPost">Post</button>
+    <p class="status" id="pubCStatus"></p>
+    <button type="button" class="ghost" id="pubMktBtn">Market</button>
+    <div id="pubMarket" class="hidden">
     <div class="row2">
       <a class="ghost btn" id="pubEbay" target="_blank" rel="noopener">eBay sold</a>
       <a class="ghost btn" id="pubFan" target="_blank" rel="noopener">Fanatics</a>
@@ -952,14 +950,16 @@
       <div class="val"><b id="vHold">—</b><span>This copy</span></div>
       <div class="val"><b id="vPaid">—</b><span>Paid</span></div>
     </div>
-    <div class="gbook" id="dGrades"></div>
-    <h3 style="font-size:14px;margin:16px 0 8px">Comments</h3>
-    <div id="ownComments"></div>
-    <textarea id="ownBody" rows="2" placeholder="Comment"></textarea>
-    <button id="ownPost">Post</button>
-    <p class="muted" id="ownCNote"></p>
-    <button type="button" class="ghost" id="dMktBtn">Market</button>
-    <div id="dMarket" class="hidden">
+    <label>Grade lookup</label>
+    <div class="row2">
+      <select id="gSvc">
+        <option>Raw</option><option>PSA</option><option>BGS</option><option>SGC</option><option>CGC</option><option>SMA</option>
+      </select>
+      <select id="gNum">
+        <option>10</option><option>9.5</option><option>9</option><option>8.5</option><option>8</option><option>7</option><option>6</option>
+      </select>
+    </div>
+    <div class="val" style="margin-top:8px"><b id="vPick">—</b><span id="vPickLbl">Raw sold</span></div>
     <div class="mini-trend">
       <div class="ranges" id="cardRanges">
         <button data-cr="7D">7D</button>
@@ -972,17 +972,14 @@
       <div class="mini-trend-top"><span class="mini-last" id="cardTrendVal">—</span><span class="mini-chg flat" id="cardTrendNote"></span></div>
       <svg class="mini-spark" id="cardSpark" viewBox="0 0 300 86" preserveAspectRatio="none"></svg>
     </div>
-    <label>Look up another grade</label>
-    <div class="row2">
-      <select id="gSvc">
-        <option>Raw</option><option>PSA</option><option>BGS</option><option>SGC</option><option>CGC</option><option>SMA</option>
-        <option>CGC</option><option>TAG</option><option>HGA</option><option>ISA</option><option>ACE</option>
-      </select>
-      <select id="gNum">
-        <option>10</option><option>9.5</option><option>9</option><option>8.5</option><option>8</option><option>7</option><option>6</option>
-      </select>
-    </div>
-    <div class="val" style="margin-top:8px"><b id="vPick">—</b><span id="vPickLbl">Pick grader + grade</span></div>
+    <div class="gbook" id="dGrades"></div>
+    <h3 style="font-size:14px;margin:16px 0 8px">Comments</h3>
+    <div id="ownComments"></div>
+    <textarea id="ownBody" rows="2" placeholder="Comment"></textarea>
+    <button id="ownPost">Post</button>
+    <p class="muted" id="ownCNote"></p>
+    <button type="button" class="ghost" id="dMktBtn">Market</button>
+    <div id="dMarket" class="hidden">
     <p class="muted" id="dNotes"></p>
     <div class="row2">
       <a class="ghost btn" id="dEbay" target="_blank" rel="noopener">eBay sold</a>
@@ -1544,12 +1541,13 @@ function lastName(p){
   return ((parts[parts.length-1]||"")+" "+(p||"")).toLowerCase();
 }
 function pushCardHist(card){
-  if (!card || card.comp==null || isNaN(+card.comp)) return;
-  const day = new Date().toISOString().slice(0,10);
+  const v = binderCad(card);
+  if (v==null || isNaN(+v)) return;
+  const day = localDay();
   const h = Array.isArray(card.hist) ? card.hist : [];
   const last = h[h.length-1];
-  if (last && last.d === day) last.v = +card.comp;
-  else h.push({ d: day, v: +card.comp, t: new Date().toISOString() });
+  if (last && last.d === day) last.v = +v;
+  else h.push({ d: day, v: +v, t: new Date().toISOString() });
   card.hist = h.slice(-400);
 }
 function axisCash(v){
@@ -1615,34 +1613,37 @@ function cardRangeKey(){
   return ["7D","1M","6M","YTD","1Y","ALL"].indexOf(r)>=0 ? r : "7D";
 }
 function sliceHist(h, r){
-  h = (h || []).filter(x => x && x.d && !isNaN(+x.v));
-  const end = new Date();
-  end.setHours(12,0,0,0);
-  let start = new Date(end);
-  if (r === "YTD") start = new Date(end.getFullYear(), 0, 1, 12);
-  else if (r === "ALL") {
-    if (!h.length) return [];
-    start = new Date(h[0].d + "T12:00:00");
-  } else {
-    const n = { "7D":7, "5D":7, "1M":30, "6M":183, "1Y":365 }[r] || 7;
-    start.setDate(start.getDate() - (n - 1));
+  h = (h || []).filter(x => x && x.d && !isNaN(+x.v)).sort((a,b)=>String(a.d).localeCompare(String(b.d)));
+  if (!h.length) return [];
+  const end = localDay();
+  let start = end;
+  if (r === "YTD") start = end.slice(0,4)+"-01-01";
+  else if (r === "ALL") start = h[0].d;
+  else {
+    const n = { "7D":7, "1M":30, "6M":183, "1Y":365 }[r] || 7;
+    const d = new Date(end+"T12:00:00");
+    d.setDate(d.getDate() - (n - 1));
+    start = d.toISOString().slice(0,10);
   }
+  const real = h.filter(x => x.d >= start && x.d <= end);
+  if (real.length <= 1) return (real.length ? real : h.slice(-1)).map(x => ({ d:x.d, v:+x.v }));
   const map = {};
-  h.forEach(x => { map[x.d] = +x.v; });
-  let last = null;
-  const firstDay = start.toISOString().slice(0,10);
-  h.forEach(x => { if (x.d <= firstDay) last = +x.v; });
+  real.forEach(x => { map[x.d] = +x.v; });
   const out = [];
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+  let last = +real[0].v;
+  const from = new Date(real[0].d+"T12:00:00");
+  const to = new Date(end+"T12:00:00");
+  for (let d = new Date(from); d <= to; d.setDate(d.getDate()+1)) {
     const key = d.toISOString().slice(0,10);
     if (map[key] != null) last = map[key];
-    if (last != null) out.push({ d: key, v: last });
+    out.push({ d: key, v: last });
   }
   return out;
 }
 function paintCardSpark(card, elId, noteId){
+  if (!localStorage.getItem(CRNG)) localStorage.setItem(CRNG, "7D");
   let hist = sliceHist((card && card.hist) || [], cardRangeKey());
-  if (!hist.length && card && card.comp != null && !isNaN(+card.comp)) hist = [{ v:+card.comp, d: new Date().toISOString().slice(0,10) }];
+  if (!hist.length && card && binderCad(card) != null) hist = [{ v:+binderCad(card), d: localDay() }];
   const vals = hist.map(x => +x.v).filter(v => !isNaN(v));
   miniSpark(hist, elId || "cardSpark");
   const lastEl = elId === "pubSpark" ? $("pubTrendVal") : $("cardTrendVal");
@@ -2694,13 +2695,15 @@ function openDetail(id){
   chips.push("<span class=\"chip dim\">"+grade+"</span>");
   $("dChips").innerHTML = chips.join("");
   $("dLine").textContent = [c.year,c.set,c.number?"#"+c.number:"",c.team].filter(Boolean).join(" · ");
-  $("vHold").textContent = money(c.comp);
+  $("vHold").textContent = money(binderCad(c));
   const holdLbl = $("vHold") && $("vHold").nextElementSibling;
   if (holdLbl) holdLbl.textContent = (!c.grader || c.grader==="Raw") ? "This copy · Raw" : ("This copy · "+[c.grader,c.grade].filter(Boolean).join(" "));
   $("vPaid").textContent = money(c.cost);
+  if ($("gSvc")) $("gSvc").value = (!c.grader || c.grader==="Raw") ? "Raw" : c.grader;
+  if ($("gNum")) $("gNum").value = c.grade || "10";
   paintGradeBook(c, "dGrades");
-  paintCardSpark(c);
   paintGradePick();
+  paintCardSpark(c);
   $("dNotes").textContent = c.notes || "";
   const qq = qstr(c);
   $("dEbay").href = "https://www.ebay.ca/sch/i.html?_nkw="+qq+"&LH_Sold=1&LH_Complete=1";
@@ -2751,7 +2754,37 @@ function asCad(v){
 }
 function binderCad(c){
   if (!c) return null;
-  return asCad(c.comp) || asCad(c.rawComp) || asCad(c.sysComp) || asCad(c.sys_comp);
+  const g = String(c.grader||"Raw").toUpperCase();
+  const gr = String(c.grade||"");
+  if (g==="PSA" && gr.startsWith("10")) return asCad(bookGet(c,"PSA","10")) || asCad(c.psa10Comp) || asCad(c.comp);
+  if (g==="PSA" && gr.startsWith("9") && gr.indexOf("9.5")<0) return asCad(bookGet(c,"PSA","9")) || asCad(c.psa9Comp) || asCad(c.comp);
+  if (g==="PSA" && gr.startsWith("8")) return asCad(bookGet(c,"PSA","8")) || asCad(c.psa8Comp) || asCad(c.comp);
+  if (g==="BGS" && gr.indexOf("9.5")>=0) return asCad(bookGet(c,"BGS","9.5")) || asCad(c.bgs95Comp) || asCad(c.comp);
+  if (g==="BGS" && gr.startsWith("10")) return asCad(bookGet(c,"BGS","10")) || asCad(c.bgs10Comp) || asCad(c.comp);
+  if (g==="SGC" && gr.startsWith("10")) return asCad(bookGet(c,"SGC","10")) || asCad(c.sgc10Comp) || asCad(c.comp);
+  if (!g || g==="RAW") return asCad(c.rawComp) || asCad(bookGet(c,"Raw","")) || asCad(c.comp);
+  return asCad(c.comp) || asCad(c.sysComp) || asCad(c.rawComp);
+}
+function soldForCopyFromApi(card, d){
+  d = d || {};
+  const g = String(card.grader||"Raw").toUpperCase();
+  const gr = String(card.grade||"");
+  if (!g || g==="RAW") return d.raw_cad;
+  if (g==="PSA") {
+    if (gr.startsWith("10")) return d.psa10_cad;
+    if (gr.indexOf("9.5")>=0) return d.psa9_cad;
+    if (gr.startsWith("9")) return d.psa9_cad;
+    if (gr.startsWith("8")) return d.psa8_cad;
+    if (gr.startsWith("7")) return d.psa7_cad;
+    if (gr.startsWith("6")) return d.psa6_cad;
+  }
+  if (g==="BGS") {
+    if (gr.indexOf("9.5")>=0) return d.bgs95_cad;
+    if (gr.startsWith("10")) return d.bgs10_cad;
+    if (gr.startsWith("9")) return d.bgs9_cad;
+  }
+  if (g==="SGC" && gr.startsWith("10")) return d.sgc10_cad;
+  return null;
 }
 function publicCad(c){
   if (!c) return null;
@@ -2802,11 +2835,11 @@ function copyValue(c){
   return n==null ? -1 : n;
 }
 function cardMove(c){
-  const h = (c && c.hist) || [];
-  if (h.length < 2) return null;
-  const a = +h[h.length-2].v, b = +h[h.length-1].v;
+  const hist = sliceHist((c && c.hist) || [], "7D");
+  if (hist.length < 2) return null;
+  const a = +hist[0].v, b = +hist[hist.length-1].v;
   if (!(a>0) || isNaN(b)) return null;
-  return { pct: ((b-a)/a)*100, pts: h.slice(-8).map(p => +p.v).filter(n => !isNaN(n)) };
+  return { pct: ((b-a)/a)*100, pts: hist.map(p => +p.v).filter(n => !isNaN(n)) };
 }
 function rowSpark(pts, up){
   if (!pts || pts.length<2) return "";
@@ -3104,17 +3137,24 @@ function orderGrades(card){
 }
 function keepMoney(next, prev){
   const n = (next==null || next==="") ? null : +next;
-  if (n != null && !isNaN(n) && n >= 1) return n;
   const p = (prev==null || prev==="") ? null : +prev;
-  if (p != null && !isNaN(p) && p >= 1) return p;
+  const okN = n != null && !isNaN(n) && n >= 1;
+  const okP = p != null && !isNaN(p) && p >= 1;
+  if (okN && okP && p >= 20 && n < p * 0.4) return p;
+  if (okN) return n;
+  if (okP) return p;
   return null;
 }
 function applyCompObj(card, c){
   const rawCard = !card.grader || card.grader === "Raw";
-  let sug = c.suggested_cad != null ? c.suggested_cad : c.suggested_usd;
-  if (rawCard && c.raw_cad != null) sug = c.raw_cad;
+  const copy = soldForCopyFromApi(card, c);
+  let sug = copy;
+  if (sug == null) sug = rawCard ? c.raw_cad : c.suggested_cad;
   if (sug == null && c.low != null && c.high != null) sug = Math.round((+c.low + +c.high)/2);
-  if (sug != null && +sug >= 1) card.comp = keepMoney(sug, card.comp);
+  if (sug != null && +sug >= 1) {
+    card.comp = keepMoney(sug, card.comp);
+    card.sysComp = card.comp;
+  }
   if (c.raw_cad != null) card.rawComp = keepMoney(c.raw_cad, card.rawComp);
   else if (rawCard && sug != null && c.psa9_cad == null && c.psa10_cad == null) card.rawComp = keepMoney(sug, card.rawComp);
   if (c.psa6_cad != null) card.psa6Comp = keepMoney(c.psa6_cad, card.psa6Comp);
@@ -3187,7 +3227,10 @@ async function refreshBookNow(auto){
     btn.dataset.busy = "0"; btn.disabled = false; return;
   }
   note.textContent = "Updating…";
-  show("bind");
+  document.body.classList.remove("book-pulse");
+  $("bookBar") && $("bookBar").classList.remove("book-pulse");
+  $("quotes") && $("quotes").classList.remove("book-pulse");
+  $("ticker") && $("ticker").classList.remove("book-pulse");
   if (btn) btn.textContent = "Updating…";
   let ok = 0;
   let i = 0;
@@ -4145,10 +4188,14 @@ function openPubCard(c){
   $("pubHero").src = photoSrc(c, viewSlug);
   $("pubTitle").textContent = c.player || "Card";
   $("pubLine").textContent = [c.team,c.year,c.set,c.number?"#"+c.number:"",c.insert,c.parallel].filter(Boolean).join(" · ");
-  if ($("pubHold")) $("pubHold").textContent = money(c.comp);
+  if ($("pubHold")) $("pubHold").textContent = money(binderCad(c) || c.comp);
   const pubLbl = $("pubHold") && $("pubHold").nextElementSibling;
   if (pubLbl) pubLbl.textContent = (!c.grader || c.grader==="Raw") ? "This copy · Raw" : ("This copy · "+[c.grader,c.grade].filter(Boolean).join(" "));
+  if ($("pgSvc")) $("pgSvc").value = (!c.grader || c.grader==="Raw") ? "Raw" : (c.grader || "Raw");
+  if ($("pgNum")) $("pgNum").value = c.grade || "10";
   paintGradeBook(c, "pubGrades");
+  paintPubGradePick();
+  paintCardSpark(c, "pubSpark", "pubTrendNote");
   paintPubGradePick();
   show("pubDetail");
   paintCardSpark(c, "pubSpark", "pubTrendNote");
