@@ -161,6 +161,7 @@
     #pubSet, #setFilter { margin-bottom:8px; }
     .hero img { width:auto; max-width:100%; max-height:320px; height:auto; object-fit:contain; display:inline-block; background:transparent; vertical-align:middle; }
     .vals { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:12px 0; }
+    .vals.one { grid-template-columns:minmax(140px, 220px); justify-content:center; }
     .gbook { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:12px 0 4px; }
     .gbook .gcell { background:#18232d; border:1px solid var(--line); border-radius:10px; padding:8px 10px; display:flex; justify-content:space-between; gap:8px; align-items:baseline; }
     .gbook .gcell span { color:var(--muted); font-size:11px; }
@@ -672,7 +673,7 @@
       <button class="ghost" id="likeBtn">Like · 0</button>
       <button class="ghost hidden" id="cardLikers" style="margin:0"></button>
     </div>
-    <div class="vals">
+    <div class="vals one">
       <div class="val"><b id="pubHold">—</b><span>This copy</span></div>
     </div>
     <label>Grade lookup</label>
@@ -697,7 +698,6 @@
       <div class="mini-trend-top"><span class="mini-last" id="pubTrendVal">—</span><span class="mini-chg flat" id="pubTrendNote"></span></div>
       <svg class="mini-spark" id="pubSpark" viewBox="0 0 300 86" preserveAspectRatio="none"></svg>
     </div>
-    <div class="gbook" id="pubGrades"></div>
     <h3 style="font-size:14px;margin:16px 0 8px">Comments</h3>
     <div id="pubComments"></div>
     <textarea id="pubBody" rows="2" placeholder="Comment"></textarea>
@@ -972,7 +972,6 @@
       <div class="mini-trend-top"><span class="mini-last" id="cardTrendVal">—</span><span class="mini-chg flat" id="cardTrendNote"></span></div>
       <svg class="mini-spark" id="cardSpark" viewBox="0 0 300 86" preserveAspectRatio="none"></svg>
     </div>
-    <div class="gbook" id="dGrades"></div>
     <h3 style="font-size:14px;margin:16px 0 8px">Comments</h3>
     <div id="ownComments"></div>
     <textarea id="ownBody" rows="2" placeholder="Comment"></textarea>
@@ -2701,7 +2700,6 @@ function openDetail(id){
   $("vPaid").textContent = money(c.cost);
   if ($("gSvc")) $("gSvc").value = (!c.grader || c.grader==="Raw") ? "Raw" : c.grader;
   if ($("gNum")) $("gNum").value = c.grade || "10";
-  paintGradeBook(c, "dGrades");
   paintGradePick();
   paintCardSpark(c);
   $("dNotes").textContent = c.notes || "";
@@ -4193,7 +4191,6 @@ function openPubCard(c){
   if (pubLbl) pubLbl.textContent = (!c.grader || c.grader==="Raw") ? "This copy · Raw" : ("This copy · "+[c.grader,c.grade].filter(Boolean).join(" "));
   if ($("pgSvc")) $("pgSvc").value = (!c.grader || c.grader==="Raw") ? "Raw" : (c.grader || "Raw");
   if ($("pgNum")) $("pgNum").value = c.grade || "10";
-  paintGradeBook(c, "pubGrades");
   paintPubGradePick();
   paintCardSpark(c, "pubSpark", "pubTrendNote");
   paintPubGradePick();
