@@ -748,8 +748,7 @@ def _sale_fits(title: str, q: str, player: str, parallel: str = "", number: str 
             if y in t or re.search(rf"\b{y[2:]}\s*[-/]\s*\d{{2}}\b", t):
                 ok_year = True
                 break
-        if not ok_year:
-            return False
+        # year in the query is enough if the listing skipped it
     hits = [k for k in SET_KEYS if k in ql]
     if hits and not any(k in t for k in hits):
         return False
@@ -776,9 +775,8 @@ def _sale_fits(title: str, q: str, player: str, parallel: str = "", number: str 
         )):
             return False
     num = re.sub(r"[^\d]", "", str(number or "").split("/")[0])
-    if num and len(num) >= 2 and num not in ("10", "20", "23", "24"):
-        if num not in t:
-            return False
+    if num and len(num) >= 3 and num not in t and re.search(r"#\s*\d+", t):
+        return False
     return True
 
 def search_queries(card: dict) -> list:
@@ -794,17 +792,27 @@ def search_queries(card: dict) -> list:
     num = re.sub(r"\s*\d+\s*/\s*\d+\s*", " ", num).strip()
     num = re.sub(r"^#+", "", num)
     setish = ins or st
-    if re.search(r"young guns|\byg\b", (ins + " " + st).lower()) and "young guns" not in setish.lower():
-        setish = (setish + " Young Guns").strip()
-    q = " ".join(x for x in [player, year_short, setish, par, ("#" + num) if num else ""] if x)
-    out = [q] if q else []
-    if par and player:
-        out.append(" ".join(x for x in [player, par, year_short, setish] if x))
-    seen = []
-    for item in out:
-        if item and item not in seen:
-            seen.append(item)
-    return seen[:2]
+    if re.search(r"young guns|\byg\b", (ins + " " + st).lower()):
+        setish = "Young Guns"
+    parts = [player]
+    if year_short:
+        parts.append(year_short)
+    if setish:
+        parts.append(f'"{setish}"' if " " in setish else setish)
+    if par:
+        run = re.search(r"/\s*(\d{1,4})", par)
+        color = re.sub(r"/.*", "", par).strip()
+        if color:
+            parts.append(f'"{color}"' if " " in color else color)
+        if run:
+            parts.append("/" + run.group(1))
+    elif num:
+        parts.append("#" + num)
+    q = " ".join(x for x in parts if x)
+    q += " -(lot,checklist,reprint,jumbo,bundle,album)"
+    if not par:
+        q += " -(outburst,exclusives,acetate,canvas,\"high gloss\",superfractor)"
+    return [q] if player else []
 
 def _clean_bucket(vals):
     vals = [v for v in vals if v and v >= 1]
@@ -849,12 +857,12 @@ def _sale_when(item: dict) -> str:
     return ""
 
 def save_house_solds(fp: str, rows: list):
-    if not fp or not rows:
+    if not fp:
         return
     con = db()
     now = time.time()
     con.execute("DELETE FROM house_solds WHERE fp=?", (fp,))
-    for r in rows:
+    for r in rows or []:
         try:
             con.execute(
                 "INSERT OR IGNORE INTO house_solds(id,fp,bucket,cad,sale_date,title,t) VALUES(?,?,?,?,?,?,?)",
