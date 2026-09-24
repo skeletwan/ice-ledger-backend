@@ -1,5 +1,10 @@
 import os, json, base64, time, re, sqlite3, hashlib, secrets, hmac
 from datetime import datetime, timedelta, timezone
+try:
+    from zoneinfo import ZoneInfo
+    TZ = ZoneInfo("America/Toronto")
+except Exception:
+    TZ = timezone(timedelta(hours=-4))
 from io import BytesIO
 from fastapi import FastAPI, UploadFile, File, Header, Form, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -664,7 +669,7 @@ def _order_grades(data: dict) -> dict:
                 data[k] = floor
             else:
                 floor = v
-    climb(("raw_cad","psa6_cad","psa7_cad","psa8_cad","psa9_cad","psa10_cad"))
+    climb(("psa6_cad","psa7_cad","psa8_cad","psa9_cad","psa10_cad"))
     climb(("bgs9_cad","bgs95_cad","bgs10_cad","bgs_black_cad"))
     return data
 
@@ -1020,7 +1025,7 @@ def search_queries(card: dict) -> list:
 
     if yg:
         product = "Young Guns"
-    elif unique:
+    elif unique and ins.lower() not in ("rookie", "rc", "base", "insert"):
         product = ins
     else:
         product = re.sub(r"^(upper deck|ud)\s+", "", st, flags=re.I).strip() or st
@@ -1438,7 +1443,7 @@ def _copy_bucket(card: dict) -> str:
     return "raw_cad"
 
 def expand_hist(pts: list, days: int = 14) -> list:
-    end = datetime.now(timezone.utc).date()
+    end = now_toronto().date()
     start = end - timedelta(days=days - 1)
     by = {}
     for p in pts or []:
@@ -1527,7 +1532,7 @@ async def comp(
     check_cap()
     card = {k: payload.get(k) for k in ("player","year","set","number","parallel","insert","team","grader","grade","cert")}
     scrub_false_yg(card)
-    ck = "|".join(str(card.get(k) or "").strip().lower() for k in ("player","year","set","number","parallel","insert"))
+    ck = card_fp(card)
     day = time.strftime("%Y-%m-%d")
     ck_day = f"{ck}|{day}"
     nightly = bool(payload.get("auto") or payload.get("skip_web") or payload.get("force"))
@@ -1694,21 +1699,13 @@ async def comp(
         try:
             con = db()
             row = con.execute("SELECT data FROM comp_cache WHERE k=?", (ck,)).fetchone()
-            if not row:
-                pl = str(card.get("player") or "").strip().lower()
-                yr = str(card.get("year") or "").strip().lower()
-                if pl and yr:
-                    row = con.execute(
-                        "SELECT data FROM comp_cache WHERE k LIKE ? ORDER BY t DESC LIMIT 1",
-                        (pl + "|" + yr + "|%",),
-                    ).fetchone()
             con.close()
             if row:
                 old = json.loads(row["data"])
                 if isinstance(old, dict) and any(old.get(k) for k in money_keys):
                     old["cached"] = True
                     old["summary"] = (old.get("summary") or "") + " Kept last sold; new search was empty."
-                    return old
+                    return attach_hist_copy(old, card)
         except Exception:
             pass
     if data.get("suggested_cad") is None:
@@ -1752,40 +1749,6 @@ async def comp(
         data["error"] = err
         data["needs_review"] = True
         data["summary"] = data.get("summary") or "Could not read solds automatically."
-    grader = str(card.get("grader") or "").upper()
-    grade = str(card.get("grade") or "")
-    sug = data.get("suggested_cad")
-    if sug and grader == "PSA" and re.match(r"^10", grade):
-        base = "|".join(str(card.get(k) or "").strip().lower() for k in ("player","year","set","number","parallel","insert"))
-        try:
-            con = db()
-            floor = 0.0
-            for g in ("psa|9", "psa|9.0", "bgs|9.5"):
-                row = con.execute("SELECT data FROM comp_cache WHERE k=?", (base+"|"+g,)).fetchone()
-                if not row:
-                    continue
-                try:
-                    old = json.loads(row["data"])
-                    v = old.get("suggested_cad") or old.get("psa9_cad") or old.get("bgs95_cad")
-                    if v:
-                        floor = max(floor, float(v))
-                except Exception:
-                    pass
-            # also any PSA 9 key suffix
-            for row in con.execute("SELECT k,data FROM comp_cache WHERE k LIKE ?", (base+"|psa|9%",)).fetchall():
-                try:
-                    old = json.loads(row["data"])
-                    v = old.get("suggested_cad")
-                    if v:
-                        floor = max(floor, float(v))
-                except Exception:
-                    pass
-            con.close()
-            if floor and float(sug) < floor:
-                data["suggested_cad"] = round(floor, 2)
-                data["summary"] = (data.get("summary") or "") + " PSA 10 floored to stored PSA 9."
-        except Exception:
-            pass
     if ck.strip("|"):
         data = _drop_junk_raw(data, q + " " + (card.get("insert") or ""))
         data = attach_hist_copy(data, card)
@@ -1803,9 +1766,7 @@ async def comp(
     return data
 
 def _card_fp(c: dict) -> str:
-    def n(v):
-        return str(v or "").strip().lower()
-    return "|".join(n(c.get(k)) for k in ("player","year","set","number","parallel","insert"))
+    return card_fp(c)
 
 def _copy_sold(c: dict, data: dict):
     g = str(c.get("grader") or "Raw").upper()
@@ -1867,20 +1828,6 @@ def spread_comp(ck: str, data: dict):
                 continue
             if v < 1:
                 continue
-            if src == "raw_cad":
-                try:
-                    ten = float(data.get("psa10_cad"))
-                    if ten and v >= ten * 0.9:
-                        continue
-                except (TypeError, ValueError):
-                    pass
-            old = None
-            try:
-                old = float(c.get(field))
-            except (TypeError, ValueError):
-                old = None
-            if old is not None and old >= 1:
-                pass
             c[field] = v
             book[label] = v
         copy = _copy_sold(c, data)
@@ -2342,6 +2289,32 @@ def person_of(con, uid: int) -> dict | None:
         "has_avatar": bool(row["avatar"]) and not int(row["avatar_hidden"] or 0),
     }
 
+def now_toronto():
+    return datetime.now(TZ)
+
+def today_iso():
+    return now_toronto().date().isoformat()
+
+def season_key(year: str) -> str:
+    y = (year or "").strip()
+    if re.match(r"(?:19|20)\d{2}$", y[:4] or ""):
+        a = y[:4]
+        return f"{a}-{str(int(a)+1)[2:]}"
+    ys = _season_years(y)
+    if len(ys) >= 2:
+        return f"{ys[0]}-{ys[1][2:]}"
+    return y.lower()
+
+def card_fp(card: dict) -> str:
+    return "|".join([
+        str(card.get("player") or "").strip().lower(),
+        season_key(card.get("year") or ""),
+        str(card.get("set") or "").strip().lower(),
+        str(card.get("number") or "").strip().lower(),
+        str(card.get("parallel") or "").strip().lower(),
+        str(card.get("insert") or "").strip().lower(),
+    ])
+
 def now_utc():
     return datetime.now(timezone.utc)
 
@@ -2579,7 +2552,7 @@ async def book_refresh(payload: dict, request: Request, x_token: str | None = He
     payload = dict(payload or {})
     scrub_false_yg(payload)
     payload["auto"] = True
-    payload["force"] = is_operator(uid)
+    payload["force"] = is_operator(uid) or plan_of(uid) == "plus"
     payload["skip_web"] = True
     return await comp(payload, payload.get("secret"), x_token)
 

@@ -413,6 +413,7 @@
     <button data-r="ALL">MAX</button>
   </div>
   <div class="ticker" id="bookStats"></div>
+  <p class="muted" id="bookBlurb">Book updates at midnight Eastern.</p>
   </div>
   </div>
 
@@ -1545,7 +1546,8 @@ function totals(){
   let paid = 0, paidN = 0, mkt = 0, mktN = 0;
   cards.forEach(c => {
     if (c.cost!=null && c.cost!=="" && !isNaN(+c.cost)) { paid += +c.cost; paidN++; }
-    if (c.comp!=null && c.comp!=="" && !isNaN(+c.comp)) { mkt += +c.comp; mktN++; }
+    const n = binderCad(c);
+    if (n!=null && !isNaN(+n)) { mkt += +n; mktN++; }
   });
   const pl = (paidN && mktN) ? mkt - paid : null;
   return { cards: cards.length, paid, paidN, mkt, mktN, pl };
@@ -2856,10 +2858,7 @@ function binderCad(c){
   if (g==="KSA" && gr.startsWith("10")) return asCad(bookGet(c,"KSA","10")) || asCad(c.ksa10Comp);
   if (g==="KSA" && gr.startsWith("9")) return asCad(bookGet(c,"KSA","9")) || asCad(c.ksa9Comp);
   if (!g || g==="RAW") {
-    const raw = asCad(c.rawComp) || asCad(bookGet(c,"Raw",""));
-    const ten = asCad(bookGet(c,"PSA","10")) || asCad(c.psa10Comp);
-    if (raw && ten && raw >= ten * 0.9) return null;
-    return raw;
+    return asCad(c.rawComp) || asCad(bookGet(c,"Raw",""));
   }
   return asCad(bookGet(c, c.grader||"Raw", c.grade||""));
 }
@@ -3261,7 +3260,7 @@ function keepMoney(next, prev){
 }
 function applyCompObj(card, c){
   c = c || {};
-  if (c.raw_cad != null && c.psa10_cad != null && +c.raw_cad > +c.psa10_cad * 1.5) c.raw_cad = null;
+  // keep raw even when it sits near a PSA 10 box
   const fromHist = {
     raw_cad: "raw_cad", psa6_cad:"psa6_cad", psa7_cad:"psa7_cad", psa8_cad:"psa8_cad",
     psa9_cad:"psa9_cad", psa10_cad:"psa10_cad", bgs9_cad:"bgs9_cad", bgs95_cad:"bgs95_cad",
@@ -3446,7 +3445,7 @@ async function refreshBookNow(auto){
 }
 $("refreshBook") && ($("refreshBook").onclick = () => refreshBookNow());
 async function maybeAutoBook(){
-  if (window.lastPlan !== "plus" && !window.lastOp) return;
+  if (!window.lastOp && window.lastPlan !== "plus") return;
   if (localStorage.getItem("ice-book-auto") === localDay()) return;
   if (!load().length) return;
   if ($("bookNote")) $("bookNote").textContent = "Updating…";
@@ -3516,8 +3515,7 @@ async function refreshUsage(){
   window.lastOp = !!u.operator;
   if ($("refreshBook")) $("refreshBook").classList.toggle("hidden", !u.operator);
   const bonus = u.bonus ? " + "+u.bonus+" extra" : "";
-  const books = (u.operator || u.plan==="plus") ? "daily book update" : "book follows scans";
-  const line = (u.plan==="plus"?"Clappers+":"Free")+" · "+u.left+" IDs left"+bonus+" · "+books;
+  const line = (u.plan==="plus"?"Clappers+":"Free")+" · "+u.left+" IDs left"+bonus;
   if ($("quotaBox")) {
     $("quotaBox").textContent = line;
     $("quotaBox").className = "quota-chip " + (u.left<=0 ? "err" : (u.left<=3 ? "warn" : "ok"));
