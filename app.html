@@ -3417,7 +3417,12 @@ async function refreshBookNow(auto){
           })
         });
       }
-      if (r.status === 402) { note.textContent = "Could not refresh that card. Continuing."; continue; }
+      if (payload && payload.quota) {
+        note.textContent = payload.summary || "Market feed paused until tomorrow.";
+        applyCompObj(card, payload);
+        await pushCard(card).catch(()=>{});
+        break;
+      }
       if (!r.ok) continue;
       const payload = await r.json();
       if (owner && Array.isArray(payload.hist_copy) && payload.hist_copy.length) {

@@ -40,6 +40,7 @@ SMTP_USER = _env("SMTP_USER")
 SMTP_PASS = _env("SMTP_PASS")
 APP_URL = _env("APP_URL")
 CARD_API_KEY = _env("CARD_API_KEY")
+CARD_API_QUOTA = False
 MAIL_LAST_ERROR = ""
 
 def _from_address(raw: str) -> str:
@@ -1158,7 +1159,7 @@ def house_day_close(fp: str):
     out, counts, when = {}, {}, {}
     if not fp:
         return out, counts, when
-    today = datetime.now(timezone.utc).date().isoformat()
+    today = today_iso()
     by = {}
     try:
         con = db()
@@ -1246,32 +1247,31 @@ def _ingest(rows, q, player, buckets, only_raw=None, sales=None, parallel="", nu
             })
 
 async def _card_api_rows(client, q: str, extra: dict) -> list:
-    start = (datetime.now(timezone.utc) - timedelta(days=14)).date().isoformat()
-    params = {"q": q, "limit": 100, "date_from": start}
+    global CARD_API_QUOTA
+    if CARD_API_QUOTA or not q:
+        return []
+    start = (now_toronto() - timedelta(days=7)).date().isoformat()
+    params = {"q": q, "limit": 25, "date_from": start}
     params.update(extra or {})
-    rows = []
-    cursor = None
-    for _ in range(3):
-        if cursor:
-            params["cursor"] = cursor
-        r = await client.get(
-            "https://www.thecardapi.com/api/v1/market/sales",
-            headers={"x-market-api-key": CARD_API_KEY},
-            params=params,
-        )
-        if r.status_code >= 400:
-            break
-        body = r.json() if r.content else {}
-        chunk = body.get("data") if isinstance(body, dict) else body
-        if isinstance(chunk, list):
-            rows.extend(chunk)
-        pag = body.get("pagination") if isinstance(body, dict) else {}
-        cursor = (pag or {}).get("next_cursor")
-        if not cursor or not (pag or {}).get("has_more"):
-            break
-    return rows
+    r = await client.get(
+        "https://www.thecardapi.com/api/v1/market/sales",
+        headers={"x-market-api-key": CARD_API_KEY},
+        params=params,
+    )
+    text = (r.text or "")[:240]
+    if r.status_code == 429 or "limit reached" in text.lower():
+        CARD_API_QUOTA = True
+        return []
+    if r.status_code >= 400:
+        return []
+    body = r.json() if r.content else {}
+    chunk = body.get("data") if isinstance(body, dict) else body
+    return chunk if isinstance(chunk, list) else []
 
 async def fetch_card_api(q: str, player: str, fp: str = "", parallel: str = "", number: str = "", grader: str = "", grade: str = "", year: str = "") -> dict | None:
+    global CARD_API_QUOTA
+    if CARD_API_QUOTA:
+        return {"quota": True, "sample_count": 0, "summary": "Market feed paused until tomorrow."}
     if not CARD_API_KEY or not q:
         return None
     buckets = {}
@@ -1279,22 +1279,20 @@ async def fetch_card_api(q: str, player: str, fp: str = "", parallel: str = "", 
     try:
         async with httpx.AsyncClient(timeout=20) as client:
             mixed = await _card_api_rows(client, q, {})
-            if not mixed and player:
-                mixed = await _card_api_rows(client, player, {})
             raw_rows = [x for x in mixed if isinstance(x, dict) and not str(x.get("grader") or "").strip()]
             slab_rows = [x for x in mixed if isinstance(x, dict) and str(x.get("grader") or "").strip()]
-            extra = {}
-            g = (grader or "").strip().upper()
-            gr = (grade or "").strip()
-            if g and g != "RAW" and gr:
-                extra = {"graded": True, "grader": g, "grade": gr.split()[0]}
-            slab_exact = await _card_api_rows(client, q, extra) if extra else []
-            _ingest(raw_rows or mixed, q, player, buckets, only_raw=True, sales=sales, parallel=parallel, number=number, year=year)
+            _ingest(raw_rows, q, player, buckets, only_raw=True, sales=sales, parallel=parallel, number=number, year=year)
             _ingest(slab_rows, q, player, buckets, only_raw=False, sales=sales, parallel=parallel, number=number, year=year)
-            _ingest(slab_exact, q, player, buckets, only_raw=False, sales=sales, parallel=parallel, number=number, year=year)
             _ingest(mixed, q, player, buckets, only_raw=None, sales=sales, parallel=parallel, number=number, year=year)
     except Exception as e:
         return {"query": q, "error": str(e)[:180], "sample_count": 0, "summary": "Card API error: "+str(e)[:120]}
+    if CARD_API_QUOTA and not sales:
+        house = pack_house(fp) if fp else None
+        if house:
+            house["quota"] = True
+            house["summary"] = "Market feed paused until tomorrow. Using last close."
+            return house
+        return {"quota": True, "sample_count": 0, "summary": "Market feed paused until tomorrow."}
     if fp and sales:
         save_house_solds(fp, sales)
         out, counts, when = house_day_close(fp)
@@ -1508,48 +1506,24 @@ async def comp(
             con.close()
         except Exception:
             pass
-    if ck.strip("|") and not nightly:
+    if ck.strip("|"):
         house = pack_house(ck)
-        if house:
+        if house and (CARD_API_QUOTA or house.get("close_day") == today_iso()):
+            if CARD_API_QUOTA:
+                house["quota"] = True
+                house["summary"] = "Market feed paused until tomorrow. Using last close."
+            else:
+                house["cached"] = True
             return attach_hist_copy(house, card)
-        con = db()
-        row = con.execute("SELECT data, t FROM comp_cache WHERE k=?", (ck_day,)).fetchone()
-        if not row:
-            row = con.execute("SELECT data, t FROM comp_cache WHERE k=?", (ck,)).fetchone()
-        con.close()
-        if row and (time.time() - float(row["t"])) < 36 * 3600:
-            try:
-                cached = json.loads(row["data"])
-                if isinstance(cached, dict) and any(cached.get(k) for k in ("raw_cad","psa10_cad","suggested_cad","psa9_cad")):
-                    cached["cached"] = True
-                    return attach_hist_copy(cached, card)
-            except Exception:
-                pass
-    def run_only(v):
-        s = re.sub(r"\b\d+\s*/\s*(\d+)\b", r"/\1", str(v or ""))
-        s = re.sub(r"\b\d+\s+of\s+(\d+)\b", r"/\1", s, flags=re.I)
-        return s
-    num = str(card.get("number") or "").strip()
-    run = ""
-    m = re.search(r"(\d+)\s*/\s*(\d+)", num)
-    if m:
-        run = "/" + m.group(2)
-        num = re.sub(r"\s*\d+\s*/\s*\d+\s*", " ", num).strip()
-    par = run_only(card.get("parallel"))
-    ins = run_only(card.get("insert"))
     qs = search_queries(card)
-    q = qs[0] if qs else " ".join(str(x) for x in [card.get("player"), ins or card.get("set"), card.get("year")] if x)
+    q = qs[0] if qs else (card.get("player") or "")
     api_hit = None
     for qtry in qs:
         extra = await fetch_card_api(qtry, card.get("player") or "", ck, card.get("parallel") or "", card.get("number") or "", card.get("grader") or "", card.get("grade") or "", card.get("year") or "")
         if extra:
             api_hit = extra
-            if extra.get("raw_cad") or extra.get("psa10_cad") or extra.get("sample_count"):
+            if extra.get("quota") or extra.get("raw_cad") or extra.get("psa10_cad") or extra.get("sample_count"):
                 break
-    if ck.strip("|") and not force:
-        house = pack_house(ck)
-        if house:
-            api_hit = house
     text = ""
     used = COMP_MODEL
     err = None
