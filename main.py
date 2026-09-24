@@ -671,8 +671,6 @@ def _cache_worthy(data: dict, card: dict | None = None) -> bool:
         raw_f = float(raw) if raw is not None else None
     except (TypeError, ValueError):
         raw_f = None
-    if raw_f is not None and raw_n <= 1 and raw_f < 8:
-        return False
     keys = ("suggested_cad","raw_cad","psa6_cad","psa7_cad","psa8_cad","psa9_cad","psa10_cad","bgs9_cad","bgs95_cad","bgs10_cad","bgs_black_cad","sgc10_cad")
     return any(data.get(k) for k in keys)
 
@@ -700,21 +698,85 @@ def _clean_bucket(vals):
             vals = [v for v in vals if v >= mid * 0.4]
     return vals
 
-async def _card_api_rows(client, q: str, extra: dict) -> list:
-    params = {"q": q, "limit": 40, "category": "sports"}
-    params.update(extra or {})
-    r = await client.get(
-        "https://www.thecardapi.com/api/v1/market/sales",
-        headers={"x-market-api-key": CARD_API_KEY},
-        params=params,
-    )
-    if r.status_code >= 400:
-        return []
-    body = r.json()
-    rows = body.get("data") if isinstance(body, dict) else body
-    return rows if isinstance(rows, list) else []
+def _sale_id(item: dict) -> str:
+    sid = str(item.get("id") or item.get("listing_id") or item.get("listing_url") or "").strip()
+    if sid:
+        return sid[:180]
+    blob = f"{item.get('title')}|{item.get('price')}|{item.get('sale_date') or item.get('sold_at')}"
+    return hashlib.sha1(blob.encode("utf-8", "ignore")).hexdigest()
 
-def _ingest(rows, q, player, buckets, only_raw=None):
+def _sale_when(item: dict) -> str:
+    raw = str(item.get("sale_date") or item.get("sold_at") or item.get("date") or "")
+    return raw[:10]
+
+def save_house_solds(fp: str, rows: list):
+    if not fp or not rows:
+        return
+    con = db()
+    now = time.time()
+    for r in rows:
+        try:
+            con.execute(
+                "INSERT OR IGNORE INTO house_solds(id,fp,bucket,cad,sale_date,title,t) VALUES(?,?,?,?,?,?,?)",
+                (r["id"], fp, r["bucket"], float(r["cad"]), r.get("date") or "", (r.get("title") or "")[:240], now),
+            )
+        except Exception:
+            pass
+    con.commit()
+    con.close()
+
+def house_day_close(fp: str):
+    """Median of each grade on the newest day that grade traded."""
+    out, counts, when = {}, {}, {}
+    if not fp:
+        return out, counts, when
+    today = datetime.now(timezone.utc).date().isoformat()
+    by = {}
+    try:
+        con = db()
+        rows = con.execute("SELECT bucket, cad, sale_date FROM house_solds WHERE fp=?", (fp,)).fetchall()
+        con.close()
+    except Exception:
+        return out, counts, when
+    for r in rows:
+        try:
+            cad = float(r["cad"])
+        except (TypeError, ValueError):
+            continue
+        d = (r["sale_date"] or "")[:10] or today
+        by.setdefault(r["bucket"], {}).setdefault(d, []).append(cad)
+    for bucket, days in by.items():
+        use = today if today in days and days[today] else None
+        if not use:
+            dated = sorted(k for k in days if k)
+            use = dated[-1] if dated else None
+        if not use:
+            continue
+        vals = days[use]
+        mid = _median(_clean_bucket(vals) or vals)
+        if mid:
+            out[bucket] = mid
+            counts[bucket] = len(vals)
+            when[bucket] = use
+    return out, counts, when
+
+def load_house_solds(fp: str) -> dict:
+    buckets = {}
+    if not fp:
+        return buckets
+    try:
+        con = db()
+        for r in con.execute("SELECT bucket, cad FROM house_solds WHERE fp=?", (fp,)):
+            try:
+                buckets.setdefault(r["bucket"], []).append(float(r["cad"]))
+            except (TypeError, ValueError):
+                pass
+        con.close()
+    except Exception:
+        return {}
+    return buckets
+
+def _ingest(rows, q, player, buckets, only_raw=None, sales=None):
     for item in rows or []:
         if not isinstance(item, dict):
             continue
@@ -722,7 +784,7 @@ def _ingest(rows, q, player, buckets, only_raw=None):
         if not _sale_fits(title, q, player):
             continue
         cad = _sale_cad(item)
-        if not cad or cad < 3:
+        if not cad or cad < 1:
             continue
         key = _sale_bucket(item)
         if only_raw is True:
@@ -735,35 +797,66 @@ def _ingest(rows, q, player, buckets, only_raw=None):
         elif not key:
             continue
         buckets.setdefault(key, []).append(cad)
+        if sales is not None:
+            sales.append({
+                "id": _sale_id(item),
+                "bucket": key,
+                "cad": cad,
+                "date": _sale_when(item),
+                "title": title,
+            })
 
-async def fetch_card_api(q: str, player: str) -> dict | None:
+async def _card_api_rows(client, q: str, extra: dict) -> list:
+    start = (datetime.now(timezone.utc) - timedelta(days=3)).date().isoformat()
+    params = {"q": q, "limit": 40, "category": "sports", "date_from": start}
+    params.update(extra or {})
+    r = await client.get(
+        "https://www.thecardapi.com/api/v1/market/sales",
+        headers={"x-market-api-key": CARD_API_KEY},
+        params=params,
+    )
+    if r.status_code >= 400:
+        return []
+    body = r.json()
+    rows = body.get("data") if isinstance(body, dict) else body
+    return rows if isinstance(rows, list) else []
+
+async def fetch_card_api(q: str, player: str, fp: str = "") -> dict | None:
     if not CARD_API_KEY or not q:
         return None
     buckets = {}
+    sales = []
     try:
         async with httpx.AsyncClient(timeout=20) as client:
             raw_rows = await _card_api_rows(client, q, {"graded": "false"})
             slab_rows = await _card_api_rows(client, q, {"graded": "true"})
             if not raw_rows and not slab_rows:
                 mixed = await _card_api_rows(client, q, {})
-                _ingest(mixed, q, player, buckets, only_raw=None)
+                _ingest(mixed, q, player, buckets, only_raw=None, sales=sales)
             else:
-                _ingest(raw_rows, q, player, buckets, only_raw=True)
-                _ingest(slab_rows, q, player, buckets, only_raw=False)
+                _ingest(raw_rows, q, player, buckets, only_raw=True, sales=sales)
+                _ingest(slab_rows, q, player, buckets, only_raw=False, sales=sales)
     except Exception:
         return None
-    if not buckets:
+    if fp:
+        save_house_solds(fp, sales)
+        out, counts, when = house_day_close(fp)
+        if not out:
+            counts = {k: len(v) for k, v in buckets.items()}
+            out = {k: _median(_clean_bucket(v) or v) for k, v in buckets.items()}
+            out = {k: v for k, v in out.items() if v}
+            when = {k: datetime.now(timezone.utc).date().isoformat() for k in out}
+    else:
+        counts = {k: len(v) for k, v in buckets.items()}
+        out = {k: _median(_clean_bucket(v) or v) for k, v in buckets.items()}
+        out = {k: v for k, v in out.items() if v}
+        when = {}
+    if not out:
         return None
-    counts = {k: len(v) for k, v in buckets.items()}
-    out = {k: _median(_clean_bucket(v)) for k, v in buckets.items()}
-    out = {k: v for k, v in out.items() if v}
     raw = out.get("raw_cad")
     floor = max([out[k] for k in ("psa9_cad","psa10_cad","bgs95_cad","bgs10_cad") if out.get(k)] or [0])
     if raw and floor and raw >= floor * 0.85:
         out.pop("raw_cad", None)
-        counts.pop("raw_cad", None)
-    out = _drop_junk_raw(out, q)
-    if "raw_cad" not in out:
         counts.pop("raw_cad", None)
     if not out:
         return None
@@ -771,8 +864,10 @@ async def fetch_card_api(q: str, player: str) -> dict | None:
     out["raw_n"] = counts.get("raw_cad", 0)
     out["currency"] = "CAD"
     out["sample_count"] = sum(counts.values())
-    out["sources"] = ["thecardapi"]
-    out["summary"] = f"The Card API · {out['sample_count']} solds (raw {out['raw_n']})."
+    out["close_day"] = when.get("raw_cad") or (max(when.values()) if when else "")
+    out["house"] = True
+    out["sources"] = ["thecardapi", "house"]
+    out["summary"] = f"Day close · {out.get('close_day') or 'today'} · {out['sample_count']} solds."
     out["model"] = "card-api"
     return out
 
@@ -856,10 +951,10 @@ async def comp(
         ("#"+num) if num else None, ins, par,
         run if ("/" not in par and "/" not in ins) else None,
     ] if x)
-    api_hit = await fetch_card_api(q, card.get("player") or "")
+    api_hit = await fetch_card_api(q, card.get("player") or "", ck)
     if not api_hit and card.get("player"):
         q2 = " ".join(str(x) for x in [card.get("player"), ins or "Young Guns", card.get("set") or "Upper Deck", card.get("year")] if x)
-        api_hit = await fetch_card_api(q2, card.get("player") or "")
+        api_hit = await fetch_card_api(q2, card.get("player") or "", ck)
     text = ""
     used = COMP_MODEL
     err = None
@@ -1052,11 +1147,8 @@ async def comp(
         data = _drop_junk_raw(data, q + " " + (card.get("insert") or ""))
         try:
             raw_f = float(data.get("raw_cad")) if data.get("raw_cad") is not None else None
-            raw_n = float(data.get("raw_n") or 0)
         except (TypeError, ValueError):
-            raw_f, raw_n = None, 0
-        if raw_f is not None and raw_n <= 1 and raw_f < 8:
-            data.pop("raw_cad", None)
+            raw_f = None
         if _cache_worthy(data, card):
             try:
                 con = db()
@@ -1149,8 +1241,7 @@ def spread_comp(ck: str, data: dict):
             except (TypeError, ValueError):
                 old = None
             if old is not None and old >= 1:
-                if old >= 20 and v < old * 0.4:
-                    continue
+                pass
             c[field] = v
             book[label] = v
         copy = _copy_sold(c, data)
@@ -1164,7 +1255,7 @@ def spread_comp(ck: str, data: dict):
                 oldc = float(c.get("comp"))
             except (TypeError, ValueError):
                 oldc = None
-            if not (oldc is not None and oldc >= 20 and copy < oldc * 0.4):
+            if not (oldc is not None and copy is None):
                 c["sysComp"] = copy
                 c["comp"] = copy
                 c["compAt"] = now
@@ -1316,6 +1407,16 @@ def init_db():
       data TEXT NOT NULL,
       t REAL NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS house_solds (
+      id TEXT PRIMARY KEY,
+      fp TEXT NOT NULL,
+      bucket TEXT NOT NULL,
+      cad REAL NOT NULL,
+      sale_date TEXT,
+      title TEXT,
+      t REAL NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS house_solds_fp ON house_solds(fp);
     """)
     try:
         con.execute("ALTER TABLE users ADD COLUMN plan TEXT DEFAULT 'free'")

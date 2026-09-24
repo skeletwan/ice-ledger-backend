@@ -3202,7 +3202,6 @@ function keepMoney(next, prev){
   const p = (prev==null || prev==="") ? null : +prev;
   const okN = n != null && !isNaN(n) && n >= 1;
   const okP = p != null && !isNaN(p) && p >= 1;
-  if (okN && okP && p >= 20 && n < p * 0.4) return p;
   if (okN) return n;
   if (okP) return p;
   return null;
