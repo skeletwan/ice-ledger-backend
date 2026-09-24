@@ -647,7 +647,7 @@ def _sale_bucket(item: dict) -> str | None:
 def _junk_title(title: str) -> bool:
     t = (title or "").lower()
     return bool(re.search(
-        r"\b(lot|lots|lot of|reprint|proxy|digital|nft|damaged|ripped|creased|wholesale|5x|x5|10x|box break|spot|shipping only|pwe|sticker only|code only|digital code)\b",
+        r"\b(lot|lots|lot of|reprint|proxy|digital|nft|damaged|ripped|creased|wholesale|5x|x5|10x|box break|spot|shipping only|pwe|sticker only|code only|digital code|checklist)\b",
         t,
     ))
 
@@ -688,6 +688,8 @@ def _sale_fits(title: str, q: str, player: str) -> bool:
     if "young guns" in ql or " yg" in f" {ql}":
         if not re.search(r"young guns|\byg\b", t):
             return False
+    if "jumbo" not in ql and "jumbo" in t:
+        return False
     return True
 
 def _clean_bucket(vals):
@@ -931,7 +933,7 @@ def _ingest(rows, q, player, buckets, only_raw=None, sales=None):
 
 async def _card_api_rows(client, q: str, extra: dict) -> list:
     start = (datetime.now(timezone.utc) - timedelta(days=14)).date().isoformat()
-    params = {"q": q, "limit": 100, "category": "sports", "date_from": start}
+    params = {"q": q, "limit": 100, "date_from": start}
     params.update(extra or {})
     rows = []
     cursor = None
@@ -996,7 +998,13 @@ async def fetch_card_api(q: str, player: str, fp: str = "") -> dict | None:
     out["hist_days"] = merge_series(house_series(fp) if fp else {}, series_from_sales(sales))
     out["house"] = True
     out["sources"] = ["thecardapi", "house"]
-    out["summary"] = f"Day close · {out.get('close_day') or 'today'} · {out['sample_count']} solds."
+    tape = series_from_sales(sales).get("raw_cad") or series_from_sales(sales).get("psa10_cad") or []
+    bits = [f"{p['d'][5:]} ${p['v']:.0f}" for p in tape[-6:]]
+    out["summary"] = (
+        f"Day close · {out.get('close_day') or 'today'} · "
+        + (str(out["sample_count"])+" solds")
+        + ((" · tape " + ", ".join(bits)) if bits else " · no dated solds")
+    )
     out["model"] = "card-api"
     return out
 
@@ -1148,9 +1156,8 @@ async def comp(
     par = run_only(card.get("parallel"))
     ins = run_only(card.get("insert"))
     q = " ".join(str(x) for x in [
-        card.get("year"), card.get("player"), card.get("set"),
-        ("#"+num) if num else None, ins, par,
-        run if ("/" not in par and "/" not in ins) else None,
+        card.get("player"), ins or card.get("set"), card.get("year"),
+        par if par else None,
     ] if x)
     api_hit = await fetch_card_api(q, card.get("player") or "", ck)
     if card.get("player"):
