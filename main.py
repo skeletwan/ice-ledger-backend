@@ -706,8 +706,25 @@ def _sale_id(item: dict) -> str:
     return hashlib.sha1(blob.encode("utf-8", "ignore")).hexdigest()
 
 def _sale_when(item: dict) -> str:
-    raw = str(item.get("sale_date") or item.get("sold_at") or item.get("date") or "")
-    return raw[:10]
+    for k in ("sale_date", "sold_at", "date", "soldAt", "closed_at", "end_time"):
+        raw = item.get(k)
+        if raw is None or raw == "":
+            continue
+        if isinstance(raw, (int, float)):
+            ts = float(raw)
+            if ts > 1e12:
+                ts = ts / 1000.0
+            if ts > 1e9:
+                return datetime.fromtimestamp(ts, tz=timezone.utc).date().isoformat()
+            continue
+        s = str(raw).strip()
+        if len(s) >= 10 and s[4] == "-" and s[7] == "-":
+            return s[:10]
+        try:
+            return datetime.fromisoformat(s.replace("Z", "+00:00")).date().isoformat()
+        except Exception:
+            pass
+    return ""
 
 def save_house_solds(fp: str, rows: list):
     if not fp or not rows:
@@ -743,7 +760,9 @@ def house_series(fp: str) -> dict:
             cad = float(r["cad"])
         except (TypeError, ValueError):
             continue
-        d = (r["sale_date"] or "")[:10] or today
+        d = (r["sale_date"] or "")[:10]
+        if len(d) < 10 or d[4] != "-":
+            continue
         by.setdefault(r["bucket"], {}).setdefault(d, []).append(cad)
     for bucket, days in by.items():
         series = []
