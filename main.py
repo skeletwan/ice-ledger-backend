@@ -1085,6 +1085,8 @@ def _sale_id(item: dict) -> str:
 def _sale_when(item: dict) -> str:
     for k in ("sale_date", "sold_at", "date", "soldAt", "closed_at", "end_time"):
         raw = item.get(k)
+        if isinstance(raw, dict):
+            raw = raw.get("date") or raw.get("day") or raw.get("sold") or ""
         if raw is None or raw == "":
             continue
         if isinstance(raw, (int, float)):
@@ -1436,9 +1438,48 @@ def _copy_bucket(card: dict) -> str:
         return "ksa9_cad"
     return "raw_cad"
 
+def expand_hist(pts: list, days: int = 14) -> list:
+    end = datetime.now(timezone.utc).date()
+    start = end - timedelta(days=days - 1)
+    by = {}
+    for p in pts or []:
+        d = str((p or {}).get("d") or "")[:10]
+        try:
+            v = float(p.get("v"))
+        except (TypeError, ValueError):
+            continue
+        if len(d) == 10 and v >= 1:
+            by[d] = v
+    last = None
+    for d in sorted(by):
+        if d <= start.isoformat():
+            last = by[d]
+    out = []
+    cur = start
+    while cur <= end:
+        key = cur.isoformat()
+        if key in by:
+            last = by[key]
+        if last is not None:
+            out.append({"d": key, "v": last})
+        cur += timedelta(days=1)
+    return out
+
+
 def attach_hist_copy(data: dict, card: dict) -> dict:
     days = (data or {}).get("hist_days") or {}
-    data["hist_copy"] = days.get(_copy_bucket(card)) or days.get("raw_cad") or []
+    pts = days.get(_copy_bucket(card)) or days.get("raw_cad") or []
+    val = None
+    for k in ("suggested_cad", "raw_cad", "psa10_cad", "psa9_cad"):
+        try:
+            if data.get(k) and float(data.get(k)) >= 1:
+                val = float(data.get(k))
+                break
+        except (TypeError, ValueError):
+            pass
+    if not pts and val:
+        pts = [{"d": datetime.now(timezone.utc).date().isoformat(), "v": val}]
+    data["hist_copy"] = expand_hist(pts, 14)
     return data
 
 def _extract_response_text(body: dict) -> str:
@@ -1553,8 +1594,7 @@ async def comp(
     if api_hit:
         data = api_hit
         used = "card-api"
-        days = data.get("hist_days") or {}
-        data["hist_copy"] = days.get(_copy_bucket(card)) or days.get("raw_cad") or []
+        data = attach_hist_copy(data, card)
     elif XAI_API_KEY and not skip_web:
         label = q + " sold Fanatics Collect OR Goldin OR Heritage"
         headers = {"Authorization": f"Bearer {XAI_API_KEY}", "Content-Type": "application/json"}
