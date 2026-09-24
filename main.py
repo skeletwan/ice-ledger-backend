@@ -982,26 +982,26 @@ def _copy_sold(c: dict, data: dict):
     g = str(c.get("grader") or "Raw").upper()
     gr = str(c.get("grade") or "").strip()
     if g in ("", "RAW") or not gr:
-        return data.get("raw_cad") or data.get("suggested_cad")
+        return data.get("raw_cad")
     if g == "PSA" and gr.startswith("10"):
-        return data.get("psa10_cad") or data.get("suggested_cad")
+        return data.get("psa10_cad")
     if g == "PSA" and gr.startswith("9"):
-        return data.get("psa9_cad") or data.get("suggested_cad")
+        return data.get("psa9_cad")
     if g == "PSA" and gr.startswith("8"):
-        return data.get("psa8_cad") or data.get("suggested_cad")
+        return data.get("psa8_cad")
     if g == "PSA" and gr.startswith("7"):
-        return data.get("psa7_cad") or data.get("suggested_cad")
+        return data.get("psa7_cad")
     if g == "PSA" and gr.startswith("6"):
-        return data.get("psa6_cad") or data.get("suggested_cad")
+        return data.get("psa6_cad")
     if g == "BGS" and "9.5" in gr:
-        return data.get("bgs95_cad") or data.get("suggested_cad")
+        return data.get("bgs95_cad")
     if g == "BGS" and gr.startswith("9"):
-        return data.get("bgs9_cad") or data.get("suggested_cad")
+        return data.get("bgs9_cad")
     if g == "BGS" and gr.startswith("10"):
-        return data.get("bgs10_cad") or data.get("suggested_cad")
+        return data.get("bgs10_cad")
     if g == "SGC" and gr.startswith("10"):
-        return data.get("sgc10_cad") or data.get("suggested_cad")
-    return data.get("suggested_cad")
+        return data.get("sgc10_cad")
+    return None
 
 def spread_comp(ck: str, data: dict):
     """Push latest house solds onto every saved copy of this card."""

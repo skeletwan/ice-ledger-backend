@@ -2371,16 +2371,15 @@ function clearCompFields(){
 function soldForCopy(c){
   const g = ($("f_grader") && $("f_grader").value) || "Raw";
   const gr = String(($("f_grade") && $("f_grade").value) || "").trim();
-  if (g === "Raw" || !gr) return c.raw_cad != null ? c.raw_cad : c.suggested_cad;
-  if (g === "PSA" && /^10/.test(gr)) return c.psa10_cad != null ? c.psa10_cad : c.suggested_cad;
-  if (g === "PSA" && /^9/.test(gr)) return c.psa9_cad != null ? c.psa9_cad : c.suggested_cad;
-  if (g === "PSA" && /^8/.test(gr)) return c.psa8_cad != null ? c.psa8_cad : c.suggested_cad;
-  if (g === "PSA" && /^7/.test(gr)) return c.psa7_cad != null ? c.psa7_cad : c.suggested_cad;
-  if (g === "PSA" && /^6/.test(gr)) return c.psa6_cad != null ? c.psa6_cad : c.suggested_cad;
-  if (g === "BGS" && /found|pristine|^10(\b|\.0)/i.test(gr)) return c.bgs10_cad != null ? c.bgs10_cad : c.suggested_cad;
-  if (g === "BGS" && /9\.5/.test(gr)) return c.bgs95_cad != null ? c.bgs95_cad : c.suggested_cad;
-  if (g === "SGC" && /(^|\s)10(\b|\.0)|gem/i.test(gr)) return c.sgc10_cad != null ? c.sgc10_cad : c.suggested_cad;
-  if (g && g !== "Raw") return c.suggested_cad;
+  if (g === "Raw" || !gr) return c.raw_cad != null ? c.raw_cad : null;
+  if (g === "PSA" && /^10/.test(gr)) return c.psa10_cad != null ? c.psa10_cad : null;
+  if (g === "PSA" && /^9/.test(gr)) return c.psa9_cad != null ? c.psa9_cad : null;
+  if (g === "PSA" && /^8/.test(gr)) return c.psa8_cad != null ? c.psa8_cad : null;
+  if (g === "PSA" && /^7/.test(gr)) return c.psa7_cad != null ? c.psa7_cad : null;
+  if (g === "PSA" && /^6/.test(gr)) return c.psa6_cad != null ? c.psa6_cad : null;
+  if (g === "BGS" && /found|pristine|^10(\b|\.0)/i.test(gr)) return c.bgs10_cad != null ? c.bgs10_cad : null;
+  if (g === "BGS" && /9\.5/.test(gr)) return c.bgs95_cad != null ? c.bgs95_cad : null;
+  if (g === "SGC" && /(^|\s)10(\b|\.0)|gem/i.test(gr)) return c.sgc10_cad != null ? c.sgc10_cad : null;
   return null;
 }
 async function lookupComp(){
@@ -2428,10 +2427,6 @@ async function lookupComp(){
   const fpKeep = ["f_player","f_year","f_set","f_number","f_parallel","f_insert"].map(id => ($(id)&&$(id).value||"").trim().toLowerCase()).join("|");
   if (moneyKeys.some(k => c[k] != null && c[k] !== "") || c.raw_cad || c.suggested_cad) window._compMem[fpKeep] = c;
   let sug = soldForCopy(c);
-  if (sug == null && (($("f_grader").value||"Raw")==="Raw")) {
-    if (c.suggested_cad != null) sug = c.suggested_cad;
-    else if (c.low != null && c.high != null) sug = Math.round((+c.low + +c.high) / 2);
-  }
   window.lastSysComp = (sug != null && !isNaN(+sug)) ? +sug : null;
   const cardNo = parseFloat(String($("f_number").value||"").replace("#",""));
   if (sug != null && !(cardNo && Math.abs(+sug - cardNo) < 0.001)) $("comp").value = sug;
@@ -2754,14 +2749,22 @@ function binderCad(c){
   if (!c) return null;
   const g = String(c.grader||"Raw").toUpperCase();
   const gr = String(c.grade||"");
-  if (g==="PSA" && gr.startsWith("10")) return asCad(bookGet(c,"PSA","10")) || asCad(c.psa10Comp) || asCad(c.comp);
-  if (g==="PSA" && gr.startsWith("9") && gr.indexOf("9.5")<0) return asCad(bookGet(c,"PSA","9")) || asCad(c.psa9Comp) || asCad(c.comp);
-  if (g==="PSA" && gr.startsWith("8")) return asCad(bookGet(c,"PSA","8")) || asCad(c.psa8Comp) || asCad(c.comp);
-  if (g==="BGS" && gr.indexOf("9.5")>=0) return asCad(bookGet(c,"BGS","9.5")) || asCad(c.bgs95Comp) || asCad(c.comp);
-  if (g==="BGS" && gr.startsWith("10")) return asCad(bookGet(c,"BGS","10")) || asCad(c.bgs10Comp) || asCad(c.comp);
-  if (g==="SGC" && gr.startsWith("10")) return asCad(bookGet(c,"SGC","10")) || asCad(c.sgc10Comp) || asCad(c.comp);
-  if (!g || g==="RAW") return asCad(c.rawComp) || asCad(bookGet(c,"Raw","")) || asCad(c.comp);
-  return asCad(c.comp) || asCad(c.sysComp) || asCad(c.rawComp);
+  if (g==="PSA" && gr.startsWith("10")) return asCad(bookGet(c,"PSA","10")) || asCad(c.psa10Comp);
+  if (g==="PSA" && gr.startsWith("9") && gr.indexOf("9.5")<0) return asCad(bookGet(c,"PSA","9")) || asCad(c.psa9Comp);
+  if (g==="PSA" && gr.startsWith("8")) return asCad(bookGet(c,"PSA","8")) || asCad(c.psa8Comp);
+  if (g==="PSA" && gr.startsWith("7")) return asCad(bookGet(c,"PSA","7")) || asCad(c.psa7Comp);
+  if (g==="PSA" && gr.startsWith("6")) return asCad(bookGet(c,"PSA","6")) || asCad(c.psa6Comp);
+  if (g==="BGS" && gr.indexOf("9.5")>=0) return asCad(bookGet(c,"BGS","9.5")) || asCad(c.bgs95Comp);
+  if (g==="BGS" && gr.startsWith("10")) return asCad(bookGet(c,"BGS","10")) || asCad(c.bgs10Comp);
+  if (g==="BGS" && gr.startsWith("9")) return asCad(bookGet(c,"BGS","9")) || asCad(c.bgs9Comp);
+  if (g==="SGC" && gr.startsWith("10")) return asCad(bookGet(c,"SGC","10")) || asCad(c.sgc10Comp);
+  if (!g || g==="RAW") {
+    const raw = asCad(c.rawComp) || asCad(bookGet(c,"Raw",""));
+    const ten = asCad(bookGet(c,"PSA","10")) || asCad(c.psa10Comp);
+    if (raw && ten && raw >= ten * 0.9) return null;
+    return raw;
+  }
+  return asCad(bookGet(c, c.grader||"Raw", c.grade||""));
 }
 function soldForCopyFromApi(card, d){
   d = d || {};
@@ -2785,8 +2788,7 @@ function soldForCopyFromApi(card, d){
   return null;
 }
 function publicCad(c){
-  if (!c) return null;
-  return asCad(c.sysComp) || asCad(c.sys_comp) || asCad(c.rawComp);
+  return binderCad(c);
 }
 function tierFromCad(n){
   if (n==null || isNaN(+n) || +n < 5) return "";
@@ -3137,6 +3139,13 @@ function orderGrades(card){
   climb([["Raw","rawComp"],["PSA 6","psa6Comp"],["PSA 7","psa7Comp"],["PSA 8","psa8Comp"],["PSA 9","psa9Comp"],["PSA 10","psa10Comp"]]);
   climb([["BGS 9","bgs9Comp"],["BGS 9.5","bgs95Comp"],["BGS 10","bgs10Comp"]]);
   card.book = b;
+  const raw = keepMoney(card.rawComp, b.Raw);
+  const ten = keepMoney(card.psa10Comp, b["PSA 10"]);
+  if (raw && ten && raw >= ten * 0.9) {
+    card.rawComp = null;
+    delete b.Raw;
+    if (!card.grader || card.grader === "Raw") card.comp = null;
+  }
   return card;
 }
 function keepMoney(next, prev){
@@ -3151,16 +3160,7 @@ function keepMoney(next, prev){
 }
 function applyCompObj(card, c){
   const rawCard = !card.grader || card.grader === "Raw";
-  const copy = soldForCopyFromApi(card, c);
-  let sug = copy;
-  if (sug == null) sug = rawCard ? c.raw_cad : c.suggested_cad;
-  if (sug == null && c.low != null && c.high != null) sug = Math.round((+c.low + +c.high)/2);
-  if (sug != null && +sug >= 1) {
-    card.comp = keepMoney(sug, card.comp);
-    card.sysComp = card.comp;
-  }
   if (c.raw_cad != null) card.rawComp = keepMoney(c.raw_cad, card.rawComp);
-  else if (rawCard && sug != null && c.psa9_cad == null && c.psa10_cad == null) card.rawComp = keepMoney(sug, card.rawComp);
   if (c.psa6_cad != null) card.psa6Comp = keepMoney(c.psa6_cad, card.psa6Comp);
   if (c.psa7_cad != null) card.psa7Comp = keepMoney(c.psa7_cad, card.psa7Comp);
   if (c.psa8_cad != null) card.psa8Comp = keepMoney(c.psa8_cad, card.psa8Comp);
@@ -3187,6 +3187,16 @@ function applyCompObj(card, c){
     const held = keepMoney(row[1], prev[row[0]] != null ? prev[row[0]] : row[2]);
     if (held != null) card.book[row[0]] = held;
   });
+  if (rawCard) {
+    card.comp = card.rawComp != null ? card.rawComp : null;
+    card.sysComp = card.comp;
+  } else {
+    const copy = soldForCopyFromApi(card, c);
+    if (copy != null && +copy >= 1) {
+      card.comp = keepMoney(copy, card.comp);
+      card.sysComp = card.comp;
+    }
+  }
   card.compAt = new Date().toISOString();
   orderGrades(card);
   pushCardHist(card);
