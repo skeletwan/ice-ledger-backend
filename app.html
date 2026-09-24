@@ -3261,7 +3261,7 @@ function keepMoney(next, prev){
 }
 function applyCompObj(card, c){
   c = c || {};
-  if (c.raw_cad != null && c.psa10_cad != null && +c.raw_cad > +c.psa10_cad * 1.25) c.raw_cad = null;
+  if (c.raw_cad != null && c.psa10_cad != null && +c.raw_cad > +c.psa10_cad * 1.5) c.raw_cad = null;
   const fromHist = {
     raw_cad: "raw_cad", psa6_cad:"psa6_cad", psa7_cad:"psa7_cad", psa8_cad:"psa8_cad",
     psa9_cad:"psa9_cad", psa10_cad:"psa10_cad", bgs9_cad:"bgs9_cad", bgs95_cad:"bgs95_cad",

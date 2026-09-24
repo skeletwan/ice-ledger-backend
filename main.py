@@ -757,9 +757,9 @@ def _sale_bucket(item: dict) -> str | None:
     if "sgc" in blob and re.search(r"\b10\b", blob):
         return "sgc10_cad"
     if grader in ("", "RAW", "UNGRADED") or " raw" in f" {blob}" or "ungraded" in blob:
-        if not re.search(r"\b(psa|bgs|sgc|cgc)\b", blob):
+        if not re.search(r"\b(psa|bgs|sgc|cgc)\s*\d", blob):
             return "raw_cad"
-    return None
+    return "raw_cad"
 
 def _junk_title(title: str) -> bool:
     t = (title or "").lower()
@@ -861,7 +861,7 @@ def _set_in_title(key: str, t: str) -> bool:
             return True
     return False
 
-def _sale_fits(title: str, q: str, player: str, parallel: str = "", number: str = "") -> bool:
+def _sale_fits(title: str, q: str, player: str, parallel: str = "", number: str = "", year: str = "") -> bool:
     t = (title or "").lower()
     parts = (player or "").strip().split()
     last = parts[-1].lower() if parts else ""
@@ -883,11 +883,11 @@ def _sale_fits(title: str, q: str, player: str, parallel: str = "", number: str 
         return False
     required = (q or "").split(" -(")[0].lower()
     ql = required
-    years = re.findall(r"\b((?:19|20)\d{2})\b", required)
-    if years:
-        season = years[0] + "-" + (years[1][2:] if len(years) > 1 else str(int(years[0]) + 1)[2:])
+    years_q = re.findall(r"\b((?:19|20)\d{2})\b", required)
+    season = year or (years_q[0] if years_q else "")
+    if season:
         titled = bool(re.search(r"\b(?:19|20)\d{2}\b", t) or re.search(r"\b\d{2}\s*[-/]\s*\d{2}\b", t))
-        if titled and not _season_hit(t, season) and not _season_hit(t, years[0]):
+        if titled and not _season_hit(t, season):
             return False
     hits = [k for k in SET_KEYS if k in ql]
     if hits:
@@ -928,7 +928,7 @@ def _sale_fits(title: str, q: str, player: str, parallel: str = "", number: str 
         )
         if any(flag in t and flag not in ql for flag in extra):
             return False
-        if re.search(r"\bgold\b", t) and "gold" not in ql:
+        if re.search(r"\b(gold\s*/|gold\s+parallel|outburst\s+gold|gold\s+outburst|gold\s+vinyl)\b", t) and "gold" not in ql:
             return False
     num = re.sub(r"[^\d]", "", str(number or "").split("/")[0])
     if num and len(num) >= 3 and num not in t and re.search(r"#\s*\d+", t) and "young guns" not in ql:
@@ -1026,8 +1026,7 @@ def search_queries(card: dict) -> list:
         product = re.sub(r"^(upper deck|ud)\s+", "", st, flags=re.I).strip() or st
 
     parts = [player, _q_token(product)]
-    if year:
-        parts.append(_season_q(year) or year[:4])
+    # Year stays out of the API string. 85/86 vs 1985 is applied in _sale_fits.
 
     color = re.sub(r"/.*", "", par).strip()
     run = re.search(r"/\s*(\d{1,4})", par)
@@ -1254,12 +1253,12 @@ def load_house_solds(fp: str) -> dict:
         return {}
     return buckets
 
-def _ingest(rows, q, player, buckets, only_raw=None, sales=None, parallel="", number=""):
+def _ingest(rows, q, player, buckets, only_raw=None, sales=None, parallel="", number="", year=""):
     for item in rows or []:
         if not isinstance(item, dict):
             continue
         title = str(item.get("title") or "")
-        if not _sale_fits(title, q, player, parallel, number):
+        if not _sale_fits(title, q, player, parallel, number, year):
             continue
         cad = _sale_cad(item)
         if not cad or cad < 1:
@@ -1310,7 +1309,7 @@ async def _card_api_rows(client, q: str, extra: dict) -> list:
             break
     return rows
 
-async def fetch_card_api(q: str, player: str, fp: str = "", parallel: str = "", number: str = "", grader: str = "", grade: str = "") -> dict | None:
+async def fetch_card_api(q: str, player: str, fp: str = "", parallel: str = "", number: str = "", grader: str = "", grade: str = "", year: str = "") -> dict | None:
     if not CARD_API_KEY or not q:
         return None
     buckets = {}
@@ -1326,10 +1325,10 @@ async def fetch_card_api(q: str, player: str, fp: str = "", parallel: str = "", 
                 extra = {"graded": "true", "grader": g, "grade": gr.split()[0]}
             slab_exact = await _card_api_rows(client, q, extra) if extra else []
             mixed = await _card_api_rows(client, q, {})
-            _ingest(raw_rows, q, player, buckets, only_raw=True, sales=sales, parallel=parallel, number=number)
-            _ingest(slab_rows, q, player, buckets, only_raw=False, sales=sales, parallel=parallel, number=number)
-            _ingest(slab_exact, q, player, buckets, only_raw=False, sales=sales, parallel=parallel, number=number)
-            _ingest(mixed, q, player, buckets, only_raw=None, sales=sales, parallel=parallel, number=number)
+            _ingest(raw_rows, q, player, buckets, only_raw=True, sales=sales, parallel=parallel, number=number, year=year)
+            _ingest(slab_rows, q, player, buckets, only_raw=False, sales=sales, parallel=parallel, number=number, year=year)
+            _ingest(slab_exact, q, player, buckets, only_raw=False, sales=sales, parallel=parallel, number=number, year=year)
+            _ingest(mixed, q, player, buckets, only_raw=None, sales=sales, parallel=parallel, number=number, year=year)
     except Exception:
         return None
     if fp and sales:
@@ -1577,7 +1576,7 @@ async def comp(
     q = qs[0] if qs else " ".join(str(x) for x in [card.get("player"), ins or card.get("set"), card.get("year")] if x)
     api_hit = None
     for qtry in qs:
-        extra = await fetch_card_api(qtry, card.get("player") or "", ck, card.get("parallel") or "", card.get("number") or "", card.get("grader") or "", card.get("grade") or "")
+        extra = await fetch_card_api(qtry, card.get("player") or "", ck, card.get("parallel") or "", card.get("number") or "", card.get("grader") or "", card.get("grade") or "", card.get("year") or "")
         if extra:
             api_hit = extra
             if extra.get("raw_cad") or extra.get("psa10_cad") or extra.get("sample_count"):
