@@ -2879,7 +2879,12 @@ function copyValue(c){
   return n==null ? -1 : n;
 }
 function cardMove(c){
-  const hist = sliceHist(cardHist(c), "7D");
+  let hist = sliceHist(cardHist(c), "7D");
+  const now = binderCad(c);
+  if (hist.length < 2 && now != null) {
+    const v = +now;
+    hist = [{ d: localDay(), v: v }, { d: localDay(), v: v }];
+  }
   if (hist.length < 2) return null;
   const a = +hist[0].v, b = +hist[hist.length-1].v;
   if (!(a>0) || isNaN(b)) return null;
@@ -3237,9 +3242,15 @@ function applyCompObj(card, c){
   if (Array.isArray(c.hist_copy) && c.hist_copy.length) {
     const pts = c.hist_copy.filter(p => p && p.d && !isNaN(+p.v)).map(p => ({ d: String(p.d).slice(0,10), v:+p.v }));
     if (pts.length) {
+      const map = {};
+      (Array.isArray(card.hist) ? card.hist : []).forEach(p => {
+        if (p && p.d && !isNaN(+p.v)) map[String(p.d).slice(0,10)] = +p.v;
+      });
+      pts.forEach(p => { map[p.d] = +p.v; });
+      const merged = Object.keys(map).sort().map(d => ({ d, v: map[d] }));
       card.histMap = card.histMap || {};
-      card.histMap[gradeKey(card)] = pts;
-      card.hist = pts;
+      card.histMap[gradeKey(card)] = merged;
+      card.hist = merged;
       return;
     }
   }

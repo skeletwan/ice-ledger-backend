@@ -720,6 +720,12 @@ def _sale_when(item: dict) -> str:
         s = str(raw).strip()
         if len(s) >= 10 and s[4] == "-" and s[7] == "-":
             return s[:10]
+        m = re.match(r"^(\d{1,2})[/-](\d{1,2})[/-](\d{4})", s)
+        if m:
+            a, b, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
+            if a > 12:
+                return f"{y:04d}-{b:02d}-{a:02d}"
+            return f"{y:04d}-{a:02d}-{b:02d}"
         try:
             return datetime.fromisoformat(s.replace("Z", "+00:00")).date().isoformat()
         except Exception:
@@ -824,22 +830,25 @@ def house_day_close(fp: str):
         d = (r["sale_date"] or "")[:10] or today
         by.setdefault(r["bucket"], {}).setdefault(d, []).append(cad)
     for bucket, days in by.items():
-        use = today if today in days and days[today] else None
+        all_vals = [v for vals in days.values() for v in vals]
+        mid14 = _median(_clean_bucket(all_vals) or all_vals)
+        use = None
+        for d in sorted(days.keys(), reverse=True):
+            vals = days[d]
+            mid = _median(_clean_bucket(vals) or vals)
+            if not mid:
+                continue
+            if mid14 and mid < mid14 * 0.4 and len(vals) <= 2:
+                continue
+            use = d
+            break
         if not use:
-            dated = sorted(k for k in days if k)
+            dated = sorted(days.keys())
             use = dated[-1] if dated else None
         if not use:
             continue
         vals = days[use]
         mid = _median(_clean_bucket(vals) or vals)
-        prior = None
-        older = sorted(k for k in days if k < use)
-        if older:
-            prior = _median(_clean_bucket(days[older[-1]]) or days[older[-1]])
-        if prior and len(vals) <= 1 and mid and mid < prior * 0.4:
-            mid = prior
-            use = older[-1]
-            vals = days[use]
         if mid:
             out[bucket] = mid
             counts[bucket] = len(vals)
@@ -916,12 +925,10 @@ async def fetch_card_api(q: str, player: str, fp: str = "") -> dict | None:
         async with httpx.AsyncClient(timeout=20) as client:
             raw_rows = await _card_api_rows(client, q, {"graded": "false"})
             slab_rows = await _card_api_rows(client, q, {"graded": "true"})
-            if not raw_rows and not slab_rows:
-                mixed = await _card_api_rows(client, q, {})
-                _ingest(mixed, q, player, buckets, only_raw=None, sales=sales)
-            else:
-                _ingest(raw_rows, q, player, buckets, only_raw=True, sales=sales)
-                _ingest(slab_rows, q, player, buckets, only_raw=False, sales=sales)
+            mixed = await _card_api_rows(client, q, {})
+            _ingest(raw_rows, q, player, buckets, only_raw=True, sales=sales)
+            _ingest(slab_rows, q, player, buckets, only_raw=False, sales=sales)
+            _ingest(mixed, q, player, buckets, only_raw=None, sales=sales)
     except Exception:
         return None
     if fp:
@@ -1107,9 +1114,15 @@ async def comp(
         run if ("/" not in par and "/" not in ins) else None,
     ] if x)
     api_hit = await fetch_card_api(q, card.get("player") or "", ck)
-    if not api_hit and card.get("player"):
-        q2 = " ".join(str(x) for x in [card.get("player"), ins or "Young Guns", card.get("set") or "Upper Deck", card.get("year")] if x)
-        api_hit = await fetch_card_api(q2, card.get("player") or "", ck)
+    if card.get("player"):
+        q2 = " ".join(str(x) for x in [card.get("player"), ins or "Young Guns", card.get("year")] if x)
+        if q2.strip() != q.strip():
+            extra = await fetch_card_api(q2, card.get("player") or "", ck)
+            if extra and not api_hit:
+                api_hit = extra
+        house = pack_house(ck)
+        if house:
+            api_hit = house
     text = ""
     used = COMP_MODEL
     err = None
