@@ -660,7 +660,7 @@ def _sale_bucket(item: dict) -> str | None:
 def _junk_title(title: str) -> bool:
     t = (title or "").lower()
     return bool(re.search(
-        r"\b(lot|lots|lot of|reprint|proxy|digital|nft|damaged|ripped|creased|wholesale|5x|x5|10x|box break|spot|shipping only|pwe|sticker only|code only|digital code|checklist)\b",
+        r"\b(lot|lots|lot of|\d+\s*card lot|bundle|collection|complete set|reprint|proxy|digital|nft|damaged|ripped|creased|wholesale|\d+x|x\d+|box break|team break|spot|shipping only|pwe|sticker only|code only|digital code|checklist)\b",
         t,
     ))
 
@@ -712,10 +712,19 @@ def _par_need(parallel: str) -> list:
         need.append("/" + run.group(1))
     return need
 
+SET_KEYS = (
+    "young guns", "allure", "splendor", "premier", "artifacts", "the cup",
+    "black diamond", "series 1", "series 2", "series 3", "extended",
+    "sp authentic", "sp game used", "clear cut", "o-pee-chee", "opc platinum",
+    "metal universe", "fleer ultra", "skybox", "starquest", "choice reserve",
+    "canvas", "ice premieres",
+)
+
 def _sale_fits(title: str, q: str, player: str, parallel: str = "", number: str = "") -> bool:
     t = (title or "").lower()
     parts = (player or "").strip().split()
     last = parts[-1].lower() if parts else ""
+    first = parts[0].lower() if len(parts) > 1 else ""
     if last:
         alts = {last}
         if last.endswith("sky"):
@@ -726,9 +735,24 @@ def _sale_fits(title: str, q: str, player: str, parallel: str = "", number: str 
             alts.add(last + "a")
         if not any(a in t for a in alts):
             return False
+    if first and len(first) > 3 and first not in ("alex", "john", "mike", "chris", "matt", "nick"):
+        if first not in t and last not in t:
+            return False
     if _junk_title(title):
         return False
     ql = (q or "").lower()
+    years = re.findall(r"\b((?:19|20)\d{2})\b", ql)
+    if years:
+        ok_year = False
+        for y in years:
+            if y in t or re.search(rf"\b{y[2:]}\s*[-/]\s*\d{{2}}\b", t):
+                ok_year = True
+                break
+        if not ok_year:
+            return False
+    hits = [k for k in SET_KEYS if k in ql]
+    if hits and not any(k in t for k in hits):
+        return False
     if "young guns" in ql or " yg" in f" {ql}":
         if not re.search(r"young guns|\byg\b", t):
             return False
@@ -742,17 +766,19 @@ def _sale_fits(title: str, q: str, player: str, parallel: str = "", number: str 
                     return False
             elif n not in t:
                 return False
+    else:
+        if re.search(r"/\s*(?:1|5|10|25|49|50|99|100|150|199|249|299|349|399|499|999)\b", t):
+            return False
+        if any(flag in t for flag in (
+            "orange", "gold vinyl", "superfractor", "printing plate",
+            "outburst", "extravagance", "canvas", "acetate", "clear cut",
+            "red rainbow", "green parallel", "blue parallel", "pink",
+        )):
+            return False
     num = re.sub(r"[^\d]", "", str(number or "").split("/")[0])
     if num and len(num) >= 2 and num not in ("10", "20", "23", "24"):
         if num not in t:
             return False
-    if not need:
-        if any(flag in t for flag in PAR_FLAGS if flag not in ql):
-            if re.search(r"/\s*\d{1,4}\b", t) or any(flag in t for flag in (
-                "orange", "red rainbow", "gold vinyl", "superfractor", "printing plate",
-                "outburst", "extravagance", "canvas", "acetate", "clear cut",
-            )):
-                return False
     return True
 
 def search_queries(card: dict) -> list:
@@ -827,6 +853,7 @@ def save_house_solds(fp: str, rows: list):
         return
     con = db()
     now = time.time()
+    con.execute("DELETE FROM house_solds WHERE fp=?", (fp,))
     for r in rows:
         try:
             con.execute(
