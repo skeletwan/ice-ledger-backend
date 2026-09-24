@@ -1159,7 +1159,7 @@ def init_db():
         con.execute("ALTER TABLE users ADD COLUMN slug TEXT")
     except sqlite3.OperationalError:
         pass
-    for col, spec in (("display", "TEXT"), ("hue", "TEXT"), ("bio", "TEXT"), ("avatar", "TEXT"), ("cropx", "TEXT"), ("cropy", "TEXT"), ("cropz", "TEXT"), ("avatar_hidden", "INTEGER NOT NULL DEFAULT 0"), ("credits", "INTEGER NOT NULL DEFAULT 0"), ("credit_month", "TEXT"), ("credit_until", "TEXT"), ("plus_until", "TEXT"), ("cycle_start", "TEXT"), ("suspended", "INTEGER NOT NULL DEFAULT 0"), ("socials", "TEXT"), ("last_book_auto", "TEXT")):
+    for col, spec in (("display", "TEXT"), ("hue", "TEXT"), ("bio", "TEXT"), ("avatar", "TEXT"), ("cropx", "TEXT"), ("cropy", "TEXT"), ("cropz", "TEXT"), ("avatar_hidden", "INTEGER NOT NULL DEFAULT 0"), ("credits", "INTEGER NOT NULL DEFAULT 0"), ("credit_month", "TEXT"), ("credit_until", "TEXT"), ("plus_until", "TEXT"), ("cycle_start", "TEXT"), ("suspended", "INTEGER NOT NULL DEFAULT 0"), ("socials", "TEXT"), ("last_book_auto", "TEXT"), ("book_hist", "TEXT")):
         try:
             con.execute(f"ALTER TABLE users ADD COLUMN {col} {spec}")
         except sqlite3.OperationalError:
@@ -2395,8 +2395,13 @@ async def me(request: Request, x_token: str | None = Header(default=None)):
     uid = require_user(request, x_token)
     slug = ensure_slug(uid)
     con = db()
-    row = con.execute("SELECT email,display,hue,bio,avatar,cropx,cropy,cropz,socials FROM users WHERE id=?", (uid,)).fetchone()
+    row = con.execute("SELECT email,display,hue,bio,avatar,cropx,cropy,cropz,socials,book_hist FROM users WHERE id=?", (uid,)).fetchone()
     con.close()
+    hist = []
+    try:
+        hist = json.loads(row["book_hist"] if row else "[]") or []
+    except Exception:
+        hist = []
     return {
         "slug": slug,
         "url": f"/?b={slug}",
@@ -2409,7 +2414,37 @@ async def me(request: Request, x_token: str | None = Header(default=None)):
         "cropy": (row["cropy"] if row else None) or "50",
         "cropz": (row["cropz"] if row else None) or "100",
         "socials": parse_socials(row["socials"] if row else ""),
+        "book_hist": hist if isinstance(hist, list) else [],
     }
+
+@app.post("/book-hist")
+async def save_book_hist(payload: dict, request: Request, x_token: str | None = Header(default=None)):
+    uid = require_user(request, x_token)
+    pts = payload.get("points") or []
+    clean = []
+    seen = set()
+    for p in pts:
+        if not isinstance(p, dict):
+            continue
+        d = str(p.get("d") or "")[:10]
+        try:
+            v = float(p.get("v"))
+        except (TypeError, ValueError):
+            continue
+        if len(d) != 10 or v < 0:
+            continue
+        seen.add(d)
+        clean.append({"d": d, "v": round(v, 2), "t": str(p.get("t") or "")[:28]})
+    clean = clean[-400:]
+    con = db()
+    try:
+        con.execute("UPDATE users SET book_hist=? WHERE id=?", (json.dumps(clean), uid))
+        con.commit()
+    except Exception:
+        pass
+    con.close()
+    return {"ok": True, "n": len(clean)}
+
 
 @app.post("/profile")
 async def save_profile(payload: dict, request: Request, x_token: str | None = Header(default=None)):

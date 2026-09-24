@@ -1193,43 +1193,84 @@ function rangeKey(){
   return ["7D","1M","6M","YTD","1Y","ALL"].indexOf(r)>=0 ? r : "7D";
 }
 function loadHist(){ try { return JSON.parse(localStorage.getItem(HIST)||"[]"); } catch(e){ return []; } }
+function saveHist(h){
+  const rows = (h||[]).filter(x => x && x.d && !isNaN(+x.v)).sort((a,b)=>String(a.d).localeCompare(String(b.d)));
+  const map = {};
+  rows.forEach(x => { map[x.d] = x; });
+  const out = Object.keys(map).sort().map(k => map[k]).slice(-400);
+  localStorage.setItem(HIST, JSON.stringify(out));
+  if (token() && !window._histQuiet) {
+    clearTimeout(window._histT);
+    window._histT = setTimeout(() => {
+      fetch("/book-hist", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json", "x-token": token() },
+        body: JSON.stringify({ points: out })
+      }).catch(()=>{});
+    }, 800);
+  }
+  return out;
+}
+function mergeHist(extra){
+  const cur = loadHist();
+  (extra||[]).forEach(x => { if (x && x.d) cur.push(x); });
+  return saveHist(cur);
+}
+function seedHistFromCards(){
+  if (loadHist().length) return;
+  const byDay = {};
+  (load()||[]).forEach(c => {
+    const pts = Array.isArray(c.hist) ? c.hist : [];
+    const first = pts[0] || null;
+    const day = (first && first.d) || String(c.added||"").slice(0,10);
+    const v = (first && +first.v) || +c.comp || +c.rawComp;
+    if (!day || !v || v < 1) return;
+    byDay[day] = (byDay[day]||0) + v;
+  });
+  const days = Object.keys(byDay).sort();
+  if (!days.length) return;
+  saveHist(days.map(d => ({ d, v: byDay[d], t: d+"T12:00:00Z" })));
+}
 function pushHist(bookCad){
-  if (bookCad==null) return;
+  if (bookCad==null || isNaN(+bookCad)) return;
   const h = loadHist();
-  const day = new Date().toISOString().slice(0,10);
+  const day = localDay();
   const last = h[h.length-1];
-  if (last && last.d === day && Math.abs((+last.v||0) - bookCad) < 0.5) {
-    last.v = bookCad;
+  if (last && last.d === day) {
+    last.v = +bookCad;
     last.t = new Date().toISOString();
   } else {
-    h.push({ d: day, v: bookCad, t: new Date().toISOString() });
+    h.push({ d: day, v: +bookCad, t: new Date().toISOString() });
   }
-  localStorage.setItem(HIST, JSON.stringify(h.slice(-400)));
+  saveHist(h);
 }
 function histForRange(){
-  const h = loadHist();
+  const h = loadHist().filter(x => x && x.d && !isNaN(+x.v));
+  if (!h.length) return [];
   const r = rangeKey();
-  const end = new Date();
-  end.setHours(12,0,0,0);
-  let start = new Date(end);
-  if (r === "YTD") start = new Date(end.getFullYear(), 0, 1, 12);
-  else if (r === "ALL") {
-    if (!h.length) return [];
-    start = new Date(h[0].d + "T12:00:00");
-  } else {
-    const n = { "7D":7, "5D":7, "1M":30, "6M":183, "1Y":365 }[r] || 7;
-    start.setDate(start.getDate() - (n - 1));
+  const end = localDay();
+  let start = end;
+  if (r === "YTD") start = end.slice(0,4)+"-01-01";
+  else if (r === "ALL") start = h[0].d;
+  else {
+    const n = { "7D":7, "1M":30, "6M":183, "1Y":365 }[r] || 7;
+    const d = new Date(end+"T12:00:00");
+    d.setDate(d.getDate() - (n - 1));
+    start = d.toISOString().slice(0,10);
   }
+  const real = h.filter(x => x.d >= start && x.d <= end);
+  const first = real.length ? real : h.slice(-1);
+  if (first.length <= 1) return first.map(x => ({ d:x.d, v:+x.v }));
   const map = {};
-  h.forEach(x => { if (x && x.d) map[x.d] = +x.v; });
-  let last = null;
-  const firstDay = start.toISOString().slice(0,10);
-  h.forEach(x => { if (x.d <= firstDay && !isNaN(+x.v)) last = +x.v; });
+  first.forEach(x => { map[x.d] = +x.v; });
   const out = [];
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+  let last = +first[0].v;
+  const from = new Date(first[0].d+"T12:00:00");
+  const to = new Date(end+"T12:00:00");
+  for (let d = new Date(from); d <= to; d.setDate(d.getDate()+1)) {
     const key = d.toISOString().slice(0,10);
-    if (map[key] != null && !isNaN(map[key])) last = map[key];
-    if (last != null && !isNaN(last)) out.push({ d: key, v: last });
+    if (map[key] != null) last = map[key];
+    out.push({ d: key, v: last });
   }
   return out;
 }
@@ -1329,14 +1370,9 @@ function persistCards(cards){
   throw new Error("quota exceeded");
 }
 function syncBookHist(){
+  seedHistFromCards();
   const t = totals();
-  const h = loadHist();
-  const day = new Date().toISOString().slice(0,10);
-  const v = t.mktN ? t.mkt : 0;
-  const last = h[h.length-1];
-  if (last && last.d === day) last.v = v;
-  else h.push({ d: day, v: v, t: new Date().toISOString() });
-  localStorage.setItem(HIST, JSON.stringify(h.slice(-400)));
+  if (t.mktN) pushHist(t.mkt);
 }
 function saveAll(cards){
   const kept = persistCards(cards);
@@ -3801,6 +3837,9 @@ async function loadMe(){
     if ($("ownerToolsBtn")) $("ownerToolsBtn").classList.toggle("hidden", !d.operator);
     if ($("refreshBook")) $("refreshBook").classList.toggle("hidden", !d.operator);
     window.lastOp = !!d.operator;
+    if (Array.isArray(d.book_hist) && d.book_hist.length) mergeHist(d.book_hist);
+    seedHistFromCards();
+    paintTicker();
     if (d.operator) loadRipCodes();
     loadBanners();
     loadCommunity();
