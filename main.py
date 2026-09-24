@@ -106,9 +106,12 @@ You may get FRONT and sometimes BACK. Back is source of truth for year, set name
 Slab: read the grading label first (grader, grade, cert), then the card through the case. Graders include PSA, BGS, SGC, CGC, SMA.
 
 Upper Deck hockey rules (2015–2026 especially):
-- Young Guns = insert "Young Guns" (not a parallel). Canvas Young Guns = insert "Young Guns Canvas".
+- Young Guns = insert "Young Guns" ONLY when the front says YOUNG GUNS or shows the YG shield on flagship UD Series 1 / Series 2 / Extended. It is not a synonym for Rookie or RC.
+- RC / Rookie / "Rookie Card" on Sizzle Reel, Allure, SP Authentic, Future Watch, Artifacts, The Cup, Stature, Premier, Synergy, Metal Universe, OPC, Parkhurst, Portraits, Dazzlers, Holofoil, Ice, Black Diamond is NOT Young Guns. Use that product name as insert or set.
+- Young Guns Renewed is insert "Young Guns Renewed". Canvas Young Guns is insert "Young Guns Canvas".
+- "C" badge alone is not enough. Series 1 #1–200 and Series 2 #251–450 are base (or that insert), not Young Guns. YG checklist numbers are typically 201–250 (S1), 451–500 (S2), and the Extended YG range.
 - Exclusives, High Gloss, Clear Cut, Outburst, Traxx are parallels or separate inserts — never label a plain YG as those.
-- "C" or Young Guns badge on silver UD Series 1/2 rookies is usually Young Guns, not SP Authentic.
+- Silver UD flagship with YOUNG GUNS printed or the YG logo = Young Guns. Silver UD without those words = base or the insert actually printed (Canvas, Sizzle Reel, Portraits).
 - Young Guns Deluxe / DELUXE on a UD rookie: insert stays Young Guns. Parallel is Deluxe /250 (or the printed serial). Set is Series 1, Series 2, or Extended from the back.
 - Flagship UD Series 1/2/Extended rainbow (base AND Young Guns): Outburst Silver, Clear Cut, Deluxe /250, UD Exclusives /100, Outburst Red /25, High Gloss /10, Outburst Gold 1/1, Printing Plates 1/1.
 - Common UD inserts (not parallels): UD Canvas, UD Canvas Young Guns, UD Portraits, Dazzlers (Blue/Pink/Green/Gold), Encore, Population Count, Sizzle Reel, Young Guns Renewed, Holotypes, OPC Glossy, French.
@@ -339,6 +342,64 @@ async def catalog_search(q: str = "", year: str = "", player: str = ""):
     con.close()
     return {"matches": hits}
 
+def scrub_false_yg(data: dict) -> bool:
+    if not isinstance(data, dict):
+        return False
+    ins = str(data.get("insert") or "")
+    st = str(data.get("set") or "")
+    par = str(data.get("parallel") or "")
+    before = ins
+    mix = f"{st} {ins} {par}".lower()
+    if not re.search(r"young guns|^\s*yg\s*$", ins, flags=re.I) and ins.lower() != "yg":
+        return False
+    named_ins = re.search(
+        r"(sizzle reel|future watch|holofoil|dazzlers|portraits|young guns renewed|young guns canvas|canvas young guns)",
+        mix,
+    )
+    named_set = re.search(
+        r"(allure|sp authentic|the cup|artifacts|stature|premier|synergy|metal universe|trilogy|o-pee-chee|parkhurst|choice|black diamond|credentials|chronology|fleer ultra|skybox)",
+        mix,
+    )
+    if named_ins:
+        pretty = {
+            "sizzle reel": "Sizzle Reel",
+            "future watch": "Future Watch",
+            "holofoil": "Holofoil",
+            "dazzlers": "Dazzlers",
+            "portraits": "Portraits",
+            "young guns renewed": "Young Guns Renewed",
+            "young guns canvas": "Young Guns Canvas",
+            "canvas young guns": "Young Guns Canvas",
+        }
+        data["insert"] = pretty.get(named_ins.group(1), named_ins.group(1).title())
+    elif named_set and not re.search(r"series\s*[123]|extended", st, flags=re.I):
+        data["insert"] = "Rookie" if re.search(r"\brc\b|rookie", mix) else None
+    return before != str(data.get("insert") or "")
+
+
+def scrub_user_yg(uid: int) -> int:
+    n = 0
+    con = db()
+    rows = con.execute("SELECT id, data FROM cards WHERE user_id=?", (uid,)).fetchall()
+    for r in rows:
+        try:
+            card = json.loads(r["data"])
+        except Exception:
+            continue
+        if not scrub_false_yg(card):
+            continue
+        con.execute("UPDATE cards SET data=? WHERE id=? AND user_id=?", (json.dumps(card), r["id"], uid))
+        n += 1
+        pl = str(card.get("player") or "").strip().lower()
+        if pl:
+            try:
+                con.execute("DELETE FROM comp_cache WHERE k LIKE ?", (pl + "|%",))
+            except Exception:
+                pass
+    con.commit()
+    con.close()
+    return n
+
 @app.post("/identify")
 async def identify(
     file: UploadFile = File(...),
@@ -496,6 +557,7 @@ async def identify(
             data["set"] = (st + " Choice").strip() if st else "Choice"
         if "reserve" not in (par + " " + ins).lower():
             data["parallel"] = ((par + " Reserve").strip() if par and par.lower() not in ("base",) else "Reserve")
+    scrub_false_yg(data)
     if not data["hockey"]:
         data["needs_review"] = True
         data["blocked"] = True
@@ -1308,6 +1370,7 @@ async def comp(
         raise HTTPException(500, "No comps source set")
     check_cap()
     card = {k: payload.get(k) for k in ("player","year","set","number","parallel","insert","team","grader","grade","cert")}
+    scrub_false_yg(card)
     ck = "|".join(str(card.get(k) or "").strip().lower() for k in ("player","year","set","number","parallel","insert"))
     day = time.strftime("%Y-%m-%d")
     ck_day = f"{ck}|{day}"
@@ -2340,7 +2403,13 @@ async def usage(request: Request, x_token: str | None = Header(default=None)):
 @app.post("/book-refresh")
 async def book_refresh(payload: dict, request: Request, x_token: str | None = Header(default=None)):
     require_user(request, x_token)
+    try:
+        uid = require_user(request, x_token)
+        scrub_user_yg(uid)
+    except Exception:
+        pass
     payload = dict(payload or {})
+    scrub_false_yg(payload)
     payload["auto"] = True
     payload["skip_web"] = True
     return await comp(payload, payload.get("secret"), x_token)
@@ -2555,6 +2624,7 @@ async def reset_confirm(payload: dict):
 @app.get("/cards")
 async def list_cards(request: Request, x_token: str | None = Header(default=None)):
     uid = require_user(request, x_token)
+    scrub_user_yg(uid)
     con = db()
     rows = con.execute("SELECT data FROM cards WHERE user_id=?", (uid,)).fetchall()
     con.close()
