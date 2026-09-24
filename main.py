@@ -420,6 +420,8 @@ def wipe_user_book(uid: int) -> int:
         card["rawComp"] = 1
         card["sysComp"] = 1
         card["book"] = {"raw_cad": 1, "suggested_cad": 1}
+        card["hist"] = []
+        card["histMap"] = {}
         con.execute("UPDATE cards SET data=? WHERE id=? AND user_id=?", (json.dumps(card), r["id"], uid))
         n += 1
     pl_seen = set()
@@ -2460,10 +2462,10 @@ async def book_refresh(payload: dict, request: Request, x_token: str | None = He
         try:
             con = db()
             con.execute("CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT)")
-            done = con.execute("SELECT v FROM kv WHERE k='book_wipe_v2'").fetchone()
+            done = con.execute("SELECT v FROM kv WHERE k='book_wipe_v3'").fetchone()
             if not done:
                 wipe_user_book(uid)
-                con.execute("INSERT OR REPLACE INTO kv(k,v) VALUES('book_wipe_v2',?)", (str(time.time()),))
+                con.execute("INSERT OR REPLACE INTO kv(k,v) VALUES('book_wipe_v3',?)", (str(time.time()),))
                 con.commit()
             con.close()
         except Exception:

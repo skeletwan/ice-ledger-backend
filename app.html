@@ -1139,7 +1139,7 @@ async function pullCloud(){
   const remote = data.cards || [];
   const local = load();
   const alive = v => { try { return v!=null && v!=="" && +v>=1; } catch(e){ return !!v; } };
-  const keep = ["comp","sysComp","rawComp","psa6Comp","psa7Comp","psa8Comp","psa9Comp","psa10Comp","bgs9Comp","bgs95Comp","bgs10Comp","bgsBlackComp","sgc10Comp","cost","histMap"];
+  const keep = ["comp","sysComp","rawComp","psa6Comp","psa7Comp","psa8Comp","psa9Comp","psa10Comp","bgs9Comp","bgs95Comp","bgs10Comp","bgsBlackComp","sgc10Comp","cost"];
   const map = {};
   local.concat(remote).forEach(c => {
     if (!c || !c.id) return;
@@ -1157,7 +1157,6 @@ async function pullCloud(){
     Object.keys(sb).forEach(k => { if (alive(sb[k])) book[k] = sb[k]; else if (alive(pb[k])) book[k] = pb[k]; });
     Object.keys(pb).forEach(k => { if (!alive(book[k]) && alive(pb[k])) book[k] = pb[k]; });
     out.book = book;
-    if (Array.isArray(prev.hist) && (!slim.hist || slim.hist.length < prev.hist.length)) out.hist = prev.hist;
     map[c.id] = out;
   });
   try { localStorage.setItem(KEY, JSON.stringify(Object.values(map))); }
@@ -1177,7 +1176,7 @@ async function pushCard(card){
 /* session restore runs at bottom */
 const dash = v => (v==null || v==="") ? "—" : String(v);
 const FXK = "ice-fx";
-const HIST = "ice-book-hist";
+const HIST = "ice-book-hist-v4";
 const USD_CAD = 1.35;
 function fx(){ return localStorage.getItem(FXK) || "CAD"; }
 function setFx(v){
@@ -1236,23 +1235,14 @@ function rawCardHist(c){
 }
 function seedHistFromCards(){
   const cards = load() || [];
-  const series = cards.map(c => ({ h: rawCardHist(c), now: binderCad(c) }));
-  const daySet = {};
-  series.forEach(s => s.h.forEach(p => { daySet[p.d] = 1; }));
-  daySet[localDay()] = 1;
-  const days = Object.keys(daySet).sort();
-  const out = [];
-  days.forEach(d => {
-    let tot = 0;
-    series.forEach(s => {
-      let last = null;
-      for (let i=0;i<s.h.length;i++) if (s.h[i].d <= d) last = +s.h[i].v;
-      if (last==null && d===localDay() && s.now!=null) last = +s.now;
-      if (last!=null) tot += last;
-    });
-    if (tot > 0) out.push({ d, v: tot, t: d+"T12:00:00Z" });
+  let tot = 0;
+  let n = 0;
+  cards.forEach(c => {
+    const now = binderCad(c);
+    if (now!=null && !isNaN(+now) && +now > 0) { tot += +now; n++; }
   });
-  if (out.length) saveHist(out);
+  if (!n) return;
+  saveHist([{ d: localDay(), v: tot, t: new Date().toISOString() }]);
 }
 function pushHist(bookCad){
   if (bookCad==null || isNaN(+bookCad)) return;
@@ -4015,7 +4005,6 @@ async function loadMe(){
     if ($("ownerToolsBtn")) $("ownerToolsBtn").classList.toggle("hidden", !d.operator);
     if ($("refreshBook")) $("refreshBook").classList.toggle("hidden", !d.operator);
     window.lastOp = !!d.operator;
-    if (Array.isArray(d.book_hist) && d.book_hist.length) mergeHist(d.book_hist);
     seedHistFromCards();
     paintTicker();
     if (d.operator) loadRipCodes();
