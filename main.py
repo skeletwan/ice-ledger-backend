@@ -34,6 +34,7 @@ SMTP_PORT = int(_env("SMTP_PORT", "587") or "587")
 SMTP_USER = _env("SMTP_USER")
 SMTP_PASS = _env("SMTP_PASS")
 APP_URL = _env("APP_URL")
+CARD_API_KEY = _env("CARD_API_KEY")
 MAIL_LAST_ERROR = ""
 
 def _from_address(raw: str) -> str:
@@ -543,6 +544,93 @@ suggested_cad is the sold that matches the scanned copy's grader/grade when pres
 Never use the card number, year, print run, or cert as a price.
 """
 
+def _usd_to_cad(n):
+    try:
+        return round(float(n) * 1.35, 2)
+    except (TypeError, ValueError):
+        return None
+
+def _median(vals):
+    vals = sorted(v for v in vals if v and v >= 1)
+    if not vals:
+        return None
+    mid = len(vals) // 2
+    return vals[mid] if len(vals) % 2 else round((vals[mid - 1] + vals[mid]) / 2, 2)
+
+def _sale_bucket(item: dict) -> str | None:
+    grader = str(item.get("grader") or "").upper()
+    grade = str(item.get("grade") or "").strip().lower()
+    title = str(item.get("title") or "")
+    blob = f"{grader} {grade} {title}".lower()
+    if "psa" in blob and re.search(r"\b10(\.0)?\b", blob) and "9.5" not in blob:
+        return "psa10_cad"
+    if "psa" in blob and re.search(r"\b9(\.0)?\b", blob) and "9.5" not in blob and not re.search(r"\b10\b", blob):
+        return "psa9_cad"
+    if "psa" in blob and re.search(r"\b8(\.0)?\b", blob):
+        return "psa8_cad"
+    if "psa" in blob and re.search(r"\b7(\.0)?\b", blob):
+        return "psa7_cad"
+    if "psa" in blob and re.search(r"\b6(\.0)?\b", blob):
+        return "psa6_cad"
+    if "bgs" in blob and "9.5" in blob:
+        return "bgs95_cad"
+    if "bgs" in blob and re.search(r"\b10\b", blob):
+        return "bgs10_cad"
+    if "bgs" in blob and re.search(r"\b9(\.0)?\b", blob):
+        return "bgs9_cad"
+    if "sgc" in blob and re.search(r"\b10\b", blob):
+        return "sgc10_cad"
+    if grader in ("", "RAW", "UNGRADED") or " raw" in f" {blob}" or "ungraded" in blob:
+        if not re.search(r"\b(psa|bgs|sgc|cgc)\b", blob):
+            return "raw_cad"
+    return None
+
+async def fetch_card_api(q: str, player: str) -> dict | None:
+    if not CARD_API_KEY or not q:
+        return None
+    last = (player or "").strip().split()[-1].lower() if player else ""
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            r = await client.get(
+                "https://www.thecardapi.com/api/v1/market/sales",
+                headers={"x-market-api-key": CARD_API_KEY},
+                params={"q": q, "limit": 25, "category": "sports"},
+            )
+        if r.status_code >= 400:
+            return None
+        body = r.json()
+    except Exception:
+        return None
+    rows = body.get("data") if isinstance(body, dict) else body
+    if not isinstance(rows, list):
+        rows = []
+    buckets = {}
+    for item in rows:
+        if not isinstance(item, dict):
+            continue
+        title = str(item.get("title") or "")
+        if last and last not in title.lower():
+            continue
+        try:
+            usd = float(item.get("price"))
+        except (TypeError, ValueError):
+            continue
+        if usd < 1 or usd > 20000:
+            continue
+        key = _sale_bucket(item)
+        if not key:
+            continue
+        buckets.setdefault(key, []).append(_usd_to_cad(usd))
+    if not buckets:
+        return None
+    out = {k: _median(v) for k, v in buckets.items()}
+    out["currency"] = "CAD"
+    out["sample_count"] = sum(len(v) for v in buckets.values())
+    out["sources"] = ["thecardapi"]
+    out["summary"] = f"The Card API · {out['sample_count']} solds (USD×1.35)."
+    out["model"] = "card-api"
+    return out
+
 def _extract_response_text(body: dict) -> str:
     if isinstance(body.get("output_text"), str) and body["output_text"]:
         return body["output_text"]
@@ -584,8 +672,8 @@ async def comp(
     x_token: str | None = Header(default=None),
 ):
     allow_user_or_secret(x_app_secret or payload.get("secret"), x_token)
-    if not XAI_API_KEY:
-        raise HTTPException(500, "XAI_API_KEY not set on server")
+    if not XAI_API_KEY and not CARD_API_KEY:
+        raise HTTPException(500, "No comps source set")
     check_cap()
     card = {k: payload.get(k) for k in ("player","year","set","number","parallel","insert","team","grader","grade","cert")}
     ck = "|".join(str(card.get(k) or "").strip().lower() for k in ("player","year","set","number","parallel","insert"))
@@ -614,35 +702,37 @@ async def comp(
         num = re.sub(r"\s*\d+\s*/\s*\d+\s*", " ", num).strip()
     par = run_only(card.get("parallel"))
     ins = run_only(card.get("insert"))
-    bits = [
+    q = " ".join(str(x) for x in [
         card.get("year"), card.get("player"), card.get("set"),
-        ("#"+num) if num else None,
-        ins, par,
+        ("#"+num) if num else None, ins, par,
         run if ("/" not in par and "/" not in ins) else None,
-        "sold",
-        "Fanatics Collect OR Goldin OR Heritage",
-    ]
-    label = " ".join(str(x) for x in bits if x)
-    headers = {"Authorization": f"Bearer {XAI_API_KEY}", "Content-Type": "application/json"}
-    prompt = COMP_PROMPT.format(card=label)
+    ] if x)
+    api_hit = await fetch_card_api(q, card.get("player") or "")
     text = ""
     used = COMP_MODEL
     err = None
-    async with httpx.AsyncClient(timeout=40) as client:
-        r = await client.post(
-            "https://api.x.ai/v1/responses",
-            headers=headers,
-            json={"model": COMP_MODEL, "tools": [{"type": "web_search"}], "input": prompt},
-        )
-        if r.status_code < 400:
-            text = _extract_response_text(r.json()).strip()
-        else:
-            err = f"{r.status_code}: {r.text[:180]}"
     data = {}
-    try:
-        data = _parse_json_blob(text) if text else {}
-    except json.JSONDecodeError:
-        data = {"summary": (text or "")[:280], "needs_review": True}
+    if api_hit:
+        data = api_hit
+        used = "card-api"
+    elif XAI_API_KEY:
+        label = q + " sold Fanatics Collect OR Goldin OR Heritage"
+        headers = {"Authorization": f"Bearer {XAI_API_KEY}", "Content-Type": "application/json"}
+        prompt = COMP_PROMPT.format(card=label)
+        async with httpx.AsyncClient(timeout=40) as client:
+            r = await client.post(
+                "https://api.x.ai/v1/responses",
+                headers=headers,
+                json={"model": COMP_MODEL, "tools": [{"type": "web_search"}], "input": prompt},
+            )
+            if r.status_code < 400:
+                text = _extract_response_text(r.json()).strip()
+            else:
+                err = f"{r.status_code}: {r.text[:180]}"
+        try:
+            data = _parse_json_blob(text) if text else {}
+        except json.JSONDecodeError:
+            data = {"summary": (text or "")[:280], "needs_review": True}
     if not isinstance(data, dict):
         data = {"summary": str(data)[:280], "needs_review": True}
     def _as_price(v):
@@ -740,6 +830,21 @@ async def comp(
                     return old
         except Exception:
             pass
+    if data.get("suggested_cad") is None:
+        g = str(card.get("grader") or "Raw").upper()
+        gr = str(card.get("grade") or "")
+        pick = None
+        if g in ("", "RAW"):
+            pick = data.get("raw_cad")
+        elif g == "PSA" and gr.startswith("10"):
+            pick = data.get("psa10_cad")
+        elif g == "PSA" and gr.startswith("9"):
+            pick = data.get("psa9_cad")
+        elif g == "PSA" and gr.startswith("8"):
+            pick = data.get("psa8_cad")
+        else:
+            pick = data.get("raw_cad") or data.get("psa10_cad")
+        data["suggested_cad"] = pick
     data["model"] = used
     data["card"] = card
     if err and not data.get("suggested_cad") and not data.get("suggested_usd"):
