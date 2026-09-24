@@ -432,6 +432,10 @@ def wipe_user_book(uid: int) -> int:
             pl_seen.add(pl)
             con.execute("DELETE FROM comp_cache WHERE k LIKE ?", (pl + "|%",))
             con.execute("DELETE FROM house_solds WHERE fp LIKE ?", (pl + "|%",))
+    try:
+        con.execute("UPDATE users SET book_hist=? WHERE id=?", ("[]", uid))
+    except Exception:
+        pass
     con.commit()
     con.close()
     return n
@@ -2456,10 +2460,10 @@ async def book_refresh(payload: dict, request: Request, x_token: str | None = He
         try:
             con = db()
             con.execute("CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT)")
-            done = con.execute("SELECT v FROM kv WHERE k='book_wipe_v1'").fetchone()
+            done = con.execute("SELECT v FROM kv WHERE k='book_wipe_v2'").fetchone()
             if not done:
                 wipe_user_book(uid)
-                con.execute("INSERT OR REPLACE INTO kv(k,v) VALUES('book_wipe_v1',?)", (str(time.time()),))
+                con.execute("INSERT OR REPLACE INTO kv(k,v) VALUES('book_wipe_v2',?)", (str(time.time()),))
                 con.commit()
             con.close()
         except Exception:
