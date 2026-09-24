@@ -2324,7 +2324,7 @@ async def add_banner(payload: dict, request: Request, x_token: str | None = Head
         for f in con.execute("SELECT follower FROM follows WHERE slug=?", (slug,)).fetchall():
             fid = f["follower"]
             if fid and fid != uid:
-                add_note(con, fid, slug, who + " updated their banner")
+                add_note(con, fid, slug, who + " posted a banner: " + title)
     con.commit()
     con.close()
     return {"ok": True, "id": rid}
