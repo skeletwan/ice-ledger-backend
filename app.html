@@ -1226,18 +1226,33 @@ function mergeHist(extra){
   (extra||[]).forEach(x => { if (x && x.d) cur.push(x); });
   return saveHist(cur);
 }
+function rawCardHist(c){
+  if (!c) return [];
+  const k = gradeKey(c);
+  const mapped = (c.histMap && Array.isArray(c.histMap[k])) ? c.histMap[k] : [];
+  const old = Array.isArray(c.hist) ? c.hist : [];
+  const h = mapped.length >= old.length ? mapped : old;
+  return (h||[]).filter(p => p && p.d && !isNaN(+p.v)).sort((a,b)=>String(a.d).localeCompare(String(b.d)));
+}
 function seedHistFromCards(){
-  const have = loadHist();
-  if (have.length >= 2) return;
-  const byDay = {};
-  (load()||[]).forEach(c => {
-    (cardHist(c)||[]).forEach(p => {
-      if (!p || !p.d || isNaN(+p.v)) return;
-      byDay[p.d] = (byDay[p.d]||0) + (+p.v);
+  const cards = load() || [];
+  const series = cards.map(c => ({ h: rawCardHist(c), now: binderCad(c) }));
+  const daySet = {};
+  series.forEach(s => s.h.forEach(p => { daySet[p.d] = 1; }));
+  daySet[localDay()] = 1;
+  const days = Object.keys(daySet).sort();
+  const out = [];
+  days.forEach(d => {
+    let tot = 0;
+    series.forEach(s => {
+      let last = null;
+      for (let i=0;i<s.h.length;i++) if (s.h[i].d <= d) last = +s.h[i].v;
+      if (last==null && d===localDay() && s.now!=null) last = +s.now;
+      if (last!=null) tot += last;
     });
+    if (tot > 0) out.push({ d, v: tot, t: d+"T12:00:00Z" });
   });
-  const days = Object.keys(byDay).sort();
-  if (days.length) saveHist(days.map(d => ({ d, v: byDay[d], t: d+"T12:00:00Z" })));
+  if (out.length) saveHist(out);
 }
 function pushHist(bookCad){
   if (bookCad==null || isNaN(+bookCad)) return;

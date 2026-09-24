@@ -822,31 +822,6 @@ def _sale_when(item: dict) -> str:
             pass
     return ""
 
-def scrub_house_raw(fp: str):
-    """Drop raw solds that are a tiny fraction of a real slab for the same card."""
-    if not fp:
-        return
-    try:
-        con = db()
-        slabs = [
-            float(r["cad"])
-            for r in con.execute(
-                "SELECT cad FROM house_solds WHERE fp=? AND bucket IN ('psa9_cad','psa10_cad','bgs95_cad','bgs10_cad')",
-                (fp,),
-            )
-        ]
-        hi = max(slabs) if slabs else 0
-        if hi >= 40:
-            con.execute(
-                "DELETE FROM house_solds WHERE fp=? AND bucket='raw_cad' AND cad < ?",
-                (fp, hi * 0.12),
-            )
-        con.execute("DELETE FROM comp_cache WHERE k LIKE ?", (fp + "%",))
-        con.commit()
-        con.close()
-    except Exception:
-        pass
-
 def save_house_solds(fp: str, rows: list):
     if not fp or not rows:
         return
@@ -1271,30 +1246,7 @@ async def comp(
         data = api_hit
         used = "card-api"
         days = data.get("hist_days") or {}
-        g = str(card.get("grader") or "Raw").upper()
-        gr = str(card.get("grade") or "").strip()
-        bucket = "raw_cad"
-        if g == "PSA" and gr.startswith("10"):
-            bucket = "psa10_cad"
-        elif g == "PSA" and gr.startswith("9"):
-            bucket = "psa9_cad"
-        elif g == "PSA" and gr.startswith("8"):
-            bucket = "psa8_cad"
-        elif g == "PSA" and gr.startswith("7"):
-            bucket = "psa7_cad"
-        elif g == "PSA" and gr.startswith("6"):
-            bucket = "psa6_cad"
-        elif g == "BGS" and "black" in gr.lower():
-            bucket = "bgs_black_cad"
-        elif g == "BGS" and "9.5" in gr:
-            bucket = "bgs95_cad"
-        elif g == "BGS" and gr.startswith("10"):
-            bucket = "bgs10_cad"
-        elif g == "BGS" and gr.startswith("9"):
-            bucket = "bgs9_cad"
-        elif g == "SGC" and gr.startswith("10"):
-            bucket = "sgc10_cad"
-        data["hist_copy"] = days.get(bucket) or days.get("raw_cad") or []
+        data["hist_copy"] = days.get(_copy_bucket(card)) or days.get("raw_cad") or []
     elif XAI_API_KEY and not skip_web:
         label = q + " sold Fanatics Collect OR Goldin OR Heritage"
         headers = {"Authorization": f"Bearer {XAI_API_KEY}", "Content-Type": "application/json"}
