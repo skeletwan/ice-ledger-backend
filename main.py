@@ -773,6 +773,35 @@ def save_house_solds(fp: str, rows: list):
     con.commit()
     con.close()
 
+def series_from_sales(sales: list) -> dict:
+    by = {}
+    for s in sales or []:
+        d = (s.get("date") or "")[:10]
+        if len(d) < 10 or d[4] != "-":
+            continue
+        by.setdefault(s.get("bucket") or "raw_cad", {}).setdefault(d, []).append(float(s["cad"]))
+    out = {}
+    for bucket, days in by.items():
+        pts = []
+        for d in sorted(days):
+            mid = _median(_clean_bucket(days[d]) or days[d])
+            if mid:
+                pts.append({"d": d, "v": mid})
+        if pts:
+            out[bucket] = pts
+    return out
+
+def merge_series(*blobs) -> dict:
+    acc = {}
+    for blob in blobs:
+        for k, pts in (blob or {}).items():
+            m = {p["d"]: p["v"] for p in (acc.get(k) or [])}
+            for p in pts or []:
+                if p and p.get("d") and p.get("v") is not None:
+                    m[str(p["d"])[:10]] = float(p["v"])
+            acc[k] = [{"d": d, "v": m[d]} for d in sorted(m)]
+    return acc
+
 def house_series(fp: str) -> dict:
     """Daily median close per grade from stored solds."""
     out = {}
@@ -785,7 +814,6 @@ def house_series(fp: str) -> dict:
         con.close()
     except Exception:
         return out
-    today = datetime.now(timezone.utc).date().isoformat()
     for r in rows:
         try:
             cad = float(r["cad"])
@@ -903,18 +931,29 @@ def _ingest(rows, q, player, buckets, only_raw=None, sales=None):
 
 async def _card_api_rows(client, q: str, extra: dict) -> list:
     start = (datetime.now(timezone.utc) - timedelta(days=14)).date().isoformat()
-    params = {"q": q, "limit": 40, "category": "sports", "date_from": start}
+    params = {"q": q, "limit": 100, "category": "sports", "date_from": start}
     params.update(extra or {})
-    r = await client.get(
-        "https://www.thecardapi.com/api/v1/market/sales",
-        headers={"x-market-api-key": CARD_API_KEY},
-        params=params,
-    )
-    if r.status_code >= 400:
-        return []
-    body = r.json()
-    rows = body.get("data") if isinstance(body, dict) else body
-    return rows if isinstance(rows, list) else []
+    rows = []
+    cursor = None
+    for _ in range(3):
+        if cursor:
+            params["cursor"] = cursor
+        r = await client.get(
+            "https://www.thecardapi.com/api/v1/market/sales",
+            headers={"x-market-api-key": CARD_API_KEY},
+            params=params,
+        )
+        if r.status_code >= 400:
+            break
+        body = r.json() if r.content else {}
+        chunk = body.get("data") if isinstance(body, dict) else body
+        if isinstance(chunk, list):
+            rows.extend(chunk)
+        pag = body.get("pagination") if isinstance(body, dict) else {}
+        cursor = (pag or {}).get("next_cursor")
+        if not cursor or not (pag or {}).get("has_more"):
+            break
+    return rows
 
 async def fetch_card_api(q: str, player: str, fp: str = "") -> dict | None:
     if not CARD_API_KEY or not q:
@@ -954,7 +993,7 @@ async def fetch_card_api(q: str, player: str, fp: str = "") -> dict | None:
     out["currency"] = "CAD"
     out["sample_count"] = sum(counts.values())
     out["close_day"] = when.get("raw_cad") or (max(when.values()) if when else "")
-    out["hist_days"] = house_series(fp) if fp else {}
+    out["hist_days"] = merge_series(house_series(fp) if fp else {}, series_from_sales(sales))
     out["house"] = True
     out["sources"] = ["thecardapi", "house"]
     out["summary"] = f"Day close · {out.get('close_day') or 'today'} · {out['sample_count']} solds."
