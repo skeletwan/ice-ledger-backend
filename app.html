@@ -50,13 +50,28 @@
     .range-dot { position:absolute; top:-3px; width:12px; height:12px; margin-left:-6px; border-radius:50%; background:var(--ice); border:2px solid #10161d; }
     .pos { color:var(--good); } .neg { color:var(--bad); }
     @keyframes grail-burn {
-      0%,100% { box-shadow: 0 0 0 2px #ff2a00, 0 0 14px #ff3b00, 0 0 28px #7a1000; }
-      50% { box-shadow: 0 0 0 2px #ffb347, 0 0 22px #ff4500, 0 0 36px #ff1a00; }
+      0%,100% { box-shadow: 0 0 0 2px #ff2a00, 0 0 16px #ff3b00, 0 0 32px rgba(255,40,0,.55); }
+      50% { box-shadow: 0 0 0 3px #ffb347, 0 0 24px #ff4500, 0 0 40px rgba(255,80,0,.7); }
     }
-    .item.grail { outline: 1px solid #5a1818; }
-    .item.grail-new, article.grail-new {
+    .item.grail { outline: none; }
+    .item.grail::after {
+      content:"";
+      position:absolute;
+      inset:-3px;
+      border-radius:14px;
+      pointer-events:none;
+      z-index:3;
+      box-shadow: 0 0 0 2px #ff2a00, 0 0 16px rgba(255,45,0,.7), 0 0 28px rgba(180,20,0,.45);
+    }
+    .item.grail.grail-new::after, article.grail-new::after {
       animation: grail-burn 1.15s ease-in-out infinite;
-      border-radius: 14px;
+    }
+    .grail-tag {
+      position:absolute; left:8px; top:8px; z-index:4;
+      font-size:9px; font-weight:800; letter-spacing:.12em; text-transform:uppercase;
+      padding:3px 6px; border-radius:4px; color:#ffd0c0;
+      background:#5a1008; border:1px solid #ff3b1a;
+      box-shadow:0 0 10px rgba(255,40,0,.55);
     }
     header { padding:12px 16px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; }
     h1 { font-size:18px; margin:0; } h1 span { color:var(--ice); }
@@ -2650,6 +2665,7 @@ function cardRowHtml(c, qty, key){
     priceCol(c, binderCad(c))+
     "</div>"+
     (qty>1?"<span class=\"qty-pill\">×"+qty+"</span>":"")+
+    (cardLooksGrail(c)?"<span class=\"grail-tag\">Grail</span>":"")+
     (tier?"<span class=\"tier-tag "+tier+"\">"+tierLabel(tier)+"</span>":"")+
     "</article>";
   } catch(e) {
@@ -3479,7 +3495,7 @@ function pubCardHtml(c, qty, key){
   const open = qty>1 ? " data-copies=\""+String(key||cardKey(c)).replace(/"/g,"")+"\"" : " data-pub=\""+c.id+"\"";
   const line = [c.team,c.year,c.set,c.number?"#"+c.number:"",(!c.grader||c.grader==="Raw")?"Raw":[c.grader,c.grade].filter(Boolean).join(" ")].filter(Boolean).join(" · ");
   const val = publicCad(c) || (viewSlug===mySlug ? binderCad(c) : null) || asCad(c.comp);
-  return "<article class=\"item"+grailCls(c)+(pt?" tier-"+pt:"")+"\""+open+"><div class=\"item-top\">"+thumbHtml(c, viewSlug)+"<div><h3>"+(c.player||"—")+" <span class=\"heart\">♥ "+(c.likes||0)+"</span></h3><div class=\"item-meta\">"+line+"</div><div class=\"item-ver\">"+rowVersion(c)+"</div></div>"+priceCol(c, val)+"</div>"+(qty>1?"<span class=\"qty-pill\">×"+qty+"</span>":"")+(pt?"<span class=\"tier-tag "+pt+"\">"+tierLabel(pt)+"</span>":"")+"</article>";
+  return "<article class=\"item"+grailCls(c)+(pt?" tier-"+pt:"")+"\""+open+"><div class=\"item-top\">"+thumbHtml(c, viewSlug)+"<div><h3>"+(c.player||"—")+" <span class=\"heart\">♥ "+(c.likes||0)+"</span></h3><div class=\"item-meta\">"+line+"</div><div class=\"item-ver\">"+rowVersion(c)+"</div></div>"+priceCol(c, val)+"</div>"+(qty>1?"<span class=\"qty-pill\">×"+qty+"</span>":"")+(cardLooksGrail(c)?"<span class=\"grail-tag\">Grail</span>":"")+(pt?"<span class=\"tier-tag "+pt+"\">"+tierLabel(pt)+"</span>":"")+"</article>";
 }
 function renderPubList(){
   const box = $("pubList");
@@ -4121,7 +4137,7 @@ function renderFeed(){
   box.innerHTML = rows.length ? rows.map(c => {
     const line = [c.team,c.year,c.set,c.number?"#"+c.number:""].filter(Boolean).join(" · ");
     const ft = tierFromCad(publicCad(c));
-    return "<article class=\"item"+grailCls(c)+(ft?" tier-"+ft:"")+"\" data-feed-slug=\""+c.slug+"\" data-feed-card=\""+c.id+"\"><div class=\"item-top\">"+thumbHtml(c, c.slug)+"<div><h3>"+(c.player||"—")+"</h3><div class=\"muted\">"+line+"</div><div class=\"item-ver\">"+rowVersion(c)+"</div><div class=\"muted\">"+(c.display||"Collector")+" · "+timeAgo(c.added)+"</div><div class=\"muted\">"+money(publicCad(c) || c.comp)+"</div></div></div>"+(ft?"<span class=\"tier-tag "+ft+"\">"+tierLabel(ft)+"</span>":"")+"</article>";
+    return "<article class=\"item"+grailCls(c)+(ft?" tier-"+ft:"")+"\" data-feed-slug=\""+c.slug+"\" data-feed-card=\""+c.id+"\"><div class=\"item-top\">"+thumbHtml(c, c.slug)+"<div><h3>"+(c.player||"—")+"</h3><div class=\"muted\">"+line+"</div><div class=\"item-ver\">"+rowVersion(c)+"</div><div class=\"muted\">"+(c.display||"Collector")+" · "+timeAgo(c.added)+"</div><div class=\"muted\">"+money(publicCad(c) || c.comp)+"</div></div></div>"+(cardLooksGrail(c)?"<span class=\"grail-tag\">Grail</span>":"")+(ft?"<span class=\"tier-tag "+ft+"\">"+tierLabel(ft)+"</span>":"")+"</article>";
   }).join("") : "<p class=\"muted\">No new cards yet.</p>";
 }
 $("feedSort") && ($("feedSort").onchange = renderFeed);
