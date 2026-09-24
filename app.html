@@ -1227,19 +1227,17 @@ function mergeHist(extra){
   return saveHist(cur);
 }
 function seedHistFromCards(){
-  if (loadHist().length) return;
+  const have = loadHist();
+  if (have.length >= 2) return;
   const byDay = {};
   (load()||[]).forEach(c => {
-    const pts = Array.isArray(c.hist) ? c.hist : [];
-    const first = pts[0] || null;
-    const day = (first && first.d) || String(c.added||"").slice(0,10);
-    const v = (first && +first.v) || +c.comp || +c.rawComp;
-    if (!day || !v || v < 1) return;
-    byDay[day] = (byDay[day]||0) + v;
+    (cardHist(c)||[]).forEach(p => {
+      if (!p || !p.d || isNaN(+p.v)) return;
+      byDay[p.d] = (byDay[p.d]||0) + (+p.v);
+    });
   });
   const days = Object.keys(byDay).sort();
-  if (!days.length) return;
-  saveHist(days.map(d => ({ d, v: byDay[d], t: d+"T12:00:00Z" })));
+  if (days.length) saveHist(days.map(d => ({ d, v: byDay[d], t: d+"T12:00:00Z" })));
 }
 function pushHist(bookCad){
   if (bookCad==null || isNaN(+bookCad)) return;
@@ -1553,24 +1551,15 @@ function lastName(p){
   const parts = String(p||"").trim().split(/\s+/);
   return ((parts[parts.length-1]||"")+" "+(p||"")).toLowerCase();
 }
-function pushCardHist(card){
-  const v = binderCad(card);
-  if (v==null || isNaN(+v)) return;
-  const k = gradeKey(card);
-  card.histMap = card.histMap || {};
-  const h = Array.isArray(card.histMap[k]) ? card.histMap[k].slice() : [];
-  const day = localDay();
-  const last = h[h.length-1];
-  if (last && last.d === day) last.v = +v;
-  else h.push({ d: day, v: +v, t: new Date().toISOString() });
-  card.histMap[k] = h.slice(-400);
-  card.hist = card.histMap[k];
-}
-function gradeKey(c){
-  const g = String((c&&c.grader)||"Raw").toUpperCase();
-  const gr = String((c&&c.grade)||"").trim();
-  if (!g || g==="RAW") return "RAW";
-  return g+"|"+gr;
+function fillHist(h, nowV){
+  h = (h||[]).filter(x => x && x.d && !isNaN(+x.v)).sort((a,b)=>String(a.d).localeCompare(String(b.d)));
+  const today = localDay();
+  if (nowV!=null && !isNaN(+nowV)) {
+    if (!h.length) return [{ d: today, v:+nowV }];
+    if (h[h.length-1].d !== today) h.push({ d: today, v:+nowV });
+    else h[h.length-1].v = +nowV;
+  }
+  return h;
 }
 function pushCardHist(card){
   const v = binderCad(card);
@@ -1579,10 +1568,7 @@ function pushCardHist(card){
   card.histMap = card.histMap || {};
   let h = Array.isArray(card.histMap[k]) ? card.histMap[k].slice() : [];
   if (h.length < 2 && Array.isArray(card.hist) && card.hist.length) h = card.hist.slice();
-  const day = localDay();
-  const last = h[h.length-1];
-  if (last && last.d === day) last.v = +v;
-  else h.push({ d: day, v: +v, t: new Date().toISOString() });
+  h = fillHist(h, v);
   card.histMap[k] = h.slice(-400);
   card.hist = card.histMap[k];
 }
@@ -1595,8 +1581,10 @@ function gradeKey(c){
 function cardHist(c){
   if (!c) return [];
   const k = gradeKey(c);
-  if (c.histMap && Array.isArray(c.histMap[k]) && c.histMap[k].length) return c.histMap[k];
-  return Array.isArray(c.hist) ? c.hist : [];
+  const mapped = (c.histMap && Array.isArray(c.histMap[k])) ? c.histMap[k] : [];
+  const old = Array.isArray(c.hist) ? c.hist : [];
+  const h = mapped.length >= old.length ? mapped : old;
+  return fillHist(h, binderCad(c));
 }
 function axisCash(v){
   const n = Math.abs(+v||0);
@@ -2891,7 +2879,8 @@ function copyValue(c){
   return n==null ? -1 : n;
 }
 function cardMove(c){
-  const hist = sliceHist(cardHist(c), "7D");
+  let hist = sliceHist(cardHist(c), "7D");
+  if (hist.length === 1) hist = [hist[0], hist[0]];
   if (hist.length < 2) return null;
   const a = +hist[0].v, b = +hist[hist.length-1].v;
   if (!(a>0) || isNaN(b)) return null;
@@ -3246,6 +3235,15 @@ function applyCompObj(card, c){
   }
   card.compAt = new Date().toISOString();
   orderGrades(card);
+  if (Array.isArray(c.hist_copy) && c.hist_copy.length) {
+    const pts = c.hist_copy.filter(p => p && p.d && !isNaN(+p.v)).map(p => ({ d: String(p.d).slice(0,10), v:+p.v }));
+    if (pts.length) {
+      card.histMap = card.histMap || {};
+      card.histMap[gradeKey(card)] = pts;
+      card.hist = pts;
+      return;
+    }
+  }
   pushCardHist(card);
 }
 function localDay(){

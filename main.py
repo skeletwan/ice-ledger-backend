@@ -725,6 +725,36 @@ def save_house_solds(fp: str, rows: list):
     con.commit()
     con.close()
 
+def house_series(fp: str) -> dict:
+    """Daily median close per grade from stored solds."""
+    out = {}
+    if not fp:
+        return out
+    by = {}
+    try:
+        con = db()
+        rows = con.execute("SELECT bucket, cad, sale_date FROM house_solds WHERE fp=?", (fp,)).fetchall()
+        con.close()
+    except Exception:
+        return out
+    today = datetime.now(timezone.utc).date().isoformat()
+    for r in rows:
+        try:
+            cad = float(r["cad"])
+        except (TypeError, ValueError):
+            continue
+        d = (r["sale_date"] or "")[:10] or today
+        by.setdefault(r["bucket"], {}).setdefault(d, []).append(cad)
+    for bucket, days in by.items():
+        series = []
+        for d in sorted(days):
+            mid = _median(_clean_bucket(days[d]) or days[d])
+            if mid:
+                series.append({"d": d, "v": mid})
+        if series:
+            out[bucket] = series
+    return out
+
 def house_day_close(fp: str):
     """Median of each grade on the newest day that grade traded."""
     out, counts, when = {}, {}, {}
@@ -865,6 +895,7 @@ async def fetch_card_api(q: str, player: str, fp: str = "") -> dict | None:
     out["currency"] = "CAD"
     out["sample_count"] = sum(counts.values())
     out["close_day"] = when.get("raw_cad") or (max(when.values()) if when else "")
+    out["hist_days"] = house_series(fp) if fp else {}
     out["house"] = True
     out["sources"] = ["thecardapi", "house"]
     out["summary"] = f"Day close · {out.get('close_day') or 'today'} · {out['sample_count']} solds."
@@ -963,6 +994,31 @@ async def comp(
     if api_hit:
         data = api_hit
         used = "card-api"
+        days = data.get("hist_days") or {}
+        g = str(card.get("grader") or "Raw").upper()
+        gr = str(card.get("grade") or "").strip()
+        bucket = "raw_cad"
+        if g == "PSA" and gr.startswith("10"):
+            bucket = "psa10_cad"
+        elif g == "PSA" and gr.startswith("9"):
+            bucket = "psa9_cad"
+        elif g == "PSA" and gr.startswith("8"):
+            bucket = "psa8_cad"
+        elif g == "PSA" and gr.startswith("7"):
+            bucket = "psa7_cad"
+        elif g == "PSA" and gr.startswith("6"):
+            bucket = "psa6_cad"
+        elif g == "BGS" and "black" in gr.lower():
+            bucket = "bgs_black_cad"
+        elif g == "BGS" and "9.5" in gr:
+            bucket = "bgs95_cad"
+        elif g == "BGS" and gr.startswith("10"):
+            bucket = "bgs10_cad"
+        elif g == "BGS" and gr.startswith("9"):
+            bucket = "bgs9_cad"
+        elif g == "SGC" and gr.startswith("10"):
+            bucket = "sgc10_cad"
+        data["hist_copy"] = days.get(bucket) or days.get("raw_cad") or []
     elif XAI_API_KEY and not skip_web:
         label = q + " sold Fanatics Collect OR Goldin OR Heritage"
         headers = {"Authorization": f"Bearer {XAI_API_KEY}", "Content-Type": "application/json"}
