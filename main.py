@@ -1061,34 +1061,55 @@ def _sale_id(item: dict) -> str:
     blob = f"{item.get('title')}|{item.get('price')}|{item.get('sale_date') or item.get('sold_at')}"
     return hashlib.sha1(blob.encode("utf-8", "ignore")).hexdigest()
 
+def _parse_day(raw) -> str:
+    if raw is None or raw == "":
+        return ""
+    if isinstance(raw, dict):
+        for k in ("date", "day", "sold", "value", "sale_date", "sold_at"):
+            got = _parse_day(raw.get(k))
+            if got:
+                return got
+        return ""
+    if isinstance(raw, (int, float)):
+        ts = float(raw)
+        if ts > 1e12:
+            ts = ts / 1000.0
+        if ts > 1e9:
+            return datetime.fromtimestamp(ts, tz=TZ).date().isoformat()
+        return ""
+    s = str(raw).strip()
+    if len(s) >= 10 and s[4] == "-" and s[7] == "-":
+        return s[:10]
+    m = re.match(r"^(\d{1,2})[/-](\d{1,2})[/-](\d{4})", s)
+    if m:
+        a, b, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        if a > 12:
+            return f"{y:04d}-{b:02d}-{a:02d}"
+        return f"{y:04d}-{a:02d}-{b:02d}"
+    m = re.search(r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{1,2}),?\s+(\d{4})", s, re.I)
+    if m:
+        months = "jan feb mar apr may jun jul aug sep oct nov dec".split()
+        mo = months.index(m.group(1)[:3].lower()) + 1
+        return f"{int(m.group(3)):04d}-{mo:02d}-{int(m.group(2)):02d}"
+    try:
+        return datetime.fromisoformat(s.replace("Z", "+00:00")).astimezone(TZ).date().isoformat()
+    except Exception:
+        return ""
+
 def _sale_when(item: dict) -> str:
-    for k in ("sale_date", "sold_at", "date", "soldAt", "closed_at", "end_time"):
-        raw = item.get(k)
-        if isinstance(raw, dict):
-            raw = raw.get("date") or raw.get("day") or raw.get("sold") or ""
-        if raw is None or raw == "":
-            continue
-        if isinstance(raw, (int, float)):
-            ts = float(raw)
-            if ts > 1e12:
-                ts = ts / 1000.0
-            if ts > 1e9:
-                return datetime.fromtimestamp(ts, tz=timezone.utc).date().isoformat()
-            continue
-        s = str(raw).strip()
-        if len(s) >= 10 and s[4] == "-" and s[7] == "-":
-            return s[:10]
-        m = re.match(r"^(\d{1,2})[/-](\d{1,2})[/-](\d{4})", s)
-        if m:
-            a, b, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
-            if a > 12:
-                return f"{y:04d}-{b:02d}-{a:02d}"
-            return f"{y:04d}-{a:02d}-{b:02d}"
-        try:
-            return datetime.fromisoformat(s.replace("Z", "+00:00")).date().isoformat()
-        except Exception:
-            pass
-    return ""
+    if not isinstance(item, dict):
+        return today_iso()
+    for k in ("sale_date", "sold_at", "sold_date", "date", "soldAt", "closed_at", "end_time", "ended_at"):
+        got = _parse_day(item.get(k))
+        if got:
+            return got
+    for k, v in item.items():
+        lk = str(k).lower()
+        if "date" in lk or lk.endswith("_at") or "sold" in lk:
+            got = _parse_day(v)
+            if got:
+                return got
+    return today_iso()
 
 def save_house_solds(fp: str, rows: list):
     if not fp:
@@ -1118,7 +1139,7 @@ def series_from_sales(sales: list) -> dict:
     for bucket, days in by.items():
         pts = []
         for d in sorted(days):
-            mid = _median(_clean_bucket(days[d]) or days[d])
+            mid = _median(days[d])
             if mid:
                 pts.append({"d": d, "v": mid})
         if pts:
@@ -1161,10 +1182,8 @@ def house_series(fp: str) -> dict:
         series = []
         for d in sorted(days):
             vals = days[d]
-            mid = _median(_clean_bucket(vals) or vals)
+            mid = _median(vals)
             if not mid:
-                continue
-            if series and len(vals) <= 1 and mid < series[-1]["v"] * 0.4:
                 continue
             series.append({"d": d, "v": mid})
         if series:
@@ -1296,16 +1315,16 @@ async def fetch_card_api(q: str, player: str, fp: str = "", parallel: str = "", 
     sales = []
     try:
         async with httpx.AsyncClient(timeout=20) as client:
-            raw_rows = await _card_api_rows(client, q, {"graded": False})
-            slab_rows = await _card_api_rows(client, q, {"graded": True})
+            mixed = await _card_api_rows(client, q, {})
+            raw_rows = [x for x in mixed if isinstance(x, dict) and not str(x.get("grader") or "").strip()]
+            slab_rows = [x for x in mixed if isinstance(x, dict) and str(x.get("grader") or "").strip()]
             extra = {}
             g = (grader or "").strip().upper()
             gr = (grade or "").strip()
             if g and g != "RAW" and gr:
-                extra = {"graded": "true", "grader": g, "grade": gr.split()[0]}
+                extra = {"graded": True, "grader": g, "grade": gr.split()[0]}
             slab_exact = await _card_api_rows(client, q, extra) if extra else []
-            mixed = await _card_api_rows(client, q, {})
-            _ingest(raw_rows, q, player, buckets, only_raw=True, sales=sales, parallel=parallel, number=number, year=year)
+            _ingest(raw_rows or mixed, q, player, buckets, only_raw=True, sales=sales, parallel=parallel, number=number, year=year)
             _ingest(slab_rows, q, player, buckets, only_raw=False, sales=sales, parallel=parallel, number=number, year=year)
             _ingest(slab_exact, q, player, buckets, only_raw=False, sales=sales, parallel=parallel, number=number, year=year)
             _ingest(mixed, q, player, buckets, only_raw=None, sales=sales, parallel=parallel, number=number, year=year)
