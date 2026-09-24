@@ -1390,18 +1390,7 @@ function lockIdentify(){
   if ($("go")) $("go").disabled = !on;
 }
 
-function load(){
-  try {
-    const cards = JSON.parse(localStorage.getItem(KEY)||"[]");
-    if (!localStorage.getItem("ice-tick-reset-v6") && cards.length) {
-      resetCardTicks(cards);
-      localStorage.setItem("ice-tick-reset-v6", localDay());
-      try { localStorage.setItem(KEY, JSON.stringify(cards)); } catch(e){}
-      seedHistFromCards();
-    }
-    return cards;
-  } catch(e){ return []; }
-}
+function load(){ try { return JSON.parse(localStorage.getItem(KEY)||"[]"); } catch(e){ return []; } }
 function persistCards(cards){
   const copy = cards.map(c => Object.assign({}, c));
   for (let n=0;n<12;n++){

@@ -2463,18 +2463,6 @@ async def book_refresh(payload: dict, request: Request, x_token: str | None = He
         scrub_user_yg(uid)
     except Exception:
         pass
-    if is_operator(uid):
-        try:
-            con = db()
-            con.execute("CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT)")
-            done = con.execute("SELECT v FROM kv WHERE k='book_wipe_v3'").fetchone()
-            if not done:
-                wipe_user_book(uid)
-                con.execute("INSERT OR REPLACE INTO kv(k,v) VALUES('book_wipe_v3',?)", (str(time.time()),))
-                con.commit()
-            con.close()
-        except Exception:
-            pass
     payload = dict(payload or {})
     scrub_false_yg(payload)
     payload["auto"] = True
