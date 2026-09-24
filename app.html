@@ -143,7 +143,7 @@
     .row-chg { font-size:11px; font-weight:700; margin-top:2px; }
     .row-chg.up { color:#3dd68c; }
     .row-chg.dn { color:#ff6b6b; }
-    .row-spark { display:inline-block; width:42px; height:16px; vertical-align:middle; margin-left:6px; }
+    .row-spark { display:inline-block; width:72px; height:28px; vertical-align:middle; margin-left:6px; }
     .qty-pill { position:absolute; left:8px; bottom:8px; min-width:28px; text-align:center; font-size:11px; font-weight:800; letter-spacing:.04em; padding:2px 6px; border-radius:8px; background:#0b1116; color:var(--ice); border:1px solid var(--ice); z-index:2; }
     .item h3 { margin:0 0 2px; font-size:15px; }
     .px { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin-top:8px; }
@@ -2841,15 +2841,21 @@ function cardMove(c){
 }
 function rowSpark(pts, up){
   if (!pts || pts.length<2) return "";
-  const mn = Math.min.apply(null, pts), mx = Math.max.apply(null, pts);
-  const w=42,h=16;
-  const d = pts.map((v,i) => {
-    const x = i/(pts.length-1)*w;
-    const y = mx===mn ? h/2 : h-2-((v-mn)/(mx-mn))*(h-4);
-    return (i?"L":"M")+x.toFixed(1)+" "+y.toFixed(1);
-  }).join(" ");
-  const col = up ? "#3dd68c" : "#ff6b6b";
-  return "<svg class=\"row-spark\" viewBox=\"0 0 "+w+" "+h+"\" aria-hidden=\"true\"><path d=\""+d+"\" fill=\"none\" stroke=\""+col+"\" stroke-width=\"1.6\"/></svg>";
+  const vals = pts.map(v => +v).filter(n => !isNaN(n));
+  if (vals.length<2) return "";
+  const W=72, H=28, L=2, R=4, T=3, B=3;
+  const plotW = W-L-R, plotH = H-T-B;
+  const min = Math.min.apply(null, vals), max = Math.max.apply(null, vals);
+  const pad = (max-min)*0.18 || Math.max(1, Math.abs(max)*0.04);
+  const lo = min - pad, hi = max + pad, span = hi - lo || 1;
+  const xAt = i => L + (i/(vals.length-1))*plotW;
+  const yAt = v => T + (1 - (v-lo)/span)*plotH;
+  const line = vals.map((v,i) => xAt(i).toFixed(1)+","+yAt(v).toFixed(1)).join(" ");
+  const col = up ? "#26a69a" : "#ef5350";
+  const lastX = xAt(vals.length-1), lastY = yAt(vals[vals.length-1]);
+  return "<svg class=\"row-spark\" viewBox=\"0 0 "+W+" "+H+"\" aria-hidden=\"true\">"+
+    "<polyline fill=\"none\" stroke=\""+col+"\" stroke-width=\"2\" stroke-linejoin=\"round\" stroke-linecap=\"round\" points=\""+line+"\"/>"+
+    "<circle cx=\""+lastX+"\" cy=\""+lastY+"\" r=\"2\" fill=\""+col+"\"/></svg>";
 }
 function groupByCard(cards){
   const map = {};
