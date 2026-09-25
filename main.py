@@ -899,11 +899,70 @@ def _sale_fits(title: str, q: str, player: str, parallel: str = "", number: str 
         return False
     return True
 
-def _code_num(num: str) -> str:
-    n = re.sub(r"^#+", "", (num or "").strip())
-    if re.search(r"[A-Za-z]", n) and re.search(r"\d", n):
-        return n
-    return ""
+_NAME_OR = {
+    "alexander": "Alex",
+    "alexandre": "Alex",
+    "william": "Will",
+    "matthew": "Matt",
+    "michael": "Mike",
+    "nicholas": "Nick",
+    "jonathan": "John",
+    "christopher": "Chris",
+    "joseph": "Joe",
+    "daniel": "Dan",
+    "joshua": "Josh",
+    "benjamin": "Ben",
+    "samuel": "Sam",
+    "zachary": "Zach",
+    "nathaniel": "Nate",
+    "timothy": "Tim",
+    "anthony": "Tony",
+    "robert": "Rob",
+    "richard": "Rick",
+    "thomas": "Tom",
+    "steven": "Steve",
+    "stephen": "Steve",
+    "andrew": "Andy",
+    "patrick": "Pat",
+    "philip": "Phil",
+    "evgeni": "Evgeny",
+    "evgeny": "Evgeni",
+    "alexei": "Alexey",
+    "aleksei": "Alexei",
+}
+
+def _player_q(player: str) -> str:
+    bits = [b for b in str(player or "").strip().split() if b]
+    if not bits:
+        return ""
+    if len(bits) == 1:
+        return bits[0]
+    first, last = bits[0], bits[-1]
+    nick = _NAME_OR.get(first.lower())
+    if nick and nick.lower() != first.lower():
+        return f"({first},{nick}) {last}"
+    return player.strip()
+
+def _num_q(num: str) -> str:
+    raw = re.sub(r"^#+", "", (num or "").strip())
+    if not raw:
+        return ""
+    compact = re.sub(r"[^A-Za-z0-9]", "", raw)
+    forms = []
+    for x in (raw, compact, "#"+compact if compact else ""):
+        if x and x not in forms:
+            forms.append(x)
+    m = re.match(r"^([A-Za-z]+)(\d+[A-Za-z]*)$", compact)
+    if m:
+        dashed = m.group(1) + "-" + m.group(2)
+        if dashed not in forms:
+            forms.append(dashed)
+        hashed = "#" + dashed
+        if hashed not in forms:
+            forms.append(hashed)
+    if len(forms) == 1:
+        return forms[0]
+    return "(" + ",".join(forms) + ")"
 
 
 _GENERIC_PRODUCT = {
@@ -989,14 +1048,14 @@ def search_queries(card: dict) -> list:
     else:
         product = re.sub(r"^(upper deck|ud)\s+", "", st, flags=re.I).strip() or st
 
-    parts = [player, _q_token(product)]
+    parts = [_player_q(player), _q_token(product)]
     color = re.sub(r"/.*", "", par).strip()
     run = re.search(r"/\s*(\d{1,4})", par)
     if color and color.lower() not in (product.lower(), "base", "parallel"):
         parts.append(_q_token(color))
     if run:
         parts.append("/" + run.group(1))
-    code = _code_num(num)
+    code = _num_q(num)
     if code:
         parts.append(code)
     q = " ".join(x for x in parts if x)
