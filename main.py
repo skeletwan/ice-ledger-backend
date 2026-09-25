@@ -2110,8 +2110,31 @@ def is_grail(c):
 def card_market(c):
     if not isinstance(c, dict):
         return None
-    for k in ("sysComp", "sys_comp", "rawComp"):
+    book = c.get("book") if isinstance(c.get("book"), dict) else {}
+    g = str(c.get("grader") or "Raw").upper()
+    gr = str(c.get("grade") or "").strip()
+    keys = []
+    if g in ("", "RAW"):
+        keys = ["rawComp", "sysComp", "Raw", "raw"]
+    elif g == "PSA":
+        tier = "10" if gr.startswith("10") else ("9" if gr.startswith("9") else ("8" if gr.startswith("8") else ("7" if gr.startswith("7") else ("6" if gr.startswith("6") else ""))))
+        if tier:
+            keys = [f"psa{tier}Comp", f"PSA {tier}", f"PSA|{tier}", "sysComp"]
+    elif g == "BGS":
+        if "black" in gr.lower():
+            keys = ["bgsBlackComp", "BGS Black", "sysComp"]
+        elif "9.5" in gr:
+            keys = ["bgs95Comp", "BGS 9.5", "sysComp"]
+        elif gr.startswith("10"):
+            keys = ["bgs10Comp", "BGS 10", "sysComp"]
+        else:
+            keys = ["bgs9Comp", "BGS 9", "sysComp"]
+    else:
+        keys = ["sysComp"]
+    for k in keys:
         v = c.get(k)
+        if v is None:
+            v = book.get(k)
         try:
             n = float(v)
         except (TypeError, ValueError):
@@ -2136,7 +2159,7 @@ def public_card(raw: dict) -> dict:
         "photo": "",
         "has_photo": bool((c.get("photo") or c.get("scan") or "") and len(str(c.get("photo") or c.get("scan") or "")) > 80) or bool(c.get("has_photo")),
         # never send what they paid to other collectors
-        "comp": card_market(c) or c.get("comp"),
+        "comp": card_market(c),
         "sysComp": card_market(c),
         "book": c.get("book") or {},
         "hist": (c.get("hist") or [])[-60:],
