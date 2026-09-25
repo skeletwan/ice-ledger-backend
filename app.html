@@ -833,7 +833,7 @@
     <h3 style="font-size:15px;margin:16px 0 8px">Clappers+ / Rip Night!</h3>
     <p class="muted" id="youQuota"></p>
     <button class="ghost" id="youPayBtn">Clappers+</button>
-    <p class="muted">$8 / month · 200 IDs</p>
+    <p class="muted">$8 / month · 80 IDs · book updates at midnight Eastern</p>
     <button class="ghost" id="youRipBtn">Rip Night!</button>
     <p class="muted">$2.99 · 20 IDs</p>
     <label>Have a code?</label>
@@ -931,11 +931,13 @@
   <section class="page" id="helpPage">
     <button class="ghost" id="backYou">Back to You</button>
     <h2 style="font-size:18px;margin:12px 0 8px">Support / feedback</h2>
-    <p class="muted">I’m just one dude running this app. If you need a hand with anything, I’ll do my best to get back to you as soon as I can. Any feedback on improvements is definitely welcome!</p>
+    <p class="muted">I’m just one dude running this app. If you need a hand with anything, I’ll do my best to get back to you as soon as I can. Feedback on improvements is welcome.</p>
+    <p class="muted">Hockey comps are hard to nail down. If a scan names the wrong card, misses a parallel, or the sold number looks off, email me with the player, year, set, card number, and what it should have been. I’ll do my best to make a fix.</p>
     <div class="card">
       <h3 style="margin:0 0 8px;font-size:15px">Contact</h3>
       <p class="muted"><a href="mailto:hello@clapperspc.com" style="color:var(--ice)">hello@clapperspc.com</a></p>
       <a class="btn" href="mailto:hello@clapperspc.com?subject=Clappers%20PC%20feedback">Email support / feedback</a>
+      <a class="ghost btn" href="mailto:hello@clapperspc.com?subject=Clappers%20PC%20scan%20miss&body=Player%3A%0AYear%3A%0ASet%3A%0ANumber%3A%0AWhat%20the%20app%20said%3A%0AWhat%20it%20should%20be%3A%0A">Report a scan miss</a>
     </div>
     <div class="card" style="margin-top:12px">
       <h3 style="margin:0 0 8px;font-size:15px">Legal</h3>
@@ -3566,7 +3568,7 @@ async function refreshUsage(){
 }
 function showPaywall(msg){
   if ($("quotaBox")) {
-    $("quotaBox").textContent = msg || "No IDs left. Clappers+ is $8 / month · 200 IDs.";
+    $("quotaBox").textContent = msg || "No IDs left. Clappers+ is $8 / month · 80 IDs.";
     $("quotaBox").className = "quota-chip err";
   }
   show("scan");

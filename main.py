@@ -21,7 +21,7 @@ OPERATOR_EMAIL = (os.environ.get("OPERATOR_EMAIL", "hello@clapperspc.com") or "h
 MODEL = os.environ.get("XAI_MODEL", "grok-4-1-fast-non-reasoning")
 DAILY_CAP = int(os.environ.get("DAILY_CAP", "80"))
 FREE_SCANS = int(os.environ.get("FREE_SCANS", "10"))
-PLUS_SCANS = int(os.environ.get("PLUS_SCANS", "200"))
+PLUS_SCANS = int(os.environ.get("PLUS_SCANS", "80"))
 FREE_BOOK = int(os.environ.get("FREE_BOOK", "8"))
 PLUS_BOOK = int(os.environ.get("PLUS_BOOK", "30"))
 STRIPE_PAY_LINK = os.environ.get("STRIPE_PAY_LINK", "")
@@ -1055,9 +1055,6 @@ def search_queries(card: dict) -> list:
     letter_code = bool(re.search(r"[A-Za-z]", num) and re.search(r"\d", num))
     if letter_code and code:
         parts = [_player_q(player), code]
-        yq = _season_q(year)
-        if yq:
-            parts.append(yq)
     else:
         parts = [_player_q(player), _q_token(product)]
         color = re.sub(r"/.*", "", par).strip()
@@ -2789,8 +2786,8 @@ async def checkout(request: Request, x_token: str | None = Header(default=None))
             "note": None if STRIPE_RIP_LINK else "Set STRIPE_RIP_LINK on Railway, or redeem a code.",
         }
     if STRIPE_PAY_LINK:
-        return {"url": STRIPE_PAY_LINK, "price": "8 CAD / month"}
-    return {"url": None, "price": "8 CAD / month", "note": "Set STRIPE_PAY_LINK on Railway when the Stripe Payment Link is live."}
+        return {"url": STRIPE_PAY_LINK, "price": "8 CAD / month · 80 IDs"}
+    return {"url": None, "price": "8 CAD / month · 80 IDs", "note": "Set STRIPE_PAY_LINK on Railway when the Stripe Payment Link is live."}
 
 @app.post("/plus")
 async def plus(payload: dict, request: Request, x_token: str | None = Header(default=None)):
