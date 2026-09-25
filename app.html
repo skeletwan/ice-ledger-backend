@@ -219,7 +219,8 @@
     .board-post .k { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin:0 0 6px; }
     .board-post h3 { margin:0 0 4px; font-size:17px; font-weight:700; line-height:1.25; }
     .board-post .muted { margin:0; }
-    .board-post a { color:inherit; font-weight:700; text-decoration:underline; }
+    .board-post .when { margin:4px 0 0; font-size:13px; font-weight:700; color:#fff; }
+    .live-chip { display:inline-block; margin-left:8px; padding:2px 8px; border-radius:999px; background:#d1263a; color:#fff; font-size:10px; font-weight:800; letter-spacing:.08em; vertical-align:middle; }
     .thread { margin-top:8px; }
     .c-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
     .c-actions button { width:auto; margin:0; padding:6px 10px; font-size:12px; }
@@ -782,10 +783,23 @@
     <button class="ghost" data-you="youHub">Back</button>
     <div class="card" id="banCard" style="margin-top:12px">
       <h3 style="margin:0 0 6px;font-size:16px">Binder banner</h3>
-      <p class="muted">One banner on your public binder. Use it for card shows, breaks, YouTube drops, anything coming up. A new save replaces the old one and pings people who follow you.</p>
+      <p class="muted">One banner on your public binder. Add a start time so it can say when it goes live. After the window ends it drops off Community. A new save replaces the old one and pings people who follow you.</p>
       <div id="banPreview"></div>
       <label>Title <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0"> · card show, YouTube break, episode, live</span></label>
       <input id="banTitle" maxlength="80" placeholder="Saturday rip · Toronto card show" />
+      <label>Starts</label>
+      <input id="banStart" type="datetime-local" />
+      <label>Length</label>
+      <select id="banHours">
+        <option value="1">1 hour</option>
+        <option value="2">2 hours</option>
+        <option value="3">3 hours</option>
+        <option value="4" selected>4 hours</option>
+        <option value="6">6 hours</option>
+        <option value="8">8 hours</option>
+        <option value="12">12 hours</option>
+        <option value="24">24 hours</option>
+      </select>
       <label>Details</label>
       <input id="banBody" maxlength="280" placeholder="Booth 14, 10am–4pm or episode notes" />
       <label>Link</label>
@@ -4310,11 +4324,43 @@ $("pSave") && ($("pSave").onclick = async () => {
     loadMe();
   } catch(e) { $("pNote").textContent = e.message; }
 });
-function bannerHtml(b){
+function bannerWhen(iso){
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(+d)) return "";
+  try {
+    return d.toLocaleString("en-CA", { timeZone:"America/Toronto", weekday:"short", month:"short", day:"numeric", hour:"numeric", minute:"2-digit" })+" ET";
+  } catch(e) {
+    return d.toLocaleString();
+  }
+}
+function bannerState(b){
+  if (!b || !b.starts) return { label:"", live:false, done:false };
+  const t = Date.parse(b.starts);
+  if (isNaN(t)) return { label:"", live:false, done:false };
+  const hrs = Math.max(1, Math.min(24, +(b.hours||4)));
+  const end = t + hrs*3600000;
+  const now = Date.now();
+  if (now < t) return { label: bannerWhen(b.starts), live:false, done:false };
+  if (now < end) return { label: bannerWhen(b.starts), live:true, done:false };
+  return { label:"Ended", live:false, done:true };
+}
+function toLocalInput(iso){
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(+d)) return "";
+  const p = n => String(n).padStart(2,"0");
+  return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+"T"+p(d.getHours())+":"+p(d.getMinutes());
+}
+function bannerHtml(b, mine){
   if (!b || !b.title) return "";
+  const st = bannerState(b);
+  if (st.done && !mine) return "";
   const col = b.color || "#8fd4ee";
   const link = b.url ? "<div style=\"margin-top:8px\"><a href=\""+b.url.replace(/"/g,"")+"\" target=\"_blank\" rel=\"noopener\">Open link</a></div>" : "";
-  return "<div class=\"board-post\" style=\"border-color:"+col+"\"><h3>"+String(b.title||"").replace(/[<>]/g,"")+"</h3>"+(b.body?"<div class=\"muted\">"+String(b.body).replace(/[<>]/g,"")+"</div>":"")+link+"</div>";
+  const live = st.live ? "<span class=\"live-chip\">LIVE</span>" : "";
+  const when = st.label ? "<div class=\"when\">"+st.label+(st.live?" · happening now":"")+"</div>" : "";
+  return "<div class=\"board-post\" style=\"border-color:"+col+"\"><h3>"+String(b.title||"").replace(/[<>]/g,"")+live+"</h3>"+when+(b.body?"<div class=\"muted\">"+String(b.body).replace(/[<>]/g,"")+"</div>":"")+link+"</div>";
 }
 function fillBannerForm(b){
   if (!b) return;
@@ -4322,6 +4368,8 @@ function fillBannerForm(b){
   if ($("banBody")) $("banBody").value = b.body || "";
   if ($("banUrl")) $("banUrl").value = b.url || "";
   if ($("banColor") && b.color) $("banColor").value = b.color;
+  if ($("banStart")) $("banStart").value = toLocalInput(b.starts);
+  if ($("banHours")) $("banHours").value = String(b.hours || 4);
 }
 async function loadBanners(){
   const box = $("banPreview") || $("banList");
@@ -4330,17 +4378,25 @@ async function loadBanners(){
   if (!r.ok) return;
   const d = await r.json();
   const b = (d.banners||[])[0];
-  if (box) box.innerHTML = b ? bannerHtml(b) : "<p class=\"muted\">No banner yet.</p>";
+  if (box) box.innerHTML = b ? bannerHtml(b, true) : "<p class=\"muted\">No banner yet.</p>";
   if (b) fillBannerForm(b);
 }
 $("banAdd") && ($("banAdd").onclick = async () => {
   try {
+    const startEl = $("banStart") && $("banStart").value;
+    let starts = "";
+    if (startEl) {
+      const d = new Date(startEl);
+      if (!isNaN(+d)) starts = d.toISOString();
+    }
     await authPost("/banners", {
       kind: "note",
       title: ($("banTitle")&&$("banTitle").value) || "",
       body: ($("banBody")&&$("banBody").value) || "",
       url: ($("banUrl")&&$("banUrl").value) || "",
-      color: ($("banColor")&&$("banColor").value) || "#8fd4ee"
+      color: ($("banColor")&&$("banColor").value) || "#8fd4ee",
+      starts,
+      hours: +(($("banHours")&&$("banHours").value) || 4)
     });
     if ($("banNote")) $("banNote").textContent = "Banner saved. It replaced the old one.";
     loadBanners();
@@ -4351,7 +4407,7 @@ $("banClear") && ($("banClear").onclick = async () => {
   const d = await r.json().catch(()=>({}));
   const b = (d.banners||[])[0];
   if (b && b.id) await fetch("/banners/"+b.id, { method:"DELETE", headers:{ "x-token": token() } });
-  ["banTitle","banBody","banUrl"].forEach(id => { if ($(id)) $(id).value = ""; });
+  ["banTitle","banBody","banUrl","banStart"].forEach(id => { if ($(id)) $(id).value = ""; });
   if ($("banNote")) $("banNote").textContent = "Banner removed.";
   if ($("banPreview")) $("banPreview").innerHTML = "<p class=\"muted\">No banner yet.</p>";
 });

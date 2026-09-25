@@ -2194,7 +2194,11 @@ def init_db():
     )
     """)
     try:
-        con.execute("ALTER TABLE notes ADD COLUMN card_id TEXT")
+        con.execute("ALTER TABLE banner_posts ADD COLUMN starts TEXT")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        con.execute("ALTER TABLE banner_posts ADD COLUMN hours INTEGER")
     except sqlite3.OperationalError:
         pass
     try:
@@ -3780,7 +3784,7 @@ async def public_binder(slug: str, request: Request, x_token: str | None = Heade
         liked = bool(con.execute("SELECT user_id FROM binder_likes WHERE slug=? AND user_id=?", (slug, me)).fetchone())
         is_following = bool(con.execute("SELECT slug FROM follows WHERE follower=? AND slug=?", (me, slug)).fetchone())
     banners = con.execute(
-        "SELECT id,kind,title,body,url,color,created FROM banner_posts WHERE user_id=? ORDER BY id DESC LIMIT 12",
+        "SELECT id,kind,title,body,url,color,created,starts,hours FROM banner_posts WHERE user_id=? ORDER BY id DESC LIMIT 12",
         (u["id"],),
     ).fetchall()
     con.close()
@@ -3803,9 +3807,37 @@ async def public_binder(slug: str, request: Request, x_token: str | None = Heade
         "liked": liked,
         "following": is_following,
         "cards": cards,
-        "banners": [dict(b) for b in banners],
+        "banners": [banner_row(b) for b in banners if not banner_ended(banner_row(b))],
     }
 
+
+def banner_row(r) -> dict:
+    if not r:
+        return {}
+    d = dict(r)
+    try:
+        d["hours"] = int(d.get("hours") or 4)
+    except (TypeError, ValueError):
+        d["hours"] = 4
+    d["hours"] = max(1, min(24, d["hours"]))
+    return d
+
+def banner_ended(b) -> bool:
+    if not b or not b.get("starts"):
+        return False
+    raw = str(b.get("starts") or "").replace("Z", "+00:00")
+    try:
+        start = datetime.fromisoformat(raw)
+    except Exception:
+        return False
+    if start.tzinfo is None:
+        start = start.replace(tzinfo=timezone.utc)
+    hrs = 4
+    try:
+        hrs = max(1, min(24, int(b.get("hours") or 4)))
+    except (TypeError, ValueError):
+        hrs = 4
+    return now_utc() > start + timedelta(hours=hrs)
 
 def _clean_banner_url(url: str) -> str:
     url = (url or "").strip()
@@ -3855,11 +3887,11 @@ async def my_banners(request: Request, x_token: str | None = Header(default=None
     uid = require_user(request, x_token)
     con = db()
     rows = con.execute(
-        "SELECT id,kind,title,body,url,color,created FROM banner_posts WHERE user_id=? ORDER BY id DESC LIMIT 12",
+        "SELECT id,kind,title,body,url,color,created,starts,hours FROM banner_posts WHERE user_id=? ORDER BY id DESC LIMIT 12",
         (uid,),
     ).fetchall()
     con.close()
-    return {"banners": [dict(r) for r in rows]}
+    return {"banners": [banner_row(r) for r in rows]}
 
 
 @app.post("/banners")
@@ -3874,6 +3906,20 @@ async def add_banner(payload: dict, request: Request, x_token: str | None = Head
     color = (payload.get("color") or "#8fd4ee").strip()[:16]
     if not re.match(r"^#[0-9a-fA-F]{3,8}$", color):
         color = "#8fd4ee"
+    starts = str(payload.get("starts") or "").strip()[:40]
+    if starts:
+        raw = starts.replace("Z", "+00:00")
+        try:
+            dt = datetime.fromisoformat(raw)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            starts = dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        except Exception:
+            starts = ""
+    try:
+        hours = max(1, min(24, int(payload.get("hours") or 4)))
+    except (TypeError, ValueError):
+        hours = 4
     if len(title) < 2:
         title = (body or "")[:80]
     if len(title) < 2:
@@ -3881,8 +3927,8 @@ async def add_banner(payload: dict, request: Request, x_token: str | None = Head
     con = db()
     con.execute("DELETE FROM banner_posts WHERE user_id=?", (uid,))
     con.execute(
-        "INSERT INTO banner_posts(user_id,kind,title,body,url,color,created) VALUES(?,?,?,?,?,?,?)",
-        (uid, kind, title, body, url, color, time.strftime("%Y-%m-%dT%H:%M:%SZ")),
+        "INSERT INTO banner_posts(user_id,kind,title,body,url,color,created,starts,hours) VALUES(?,?,?,?,?,?,?,?,?)",
+        (uid, kind, title, body, url, color, time.strftime("%Y-%m-%dT%H:%M:%SZ"), starts or None, hours),
     )
     con.commit()
     rid = con.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
