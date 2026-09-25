@@ -2764,7 +2764,7 @@ async function lookupSoldFor(c, noteId, after){
     if (!r.ok) throw new Error(t.slice(0,160));
     const d = JSON.parse(t);
     const sug = d.suggested_cad != null ? +d.suggested_cad : null;
-    if (note) note.textContent = (d.cached ? "From cache · " : "") + (d.summary || (sug!=null ? ("Sold "+money(sug)) : "No sold match"));
+    if (note) note.textContent = (d.cached ? "Saved close · " : "API · ") + (d.summary || (sug!=null ? ("Sold "+money(sug)) : "No sold match")) + (d.query ? (" · "+d.query) : "");
     if (after) after(d, sug);
   } catch(e) {
     if (note) note.textContent = "Lookup failed. " + ((e && e.message) || "");

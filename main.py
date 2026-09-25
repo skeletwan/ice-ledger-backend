@@ -1528,6 +1528,9 @@ async def comp(
     ck_day = f"{ck}|{day}"
     nightly = bool(payload.get("auto") or payload.get("skip_web") or payload.get("force"))
     force = bool(payload.get("force"))
+    if force:
+        global CARD_API_QUOTA
+        CARD_API_QUOTA = False
     pl = str(card.get("player") or "").strip().lower()
     yr = str(card.get("year") or "").strip().lower()
     if force and pl:
@@ -1547,7 +1550,7 @@ async def comp(
                 house_ok = any(float(house.get(k) or 0) > 2 for k in ("raw_cad","psa10_cad","psa9_cad","psa8_cad","psa7_cad","suggested_cad"))
             except (TypeError, ValueError):
                 house_ok = False
-        if house and house_ok and (CARD_API_QUOTA or house.get("close_day") == today_iso()):
+        if (not force) and house and house_ok and (CARD_API_QUOTA or house.get("close_day") == today_iso()):
             if CARD_API_QUOTA:
                 house["quota"] = True
                 house["summary"] = "Market feed paused until tomorrow. Using last close."
