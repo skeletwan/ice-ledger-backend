@@ -215,35 +215,41 @@
     .socials { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
     .socials a { color:var(--ice); font-size:13px; font-weight:700; text-decoration:none; }
     .item.reply { margin-left:18px; border-left:2px solid var(--line); }
-    .board-post { display:block; border-radius:16px; padding:14px 16px; margin:10px 0 14px; background:#0e171e; border:2px solid var(--ice); }
+    .board-post { display:block; border-radius:16px; padding:14px 16px; margin:10px 0 14px; background:#0e171e; border:2px solid var(--ice); overflow:hidden; }
     .board-post .k { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin:0 0 6px; }
     .board-post h3 { margin:0 0 4px; font-size:17px; font-weight:700; line-height:1.25; }
     .board-post .muted { margin:0; }
     .board-post .when { margin:4px 0 0; font-size:13px; font-weight:700; color:#fff; }
+    #banCard { border-radius:12px; overflow:hidden; }
     #banCard input, #banCard select { max-width:100%; min-width:0; box-sizing:border-box; }
     .ban-when {
+      position:relative;
       margin-top:4px;
       width:100%;
       max-width:100%;
+      min-height:44px;
       border:1px solid var(--line);
       border-radius:8px;
       background:#121820;
       overflow:hidden;
     }
-    #banStart {
-      -webkit-appearance:none;
-      appearance:none;
+    #banStartShow {
       display:block;
-      width:100%;
-      max-width:100%;
-      min-width:0;
-      margin:0;
-      border:0;
-      border-radius:0;
-      background:transparent;
-      color:var(--text);
-      font:inherit;
       padding:10px 12px;
+      color:var(--text);
+      pointer-events:none;
+    }
+    #banStartShow.empty { color:var(--muted); }
+    #banStart {
+      position:absolute;
+      inset:0;
+      width:100%;
+      height:100%;
+      margin:0;
+      padding:0;
+      border:0;
+      opacity:0;
+      font-size:16px;
     }
     .thread { margin-top:8px; }
     .c-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
@@ -316,7 +322,7 @@
     #catPicks button { margin:0; text-align:left; font-size:13px; padding:10px 12px; }
     .item.comment, .thread .item { padding:8px 10px; margin-bottom:6px; }
     .item.reply { margin-left:14px; padding:8px 10px; }
-    .board-post { border-width:1px; padding:10px 12px; }
+    .board-post { border-width:1px; padding:10px 12px; border-radius:16px; overflow:hidden; }
     .dock button { display:flex; flex-direction:column; align-items:center; gap:4px; }
     header { background:var(--bg); }
     .dock { background:var(--ink); }
@@ -813,6 +819,7 @@
       <input id="banTitle" maxlength="80" placeholder="Saturday rip · Toronto card show" />
       <label>Starts</label>
       <div class="ban-when">
+        <span id="banStartShow" class="empty">Tap to set date and time</span>
         <input id="banStart" type="datetime-local" />
       </div>
       <label>Length</label>
@@ -4371,13 +4378,26 @@ function bannerState(b){
   if (now < end) return { label: bannerWhen(b.starts), live:true, done:false };
   return { label:"Ended", live:false, done:true };
 }
+function paintBanStartShow(){
+  const lab = $("banStartShow");
+  const el = $("banStart");
+  if (!lab || !el) return;
+  if (!el.value) {
+    lab.textContent = "Tap to set date and time";
+    lab.classList.add("empty");
+    return;
+  }
+  lab.textContent = bannerWhen(new Date(el.value).toISOString()) || el.value;
+  lab.classList.remove("empty");
+}
 function fillStartInputs(iso){
   if (!$("banStart")) return;
-  if (!iso) { $("banStart").value = ""; return; }
+  if (!iso) { $("banStart").value = ""; paintBanStartShow(); return; }
   const d = new Date(iso);
   if (isNaN(+d)) return;
   const p = n => String(n).padStart(2,"0");
   $("banStart").value = d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+"T"+p(d.getHours())+":"+p(d.getMinutes());
+  paintBanStartShow();
 }
 function bannerHtml(b, mine){
   if (!b || !b.title) return "";
@@ -4409,6 +4429,8 @@ async function loadBanners(){
   if (box) box.innerHTML = b ? bannerHtml(b, true) : "<p class=\"muted\">No banner yet.</p>";
   if (b) fillBannerForm(b);
 }
+$("banStart") && ($("banStart").onchange = paintBanStartShow);
+$("banStart") && ($("banStart").oninput = paintBanStartShow);
 $("banAdd") && ($("banAdd").onclick = async () => {
   try {
     const startEl = $("banStart") && $("banStart").value;
@@ -4436,6 +4458,7 @@ $("banClear") && ($("banClear").onclick = async () => {
   const b = (d.banners||[])[0];
   if (b && b.id) await fetch("/banners/"+b.id, { method:"DELETE", headers:{ "x-token": token() } });
   ["banTitle","banBody","banUrl","banStart"].forEach(id => { if ($(id)) $(id).value = ""; });
+  paintBanStartShow();
   if ($("banNote")) $("banNote").textContent = "Banner removed.";
   window.myBanner = null;
   if ($("banPreview")) $("banPreview").innerHTML = "<p class=\"muted\">No banner yet.</p>";
