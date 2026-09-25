@@ -1622,6 +1622,14 @@ async def comp(
         data = api_hit
         used = "card-api"
         data = attach_hist_copy(data, card)
+    elif CARD_API_KEY:
+        data = {
+            "summary": "No eBay solds in the feed for this search.",
+            "query": q,
+            "sample_count": 0,
+            "needs_review": True,
+        }
+        used = "card-api"
     elif XAI_API_KEY and not skip_web:
         label = q + " sold Fanatics Collect OR Goldin OR Heritage"
         headers = {"Authorization": f"Bearer {XAI_API_KEY}", "Content-Type": "application/json"}
@@ -1713,10 +1721,17 @@ async def comp(
         v = _as_price(m)
         if v is not None and not _looks_like_card_no(v):
             nums.append(v)
+    if data.get("suggested_cad") is None:
+        pick = _copy_sold(card, data)
+        if pick is not None:
+            data["suggested_cad"] = pick
     if data.get("suggested_cad") is None and data.get("suggested_usd") is None:
         data["needs_review"] = True
         data["sample_count"] = data.get("sample_count") or 0
-        data["summary"] = data.get("summary") or "No Fanatics / Goldin / Heritage sold matched this copy."
+        if used == "card-api":
+            data["summary"] = data.get("summary") or "No eBay solds in the feed for this search."
+        else:
+            data["summary"] = data.get("summary") or "No sold match for this copy."
     money_keys = ("suggested_cad","suggested_usd","raw_cad","psa6_cad","psa7_cad","psa8_cad","psa9_cad","psa10_cad","bgs9_cad","bgs95_cad","bgs10_cad","bgs_black_cad","sgc10_cad")
     if not any(data.get(k) for k in money_keys) and ck.strip("|") and not payload.get("auto") and not payload.get("force"):
         try:
@@ -1747,6 +1762,9 @@ async def comp(
     data = _order_grades(data)
     data["model"] = used
     data["card"] = card
+    data["query"] = data.get("query") or q
+    if used == "card-api" and data.get("sample_count"):
+        data["summary"] = data.get("summary") or ("eBay solds · " + str(data.get("sample_count")) + " in feed")
     if err and not data.get("suggested_cad") and not data.get("suggested_usd"):
         data["error"] = err
         data["needs_review"] = True
