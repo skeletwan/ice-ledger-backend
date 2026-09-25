@@ -3614,10 +3614,6 @@ $("modPushList") && ($("modPushList").onclick = async ev => {
     loadAnnounces();
   } catch(e) { if ($("modPushNote")) $("modPushNote").textContent = e.message; }
 });
-  if (!confirm("Clear all reports from the inbox?")) return;
-  await fetch("/admin/clear-inbox", { method:"POST", headers:{ "x-token": token() } });
-  if ($("modLoad")) $("modLoad").click();
-});
 $("modLoad") && ($("modLoad").onclick = async () => {
   const box = $("modList");
   const r = await fetch("/admin/inbox", { headers:{ "x-token": token() } });
