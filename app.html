@@ -897,6 +897,10 @@
       <button class="ghost" id="modPlusOn">Give Clappers+</button>
       <button class="ghost" id="modPlusOff">Remove Clappers+</button>
     </div>
+    <div class="row2">
+      <button class="ghost" id="modCreatorOn">Give creator scans</button>
+      <button class="ghost" id="modCreatorOff">Remove creator scans</button>
+    </div>
     <button class="ghost" id="modResetIds">Reset IDs this cycle</button>
     <div class="row2">
       <button class="ghost" id="modSuspend">Suspend</button>
@@ -3859,6 +3863,14 @@ $("modPlusOn") && ($("modPlusOn").onclick = async () => {
 });
 $("modPlusOff") && ($("modPlusOff").onclick = async () => {
   try { const d = await modAccount("/admin/plan", { plan:"free" }); $("modUserNote").textContent = "Clappers+ off for "+(d.email||d.slug); $("modLookup") && $("modLookup").click(); }
+  catch(e){ $("modUserNote").textContent = e.message; }
+});
+$("modCreatorOn") && ($("modCreatorOn").onclick = async () => {
+  try { const d = await modAccount("/admin/plan", { plan:"creator" }); $("modUserNote").textContent = "Creator scans on for "+(d.email||d.slug); $("modLookup") && $("modLookup").click(); }
+  catch(e){ $("modUserNote").textContent = e.message; }
+});
+$("modCreatorOff") && ($("modCreatorOff").onclick = async () => {
+  try { const d = await modAccount("/admin/plan", { plan:"plus" }); $("modUserNote").textContent = "Creator off. Clappers+ for "+(d.email||d.slug); $("modLookup") && $("modLookup").click(); }
   catch(e){ $("modUserNote").textContent = e.message; }
 });
 $("modMailOne") && ($("modMailOne").onclick = async () => {

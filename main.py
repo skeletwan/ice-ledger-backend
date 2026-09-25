@@ -22,6 +22,7 @@ MODEL = os.environ.get("XAI_MODEL", "grok-4-1-fast-non-reasoning")
 DAILY_CAP = int(os.environ.get("DAILY_CAP", "80"))
 FREE_SCANS = int(os.environ.get("FREE_SCANS", "10"))
 PLUS_SCANS = int(os.environ.get("PLUS_SCANS", "80"))
+CREATOR_SCANS = int(os.environ.get("CREATOR_SCANS", "200"))
 FREE_BOOK = int(os.environ.get("FREE_BOOK", "8"))
 PLUS_BOOK = int(os.environ.get("PLUS_BOOK", "30"))
 STRIPE_PAY_LINK = os.environ.get("STRIPE_PAY_LINK", "")
@@ -2614,11 +2615,15 @@ def plan_of(uid: int) -> str:
     con = db()
     row = con.execute("SELECT plan, plus_until FROM users WHERE id=?", (uid,)).fetchone()
     now = now_utc()
+    raw = ((row["plan"] if row else "free") or "free").lower()
+    if raw == "creator":
+        con.close()
+        return "creator"
     until = parse_ts(row["plus_until"] if row else None)
     if until and until > now:
         con.close()
         return "plus"
-    p = (row["plan"] if row else "free") or "free"
+    p = raw
     if p == "plus" and not until:
         until = now + timedelta(days=30)
         con.execute(
@@ -2633,6 +2638,17 @@ def plan_of(uid: int) -> str:
         con.commit()
     con.close()
     return "free"
+
+def paid_plan(uid: int) -> bool:
+    return plan_of(uid) in ("plus", "creator")
+
+def scan_cap(uid: int) -> int:
+    p = plan_of(uid)
+    if p == "creator":
+        return CREATOR_SCANS
+    if p == "plus":
+        return PLUS_SCANS
+    return FREE_SCANS
 
 def bonus_of(uid: int) -> int:
     con = db()
@@ -2673,8 +2689,8 @@ def usage_of(uid: int):
     start, end = ensure_cycle(uid)
     m = start.strftime("%Y-%m-%d")
     plan = plan_of(uid)
-    cap = PLUS_SCANS if plan == "plus" else FREE_SCANS
-    bcap = PLUS_BOOK if plan == "plus" else FREE_BOOK
+    cap = scan_cap(uid)
+    bcap = PLUS_BOOK if paid_plan(uid) else FREE_BOOK
     con = db()
     row = con.execute("SELECT n FROM usage WHERE user_id=? AND month=?", (uid, m)).fetchone()
     brow = con.execute("SELECT n FROM book_usage WHERE user_id=? AND month=?", (uid, m)).fetchone()
@@ -2685,11 +2701,12 @@ def usage_of(uid: int):
     bonus = bonus_of(uid)
     monthly_left = max(0, cap - used)
     reset_at = (parse_ts(prow["plus_until"] if prow else None) if plan == "plus" else end) or end
+    shown = "plus" if plan in ("plus", "creator") else "free"
     out = {
         "used": used, "cap": cap, "bonus": bonus,
         "left": monthly_left + bonus,
         "book_used": bused, "book_cap": bcap, "book_left": max(0, bcap - bused),
-        "plan": plan, "month": m,
+        "plan": shown, "month": m,
         "reset_at": reset_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "rip_scans": RIP_SCANS, "rip_price": RIP_PRICE,
         "operator": is_operator(uid),
@@ -2704,8 +2721,7 @@ def bump_usage(uid: int):
     con = db()
     row = con.execute("SELECT n FROM usage WHERE user_id=? AND month=?", (uid, m)).fetchone()
     used = row["n"] if row else 0
-    plan = plan_of(uid)
-    cap = PLUS_SCANS if plan == "plus" else FREE_SCANS
+    cap = scan_cap(uid)
     if used < cap:
         if row:
             con.execute("UPDATE usage SET n=n+1 WHERE user_id=? AND month=?", (uid, m))
@@ -2804,7 +2820,7 @@ async def book_refresh(payload: dict, request: Request, x_token: str | None = He
     payload = dict(payload or {})
     scrub_false_yg(payload)
     payload["auto"] = True
-    payload["force"] = is_operator(uid) or plan_of(uid) == "plus"
+    payload["force"] = is_operator(uid) or paid_plan(uid)
     payload["skip_web"] = True
     return await comp(payload, payload.get("secret"), x_token)
 
@@ -4357,7 +4373,13 @@ async def admin_mail_all(payload: dict, request: Request, x_token: str | None = 
 @app.post("/admin/plan")
 async def admin_plan(payload: dict, request: Request, x_token: str | None = Header(default=None)):
     require_operator(request, x_token)
-    want = "plus" if str(payload.get("plan") or "").lower() in ("plus", "on", "1", "true") else "free"
+    raw = str(payload.get("plan") or "").lower()
+    if raw in ("creator", "creators", "hidden"):
+        want = "creator"
+    elif raw in ("plus", "on", "1", "true"):
+        want = "plus"
+    else:
+        want = "free"
     con = db()
     row = _find_user(con, payload)
     if not row:
@@ -4370,6 +4392,11 @@ async def admin_plan(payload: dict, request: Request, x_token: str | None = Head
         con.execute(
             "UPDATE users SET plan='plus', plus_until=?, cycle_start=? WHERE id=?",
             (mark, start, row["id"]),
+        )
+    elif want == "creator":
+        con.execute(
+            "UPDATE users SET plan='creator', plus_until=NULL WHERE id=?",
+            (row["id"],),
         )
     else:
         con.execute("UPDATE users SET plan='free', plus_until=NULL WHERE id=?", (row["id"],))
