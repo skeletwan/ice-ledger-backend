@@ -4378,6 +4378,22 @@ async def admin_plan(payload: dict, request: Request, x_token: str | None = Head
     send_mail("Clappers PC plan "+want, f"{row['email']} / {row['slug'] if 'slug' in row.keys() else ''}")
     return {"ok": True, "email": row["email"], "slug": row["slug"], "plan": want}
 
+@app.post("/admin/reset-ids")
+async def admin_reset_ids(payload: dict, request: Request, x_token: str | None = Header(default=None)):
+    require_operator(request, x_token)
+    con = db()
+    row = _find_user(con, payload)
+    if not row:
+        con.close()
+        raise HTTPException(404, "no user with that email or slug")
+    uid = row["id"]
+    m = month_key(uid)
+    con.execute("DELETE FROM usage WHERE user_id=? AND month=?", (uid, m))
+    con.commit()
+    con.close()
+    u = usage_of(uid)
+    return {"ok": True, "email": row["email"], "slug": row["slug"], "left": u["left"], "cap": u["cap"]}
+
 @app.post("/admin/suspend")
 async def admin_suspend(payload: dict, request: Request, x_token: str | None = Header(default=None)):
     oid = require_operator(request, x_token)

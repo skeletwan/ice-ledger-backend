@@ -897,6 +897,7 @@
       <button class="ghost" id="modPlusOn">Give Clappers+</button>
       <button class="ghost" id="modPlusOff">Remove Clappers+</button>
     </div>
+    <button class="ghost" id="modResetIds">Reset IDs this cycle</button>
     <div class="row2">
       <button class="ghost" id="modSuspend">Suspend</button>
       <button class="ghost" id="modUnsuspend">Unsuspend</button>
@@ -1530,7 +1531,7 @@ $("tabScan").onclick = () => {
   else show("scan");
 };
 $("backScan").onclick = () => {
-  if (window.idPending && !window.confirm("Start a new scan? This ID stays used. Resume from Scan if you only meant to leave.")) return;
+  if (window.idPending && !window.confirm("Leave without saving? This scan already used an ID. Cancel to stay and save it to your binder.")) return;
   window.idPending = false;
   paintResume();
   show("scan");
@@ -3557,8 +3558,7 @@ async function refreshUsage(){
   if ($("refreshBook")) $("refreshBook").classList.toggle("hidden", !u.operator);
   if ($("updOne")) $("updOne").classList.toggle("hidden", !u.operator);
   if ($("updOneNote")) $("updOneNote").classList.toggle("hidden", !u.operator);
-  const bonus = u.bonus ? " + "+u.bonus+" extra" : "";
-  const line = (u.plan==="plus"?"Clappers+":"Free")+" · "+u.left+" IDs left"+bonus;
+  const line = (u.plan==="plus"?"Clappers+":"Free")+" · "+u.left+" IDs left";
   if ($("quotaBox")) {
     $("quotaBox").textContent = line;
     $("quotaBox").className = "quota-chip " + (u.left<=0 ? "err" : (u.left<=3 ? "warn" : "ok"));
