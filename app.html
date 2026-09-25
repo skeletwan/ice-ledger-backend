@@ -349,9 +349,9 @@
         <div class="auth-pw">
           <label>Password</label>
           <input id="password" type="password" name="password" autocomplete="current-password" placeholder="Password" passwordrules="minlength: 8;" />
-          <div class="signup-only">
+          <div class="signup-only hidden" id="confirmWrap">
             <label>Confirm password</label>
-            <input id="password2" type="password" name="password_confirm" autocomplete="off" placeholder="Confirm password" />
+            <input id="password2" type="text" name="password_confirm" autocomplete="off" placeholder="Confirm password" />
           </div>
           <label class="show-pw"><input type="checkbox" id="showPw" /> Show password</label>
         </div>
@@ -3887,12 +3887,29 @@ function setAuthMode(mode){
     $("password").autocomplete = mode === "signup" ? "new-password" : "current-password";
     $("password").placeholder = "Password";
   }
-  if ($("password2")) $("password2").autocomplete = "off";
+  if ($("password2")) {
+    $("password2").autocomplete = "off";
+    $("password2").type = "text";
+  }
+  if ($("confirmWrap")) $("confirmWrap").classList.add("hidden");
   if (mode === "signup" && $("password")) {
-    setTimeout(() => { try { $("password").focus(); } catch(e) {} }, 50);
+    setTimeout(() => { try { $("password").focus(); } catch(e) {} }, 80);
   }
   lockSignup();
 }
+function revealConfirm(){
+  if (!$("confirmWrap") || !$("password2")) return;
+  $("confirmWrap").classList.remove("hidden");
+  $("password2").type = "password";
+}
+$("password") && $("password").addEventListener("blur", () => {
+  const mode = document.querySelector(".auth-card") && document.querySelector(".auth-card").getAttribute("data-mode");
+  if (mode === "signup" && ($("password").value || "").length >= 6) revealConfirm();
+});
+$("password") && $("password").addEventListener("input", () => {
+  const mode = document.querySelector(".auth-card") && document.querySelector(".auth-card").getAttribute("data-mode");
+  if (mode === "signup" && ($("password").value || "").length >= 8) revealConfirm();
+});
 function authEmail(){
   return (($("email") && $("email").value) || "").trim().toLowerCase();
 }
