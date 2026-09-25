@@ -220,11 +220,31 @@
     .board-post h3 { margin:0 0 4px; font-size:17px; font-weight:700; line-height:1.25; }
     .board-post .muted { margin:0; }
     .board-post .when { margin:4px 0 0; font-size:13px; font-weight:700; color:#fff; }
-    #banCard { overflow:hidden; }
     #banCard input, #banCard select { max-width:100%; min-width:0; box-sizing:border-box; }
-    .ban-when { width:100%; max-width:100%; overflow:hidden; }
-    #banStart { width:100%; max-width:100%; min-width:0; display:block; }
-    #banStart::-webkit-datetime-edit, #banStart::-webkit-datetime-edit-fields-wrapper { min-width:0; max-width:100%; }
+    .ban-when {
+      margin-top:4px;
+      width:100%;
+      max-width:100%;
+      border:1px solid var(--line);
+      border-radius:8px;
+      background:#121820;
+      overflow:hidden;
+    }
+    #banStart {
+      -webkit-appearance:none;
+      appearance:none;
+      display:block;
+      width:100%;
+      max-width:100%;
+      min-width:0;
+      margin:0;
+      border:0;
+      border-radius:0;
+      background:transparent;
+      color:var(--text);
+      font:inherit;
+      padding:10px 12px;
+    }
     .thread { margin-top:8px; }
     .c-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
     .c-actions button { width:auto; margin:0; padding:6px 10px; font-size:12px; }
