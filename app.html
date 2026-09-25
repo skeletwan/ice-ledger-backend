@@ -222,6 +222,9 @@
     .board-post .when { margin:4px 0 0; font-size:13px; font-weight:700; color:#fff; }
     #banCard { overflow:hidden; }
     #banCard input, #banCard select { max-width:100%; min-width:0; box-sizing:border-box; }
+    .ban-when { width:100%; max-width:100%; overflow:hidden; }
+    #banStart { width:100%; max-width:100%; min-width:0; display:block; }
+    #banStart::-webkit-datetime-edit, #banStart::-webkit-datetime-edit-fields-wrapper { min-width:0; max-width:100%; }
     .thread { margin-top:8px; }
     .c-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
     .c-actions button { width:auto; margin:0; padding:6px 10px; font-size:12px; }
@@ -789,9 +792,8 @@
       <label>Title <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0"> · card show, YouTube break, episode, live</span></label>
       <input id="banTitle" maxlength="80" placeholder="Saturday rip · Toronto card show" />
       <label>Starts</label>
-      <div class="row2">
-        <div><input id="banDate" type="date" /></div>
-        <div><input id="banTime" type="time" /></div>
+      <div class="ban-when">
+        <input id="banStart" type="datetime-local" />
       </div>
       <label>Length</label>
       <select id="banHours">
@@ -4350,14 +4352,12 @@ function bannerState(b){
   return { label:"Ended", live:false, done:true };
 }
 function fillStartInputs(iso){
-  if ($("banDate")) $("banDate").value = "";
-  if ($("banTime")) $("banTime").value = "";
-  if (!iso) return;
+  if (!$("banStart")) return;
+  if (!iso) { $("banStart").value = ""; return; }
   const d = new Date(iso);
   if (isNaN(+d)) return;
   const p = n => String(n).padStart(2,"0");
-  if ($("banDate")) $("banDate").value = d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate());
-  if ($("banTime")) $("banTime").value = p(d.getHours())+":"+p(d.getMinutes());
+  $("banStart").value = d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+"T"+p(d.getHours())+":"+p(d.getMinutes());
 }
 function bannerHtml(b, mine){
   if (!b || !b.title) return "";
@@ -4391,11 +4391,10 @@ async function loadBanners(){
 }
 $("banAdd") && ($("banAdd").onclick = async () => {
   try {
-    const day = ($("banDate")&&$("banDate").value) || "";
-    const tm = ($("banTime")&&$("banTime").value) || "19:00";
+    const startEl = $("banStart") && $("banStart").value;
     let starts = "";
-    if (day) {
-      const d = new Date(day+"T"+tm);
+    if (startEl) {
+      const d = new Date(startEl);
       if (!isNaN(+d)) starts = d.toISOString();
     }
     await authPost("/banners", {
@@ -4416,7 +4415,7 @@ $("banClear") && ($("banClear").onclick = async () => {
   const d = await r.json().catch(()=>({}));
   const b = (d.banners||[])[0];
   if (b && b.id) await fetch("/banners/"+b.id, { method:"DELETE", headers:{ "x-token": token() } });
-  ["banTitle","banBody","banUrl","banDate","banTime"].forEach(id => { if ($(id)) $(id).value = ""; });
+  ["banTitle","banBody","banUrl","banStart"].forEach(id => { if ($(id)) $(id).value = ""; });
   if ($("banNote")) $("banNote").textContent = "Banner removed.";
   window.myBanner = null;
   if ($("banPreview")) $("banPreview").innerHTML = "<p class=\"muted\">No banner yet.</p>";
