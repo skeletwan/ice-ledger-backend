@@ -114,7 +114,7 @@
     .auth-card[data-mode="reset"] .signup-only,
     .auth-card[data-mode="reset"] .signin-actions,
     .auth-card[data-mode="reset"] .signup-actions,
-    .auth-card[data-mode="reset"] .auth-show { display:none; }
+    .auth-card[data-mode="reset"] .auth-pw { display:none; }
     .auth-links { display:flex; justify-content:space-between; gap:12px; margin-top:12px; }
     .auth-links button { width:auto; margin:0; padding:0; background:none; border:0; color:var(--ice); font-size:13px; font-weight:600; }
     .pw-wrap { position:relative; }
@@ -346,13 +346,16 @@
         <form id="authForm" action="#" method="post">
         <label>Email</label>
         <input id="email" type="email" autocomplete="username" />
-        <label>Password</label>
-        <input id="password" type="password" name="password" autocomplete="current-password" placeholder="6+ characters" />
-        <div class="signup-only">
-          <label>Confirm password</label>
-          <input id="password2" type="password" name="password_confirm" autocomplete="new-password" placeholder="Type it again" />
+        <div class="auth-pw">
+          <label>Password</label>
+          <input id="password" type="password" name="password" autocomplete="current-password" placeholder="6+ characters" />
+          <div class="signup-only">
+            <label>Confirm password</label>
+            <input id="password2" type="password" name="password_confirm" autocomplete="new-password" placeholder="Type it again" />
+          </div>
+          <label class="show-pw"><input type="checkbox" id="showPw" /> Show password</label>
         </div>
-        <label class="show-pw auth-show"><input type="checkbox" id="showPw" /> Show password</label>
+        <div class="signup-only">
           <label style="margin-top:14px"><input id="agreeLegal" type="checkbox" style="width:auto;margin-right:8px" /> I agree to the <a href="/terms#terms-of-service" target="_blank" rel="noopener">Terms</a>, <a href="/aup#acceptable-use-policy" target="_blank" rel="noopener">Acceptable Use</a>, and <a href="/privacy#privacy-policy" target="_blank" rel="noopener">Privacy Policy</a></label>
         </div>
         <div class="signin-actions">
