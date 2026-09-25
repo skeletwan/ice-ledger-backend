@@ -345,7 +345,7 @@
         </div>
         <p class="auth-tag">Your exclusive hockey card community.</p>
         <p class="muted" id="authLead">Sign in to your binder.</p>
-        <form id="authForm" action="#" method="post">
+        <form id="authForm" action="/" method="post" onsubmit="return false">
         <label>Email</label>
         <input id="email" type="email" name="email" autocomplete="username" />
         <div class="auth-pw">
@@ -362,14 +362,14 @@
           <label style="margin-top:14px"><input id="agreeLegal" type="checkbox" style="width:auto;margin-right:8px" /> I agree to the <a href="/terms#terms-of-service" target="_blank" rel="noopener">Terms</a>, <a href="/aup#acceptable-use-policy" target="_blank" rel="noopener">Acceptable Use</a>, and <a href="/privacy#privacy-policy" target="_blank" rel="noopener">Privacy Policy</a></label>
         </div>
         <div class="signin-actions">
-          <button type="submit" id="loginBtn">Sign in</button>
+          <button type="button" id="loginBtn">Sign in</button>
           <div class="auth-links">
             <button type="button" id="toSignup">Create account</button>
             <button type="button" id="showReset">Forgot password</button>
           </div>
         </div>
         <div class="signup-actions">
-          <button type="submit" id="signupBtn" disabled>Create account</button>
+          <button type="button" id="signupBtn" disabled>Create account</button>
           <div class="auth-links">
             <button type="button" id="toSignin">Already have an account</button>
           </div>
@@ -381,7 +381,7 @@
           <label>New password</label>
           <input id="resetPw" type="password" autocomplete="new-password" placeholder="Password" />
           <label class="show-pw"><input type="checkbox" id="showResetPw" /> Show password</label>
-          <button type="submit" id="resetBtn">Save password</button>
+          <button type="button" id="resetBtn">Save password</button>
           <div class="auth-links">
             <button type="button" id="resetBack">Back to sign in</button>
           </div>

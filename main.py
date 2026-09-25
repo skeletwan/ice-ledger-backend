@@ -254,6 +254,9 @@ def allow_user_or_secret(secret: str | None, x_token: str | None = None):
     check_secret(secret)
 
 @app.get("/", response_class=HTMLResponse)
+@app.get("/login", response_class=HTMLResponse)
+@app.get("/signup", response_class=HTMLResponse)
+@app.get("/reset", response_class=HTMLResponse)
 def home():
     page = ROOT / "app.html"
     if page.exists():
