@@ -1100,6 +1100,13 @@ const KEY = "ice-binder-v1";
 const TOK = "ice-token";
 function token(){ return localStorage.getItem(TOK) || ""; }
 function setToken(t){ if (t) localStorage.setItem(TOK, t); else localStorage.removeItem(TOK); }
+function clearLocalAccount(){
+  localStorage.removeItem(KEY);
+  localStorage.removeItem(HIST);
+  window.lastOp = false;
+  window.lastPlan = "";
+  mySlug = "";
+}
 function showApp(){
   $("authPage").classList.remove("on");
   $("authPage").classList.add("hidden");
@@ -1146,25 +1153,25 @@ async function pullCloud(){
   const data = await r.json();
   const remote = data.cards || [];
   const local = load();
+  const remoteIds = {};
+  remote.forEach(c => { if (c && c.id) remoteIds[c.id] = true; });
   const alive = v => { try { return v!=null && v!=="" && +v>=1; } catch(e){ return !!v; } };
   const keep = ["comp","sysComp","rawComp","psa6Comp","psa7Comp","psa8Comp","psa9Comp","psa10Comp","bgs9Comp","bgs95Comp","bgs10Comp","bgsBlackComp","sgc10Comp","cost"];
   const map = {};
-  local.concat(remote).forEach(c => {
+  remote.forEach(c => {
     if (!c || !c.id) return;
     const slim = Object.assign({}, c);
     if (slim.photo && String(slim.photo).length > 200000) slim.photo = "";
     delete slim.scan;
+    map[c.id] = slim;
+  });
+  local.forEach(c => {
+    if (!c || !c.id || !remoteIds[c.id]) return;
     const prev = map[c.id] || {};
-    const out = Object.assign({}, prev, slim);
+    const out = Object.assign({}, prev, c);
     keep.forEach(k => {
-      if (!alive(slim[k]) && alive(prev[k])) out[k] = prev[k];
+      if (!alive(c[k]) && alive(prev[k])) out[k] = prev[k];
     });
-    const pb = (prev.book && typeof prev.book==="object") ? prev.book : {};
-    const sb = (slim.book && typeof slim.book==="object") ? slim.book : {};
-    const book = Object.assign({}, pb);
-    Object.keys(sb).forEach(k => { if (alive(sb[k])) book[k] = sb[k]; else if (alive(pb[k])) book[k] = pb[k]; });
-    Object.keys(pb).forEach(k => { if (!alive(book[k]) && alive(pb[k])) book[k] = pb[k]; });
-    out.book = book;
     map[c.id] = out;
   });
   try { localStorage.setItem(KEY, JSON.stringify(Object.values(map))); }
@@ -3918,6 +3925,7 @@ $("signupBtn") && ($("signupBtn").onclick = async ev => {
       return;
     }
     const d = await authPost("/signup", { email: authEmail(), password:pw });
+    clearLocalAccount();
     setToken(d.token); showApp(); await pullCloud(); paintTicker(); renderBinder();
   } catch(e) { flash("authStatus", "err", e.message); }
 });
@@ -3929,6 +3937,7 @@ $("loginBtn") && ($("loginBtn").onclick = async ev => {
       return;
     }
     const d = await authPost("/login", { email: authEmail(), password:$("password").value });
+    clearLocalAccount();
     setToken(d.token); showApp(); await pullCloud(); paintTicker(); renderBinder();
   } catch(e) { flash("authStatus", "err", e.message); }
 });
@@ -3954,6 +3963,7 @@ $("resetBtn") && ($("resetBtn").onclick = async ev => {
       password: $("resetPw").value
     });
     flash("authStatus", "ok", "Password updated. Signing you in…");
+    clearLocalAccount();
     setToken(d.token); showApp(); await pullCloud(); paintTicker(); renderBinder();
   } catch(e) { flash("authStatus", "err", e.message); }
 });
@@ -4877,7 +4887,7 @@ $("backPub") && ($("backPub").onclick = () => {
   show("pub");
 });
 
-$("logoutBtn") && ($("logoutBtn").onclick = () => { setToken(""); location.reload(); });
+$("logoutBtn") && ($("logoutBtn").onclick = () => { clearLocalAccount(); setToken(""); location.reload(); });
 $("youRipRedeem") && ($("youRipRedeem").onclick = async () => {
   try {
     const d = await authPost("/rip/redeem", { code: ($("youRipCode")&&$("youRipCode").value) || "" });
