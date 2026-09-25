@@ -441,19 +441,9 @@
       <button type="button" class="shot-wrap" id="shotFront"><div class="shot-ui"><span class="cam-ico"></span>Front<small>Tap to shoot</small></div></button>
       <button type="button" class="shot-wrap" id="shotBack"><div class="shot-ui"><span class="cam-ico"></span>Back<small>Tap to shoot</small></div></button>
     </div>
-    <div id="liveCam" class="live-overlay hidden">
-      <video id="liveVid" autoplay playsinline></video>
-      <img id="liveReview" class="hidden" alt="" />
-      <button type="button" class="primary" id="liveSnap">Take photo</button>
-      <div id="liveReviewBtns" class="row2 hidden" style="margin-top:8px">
-        <button type="button" class="ghost" id="liveRetake">Retake</button>
-        <button type="button" class="ghost" id="liveRot">Rotate</button>
-        <button type="button" class="primary" id="liveUse">Use photo</button>
-      </div>
-    </div>
+    <button class="ghost hidden" id="resumeId">Resume this card</button>
     <p class="status" id="status"></p>
     <button id="go" class="primary" disabled>Identify card</button>
-    <button class="ghost hidden" id="resumeId">Resume this card</button>
   </section>
   <section class="page" id="resultPage">
     <button class="ghost" id="backScan">New scan</button>
@@ -517,8 +507,8 @@
       <input id="bgs95Comp" type="hidden" />
       <input id="bgs10Comp" type="hidden" /><input id="bgsBlackComp" type="hidden" />
       <input id="sgc10Comp" type="hidden" />
-      <label>Notes</label>
-      <textarea id="notes" rows="2"></textarea>
+      <label>Caption</label>
+      <textarea id="notes" rows="2" maxlength="140" placeholder="Shows on your binder and in Community"></textarea>
       <div class="banner" id="compBanner">Looking up solds…</div>
       <button type="button" class="primary" id="saveBtn" onclick="return saveToBinder(event)" disabled>Save to binder</button>
     </div>
@@ -569,7 +559,9 @@
   </section>
   <section class="page" id="searchPage">
     <button class="ghost" id="backBindFromSearch">Back to binder</button>
-    <input id="q" type="search" name="n-q" placeholder="Player, team, set, number…" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search" />
+    <form autocomplete="off" action="" onsubmit="return false">
+    <input id="q" type="search" name="iceq" placeholder="Player, team, set, number…" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" enterkeyhint="search" data-lpignore="true" data-1p-ignore="true" data-form-type="other" readonly />
+    </form>
     <div id="searchList"></div>
   </section>
   <section class="page" id="copiesPage">
@@ -582,7 +574,9 @@
     <button class="ghost" id="backLedgerz">Back to community</button>
     <h2 style="font-size:18px;margin:12px 0 8px">Search Clappers</h2>
     <p class="muted">Player or team across every public binder.</p>
-    <input id="ledgerzQ" type="search" name="n-ledgerzQ" placeholder="Matthews, Leafs…" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search" />
+    <form autocomplete="off" action="" onsubmit="return false">
+    <input id="ledgerzQ" type="search" name="icelz" placeholder="Matthews, Leafs…" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" enterkeyhint="search" data-lpignore="true" data-1p-ignore="true" data-form-type="other" readonly />
+    </form>
     <div id="ledgerzList"></div>
   </section>
   <section class="page" id="findPage">
@@ -594,7 +588,9 @@
       <button class="ghost" id="openLedgerz">Search</button>
       <button class="ghost" id="openNotes">Alerts</button>
     </div>
-    <input id="findQ" type="search" name="n-findQ" placeholder="Screen name or player…" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search" />
+    <form autocomplete="off" action="" onsubmit="return false">
+    <input id="findQ" type="search" name="icefind" placeholder="Player, team, collector…" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" enterkeyhint="search" data-lpignore="true" data-1p-ignore="true" data-form-type="other" readonly />
+    </form>
     <select id="findSort">
       <option value="cards">Most cards</option>
       <option value="value">Highest book</option>
@@ -675,6 +671,7 @@
     <div class="hero"><img id="pubHero" alt="" /></div>
     <h2 id="pubTitle" style="margin:12px 0 4px"></h2>
     <p class="muted" id="pubLine"></p>
+    <p class="item-ver" id="pubCap"></p>
     <div class="row2">
       <button class="ghost" id="likeBtn">Like · 0</button>
       <button class="ghost hidden" id="cardLikers" style="margin:0"></button>
@@ -961,6 +958,7 @@
     <h2 id="dPlayer" style="margin:14px 0 4px"></h2>
     <div id="dChips"></div>
     <p class="muted" id="dLine"></p>
+    <p class="item-ver" id="dCap"></p>
     <button type="button" class="ghost" id="ownCmtBtn">Comments (0)</button>
     <div id="ownCmtWrap" class="hidden">
       <div id="ownComments"></div>
@@ -1039,15 +1037,23 @@
     <label>Photo</label>
     <div class="hero" style="margin:8px 0"><img id="ePrev" alt="" /></div>
     <button type="button" class="ghost" id="eRot">Rotate photo</button>
-    <label class="shot-wrap" for="e_photo" style="min-height:88px;margin:10px 0">
-      <input class="shot-file" id="e_photo" type="file" accept="image/*" />
-      <div class="shot-ui">Replace photo</div>
-    </label>
-    <p class="muted">Rotate if it’s sideways. This is the binder photo.</p>
-    <label>Notes</label><textarea id="e_notes" rows="2"></textarea>
+    <button type="button" class="ghost" id="eRetake">Retake photo</button>
+    <p class="muted">Camera only. Rotate if it’s sideways. This is the binder photo.</p>
+    <label>Caption</label><input id="e_caption" maxlength="140" placeholder="Shows on your binder and in Community" />
+    <label>Notes</label><textarea id="e_notes" rows="2" placeholder="Private to you"></textarea>
     <button id="saveEdit">Save</button>
     <p class="muted" id="editNote"></p>
   </section>
+  <div id="liveCam" class="live-overlay hidden">
+    <video id="liveVid" autoplay playsinline></video>
+    <img id="liveReview" class="hidden" alt="" />
+    <button type="button" class="primary" id="liveSnap">Take photo</button>
+    <div id="liveReviewBtns" class="row2 hidden" style="margin-top:8px">
+      <button type="button" class="ghost" id="liveRetake">Retake</button>
+      <button type="button" class="ghost" id="liveRot">Rotate</button>
+      <button type="button" class="primary" id="liveUse">Use photo</button>
+    </div>
+  </div>
   <nav class="dock" id="dock">
     <button id="tabScan"><svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" rx="2"/><circle cx="12" cy="12" r="3"/></svg>Scan</button>
     <button id="tabBind"><svg viewBox="0 0 24 24"><path d="M6 4h11a2 2 0 0 1 2 2v14H8a2 2 0 0 1-2-2V4z"/><path d="M6 18a2 2 0 0 1 2-2h13"/><path d="M9 8h8M9 12h6"/></svg>Binder</button>
@@ -1137,22 +1143,24 @@ function muteAuthPasswords(mute){
   }
 }
 function stopSearchAutofill(){
-  document.querySelectorAll("#appShell input, #appShell textarea").forEach(el => {
-    if (el.type === "checkbox" || el.type === "color" || el.type === "hidden" || el.type === "file") return;
-    if (el.id === "gonePw") {
-      el.setAttribute("autocomplete", "off");
-      return;
-    }
+  ["q","findQ","ledgerzQ","modUser"].forEach(id => {
+    const el = $(id);
+    if (!el) return;
     el.setAttribute("autocomplete", "off");
     el.setAttribute("autocorrect", "off");
+    el.setAttribute("autocapitalize", "none");
     el.setAttribute("spellcheck", "false");
-    if (el.tagName === "INPUT" && (el.type === "text" || el.type === "" || el.type === "search")) {
-      if (/q|find|search|ledger/i.test(el.id || "")) {
-        el.type = "search";
-        el.setAttribute("enterkeyhint", "search");
-      }
-      if (!el.name || /user|email|pass|username/i.test(el.name)) el.name = "n-" + (el.id || "field");
-    }
+    el.setAttribute("data-lpignore", "true");
+    el.setAttribute("data-form-type", "other");
+    el.type = "search";
+    if (!el.readOnly) el.setAttribute("readonly", "readonly");
+    el.addEventListener("focus", () => el.removeAttribute("readonly"));
+    el.addEventListener("touchstart", () => el.removeAttribute("readonly"), { passive:true });
+  });
+  document.querySelectorAll("#appShell input, #appShell textarea").forEach(el => {
+    if (el.type === "checkbox" || el.type === "color" || el.type === "hidden" || el.type === "file" || el.type === "password") return;
+    if (el.id === "gonePw" || el.id === "email" || el.id === "password" || el.id === "newPw" || el.id === "newPw2" || el.id === "resetPw") return;
+    el.setAttribute("autocomplete", "off");
   });
 }
 function showApp(){
@@ -2252,6 +2260,13 @@ async function useReview(){
   const data = await cropToCard(reviewData);
   const file = await dataToFile(data, liveTarget+".jpg");
   stopLive();
+  if (liveTarget === "edit") {
+    editPhoto = data;
+    if ($("ePrev")) $("ePrev").src = data;
+    if ($("editNote")) $("editNote").textContent = "New photo ready. Save changes to keep it.";
+    reviewData = "";
+    return;
+  }
   if (liveTarget === "back") {
     backFile = file;
     window.backData = data;
@@ -2271,6 +2286,9 @@ async function useReview(){
   }
   reviewData = "";
 }
+function cardCap(c){
+  return String((c && (c.caption || "")) || "").trim();
+}
 $("shotFront") && ($("shotFront").onclick = () => openLive("front"));
 $("shotBack") && ($("shotBack").onclick = () => openLive("back"));
 $("liveSnap") && ($("liveSnap").onclick = snapLive);
@@ -2281,6 +2299,7 @@ $("liveRot") && ($("liveRot").onclick = async () => {
   $("liveReview").src = reviewData;
 });
 $("liveUse") && ($("liveUse").onclick = useReview);
+$("eRetake") && ($("eRetake").onclick = () => openLive("edit"));
 function blobJpegUrl(file, max){
   return new Promise(resolve => {
     const img = new Image();
@@ -2682,6 +2701,7 @@ async function saveToBinder(ev){
     id: "c"+Date.now(),
     ...rec,
     notes: $("notes").value || "",
+    caption: ($("notes").value || "").slice(0,140),
     cost: numOrNull("cost"),
     comp: comp,
     rawComp: numOrNull("rawComp"),
@@ -2860,6 +2880,11 @@ function openDetail(id){
   chips.push("<span class=\"chip dim\">"+grade+"</span>");
   $("dChips").innerHTML = chips.join("");
   $("dLine").textContent = [c.year,c.set,c.number?"#"+c.number:"",c.team].filter(Boolean).join(" · ");
+  if ($("dCap")) {
+    const cap = (c.caption || "").trim();
+    $("dCap").textContent = cap;
+    $("dCap").classList.toggle("hidden", !cap);
+  }
   $("vHold").textContent = money(binderCad(c));
   const holdLbl = $("vHold") && $("vHold").nextElementSibling;
   if (holdLbl) holdLbl.textContent = (!c.grader || c.grader==="Raw") ? "This copy · Raw" : ("This copy · "+[c.grader,c.grade].filter(Boolean).join(" "));
@@ -2898,6 +2923,7 @@ function fillEdit(){
   $("e_psa8").value = c.psa8Comp??"";
   $("e_psa10").value = c.psa10Comp??"";
   $("e_notes").value = c.notes||"";
+  if ($("e_caption")) $("e_caption").value = c.caption || c.notes || "";
   if ($("ePrev")) $("ePrev").src = photoSrc(c);
 }
 function teamName(c){ return (c.team||"").trim() || "No team"; }
@@ -3090,6 +3116,7 @@ function cardRowHtml(c, qty, key){
   return "<article class=\"item"+grailCls(c)+(tier?" tier-"+tier:"")+"\""+open+">"+
     "<div class=\"item-top\">"+thumbHtml(c)+"<div><h3>"+dash(c.player)+"</h3>"+
     "<div class=\"item-meta\">"+dash(line)+"</div><div class=\"item-ver\">"+rowVersion(c)+"</div>"+
+    (cardCap(c)?"<div class=\"item-meta\">"+cardCap(c).replace(/[<>]/g,"")+"</div>":"")+
     priceCol(c, binderCad(c))+
     "</div></div>"+
     (qty>1?"<span class=\"qty-pill\">×"+qty+"</span>":"")+
@@ -3306,6 +3333,7 @@ $("saveEdit").onclick = () => {
     set:$("e_set").value.trim(), insert:$("e_insert").value.trim(), parallel:$("e_parallel").value.trim(),
     team:$("e_team").value.trim(), grader:$("e_grader").value, grade:$("e_grade").value.trim(),
     cert:$("e_cert").value.trim(), notes:$("e_notes").value,
+    caption: (($("e_caption")&&$("e_caption").value)||"").trim().slice(0,140),
     cost:n($("e_cost").value), comp:n($("e_comp").value),
     rawComp:n($("e_raw").value), psa8Comp:n($("e_psa8").value),
     psa9Comp:n($("e_psa9").value), psa10Comp:n($("e_psa10").value),
@@ -4105,7 +4133,7 @@ function pubCardHtml(c, qty, key){
   const open = qty>1 ? " data-copies=\""+String(key||cardKey(c)).replace(/"/g,"")+"\"" : " data-pub=\""+c.id+"\"";
   const line = [c.team,c.year,c.set,c.number?"#"+c.number:"",(!c.grader||c.grader==="Raw")?"Raw":[c.grader,c.grade].filter(Boolean).join(" ")].filter(Boolean).join(" · ");
   const val = publicCad(c);
-  return "<article class=\"item"+grailCls(c)+(pt?" tier-"+pt:"")+"\""+open+"><div class=\"item-top\">"+thumbHtml(c, viewSlug)+"<div><h3>"+(c.player||"—")+" <span class=\"heart\">♥ "+(c.likes||0)+"</span></h3><div class=\"item-meta\">"+line+"</div><div class=\"item-ver\">"+rowVersion(c)+"</div>"+priceCol(c, val, "pub")+"</div></div>"+(qty>1?"<span class=\"qty-pill\">×"+qty+"</span>":"")+(cardLooksGrail(c)?"<span class=\"grail-tag\">Grail</span>":"")+(pt?"<span class=\"tier-tag "+pt+"\">"+tierLabel(pt)+"</span>":"")+"</article>";
+  return "<article class=\"item"+grailCls(c)+(pt?" tier-"+pt:"")+"\""+open+"><div class=\"item-top\">"+thumbHtml(c, viewSlug)+"<div><h3>"+(c.player||"—")+" <span class=\"heart\">♥ "+(c.likes||0)+"</span></h3><div class=\"item-meta\">"+line+"</div><div class=\"item-ver\">"+rowVersion(c)+"</div>"+(cardCap(c)?"<div class=\"item-meta\">"+cardCap(c).replace(/[<>]/g,"")+"</div>":"")+priceCol(c, val, "pub")+"</div></div>"+(qty>1?"<span class=\"qty-pill\">×"+qty+"</span>":"")+(cardLooksGrail(c)?"<span class=\"grail-tag\">Grail</span>":"")+(pt?"<span class=\"tier-tag "+pt+"\">"+tierLabel(pt)+"</span>":"")+"</article>";
 }
 function renderPubList(){
   const box = $("pubList");
@@ -4501,6 +4529,11 @@ function openPubCard(c){
   $("pubHero").src = photoSrc(c, viewSlug);
   $("pubTitle").textContent = c.player || "Card";
   $("pubLine").textContent = [c.team,c.year,c.set,c.number?"#"+c.number:"",c.insert,c.parallel].filter(Boolean).join(" · ");
+  if ($("pubCap")) {
+    const cap = (c.caption || "").trim();
+    $("pubCap").textContent = cap;
+    $("pubCap").classList.toggle("hidden", !cap);
+  }
   if ($("pubHold")) $("pubHold").textContent = money(publicCad(c));
   const pubLbl = $("pubHold") && $("pubHold").nextElementSibling;
   if (pubLbl) pubLbl.textContent = (!c.grader || c.grader==="Raw") ? "This copy · Raw" : ("This copy · "+[c.grader,c.grade].filter(Boolean).join(" "));

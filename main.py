@@ -2307,6 +2307,7 @@ def public_card(raw: dict) -> dict:
         "hist": (c.get("hist") or [])[-60:],
         "added": c.get("added"),
         "grail": is_grail(c),
+        "caption": str(c.get("caption") or "")[:140],
     }
 
 init_db()
