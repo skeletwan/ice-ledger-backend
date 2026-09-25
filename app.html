@@ -118,8 +118,7 @@
     .auth-card[data-mode="reset"] .auth-pw { display:none; }
     .auth-links { display:flex; justify-content:space-between; gap:12px; margin-top:12px; }
     .auth-links button { width:auto; margin:0; padding:0; background:none; border:0; color:var(--ice); font-size:13px; font-weight:600; }
-    .pw-wrap { position:relative; }
-    .pw-wrap input { padding-right:16px; }
+    button.auth-text { width:auto; margin:8px 0 12px; padding:0; background:none; border:0; color:var(--ice); font-size:14px; font-weight:600; text-align:left; display:inline-block; }
     .show-pw { display:flex; align-items:center; gap:8px; margin:8px 0 0; font-size:13px; color:var(--muted); font-weight:600; }
     .show-pw input { width:auto; margin:0; }
     .card { margin-top:14px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; }
@@ -374,39 +373,13 @@
           </div>
         </div>
         <div class="reset-only" id="resetBox">
-          <button type="button" class="ghost" id="resetSend">Email me a code</button>
-          <label>Code from email</label>
-          <input id="resetCode" autocomplete="one-time-code" />
+          <button type="button" class="auth-text" id="resetSend">Send reset code</button>
+          <label>Code</label>
+          <input id="resetCode" autocomplete="one-time-code" placeholder="6-digit code" />
           <label>New password</label>
           <input id="resetPw" type="password" autocomplete="new-password" placeholder="Password" />
           <label class="show-pw"><input type="checkbox" id="showResetPw" /> Show password</label>
-          <button type="submit" id="resetBtn">Set new password</button>
-          <div class="auth-links">
-            <button type="button" id="resetBack">Back to sign in</button>
-          </div>
-        </div>
-        </form>
-        <div class="signin-actions">
-          <button type="submit" id="loginBtn">Sign in</button>
-          <div class="auth-links">
-            <button type="button" id="toSignup">Create account</button>
-            <button type="button" id="showReset">Forgot password</button>
-          </div>
-        </div>
-        <div class="signup-actions">
-          <button type="submit" id="signupBtn" disabled>Create account</button>
-          <div class="auth-links">
-            <button type="button" id="toSignin">Already have an account</button>
-          </div>
-        </div>
-        <div class="reset-only" id="resetBox">
-          <button type="button" class="ghost" id="resetSend">Email me a code</button>
-          <label>Code from email</label>
-          <input id="resetCode" autocomplete="one-time-code" />
-          <label>New password</label>
-          <input id="resetPw" type="password" autocomplete="new-password" placeholder="Password" />
-          <label class="show-pw"><input type="checkbox" id="showResetPw" /> Show password</label>
-          <button type="submit" id="resetBtn">Set new password</button>
+          <button type="submit" id="resetBtn">Save password</button>
           <div class="auth-links">
             <button type="button" id="resetBack">Back to sign in</button>
           </div>
@@ -3909,7 +3882,7 @@ function setAuthMode(mode){
   const card = document.querySelector(".auth-card");
   if (card) card.setAttribute("data-mode", mode);
   if ($("authLead")) {
-    $("authLead").textContent = mode === "signup" ? "Create an account." : mode === "reset" ? "We’ll email a code to reset your password." : "Sign in to your binder.";
+    $("authLead").textContent = mode === "signup" ? "Create an account." : mode === "reset" ? "Reset your password." : "Sign in to your binder.";
   }
   if ($("authStatus")) { $("authStatus").className = "status"; $("authStatus").textContent = ""; }
   lockSignup();
