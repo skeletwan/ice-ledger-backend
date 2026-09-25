@@ -253,7 +253,7 @@
     .live-overlay.hidden { display:none; }
     .live-overlay video, .live-overlay img#liveReview { flex:1 1 0; min-height:0; width:100%; object-fit:contain; background:#000; }
     .live-overlay #liveSnap { flex:0 0 auto; margin:10px 12px calc(16px + env(safe-area-inset-bottom)); width:auto; }
-    .live-overlay #liveReviewBtns { flex:0 0 auto; display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:10px 12px calc(16px + env(safe-area-inset-bottom)); }
+    .live-overlay #liveReviewBtns { flex:0 0 auto; display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin:10px 12px calc(16px + env(safe-area-inset-bottom)); }
     .live-overlay #liveReviewBtns button { margin:0; width:auto; }
     .quota-chip { display:inline-flex; align-items:center; gap:8px; font-size:12px; color:var(--muted); background:var(--card); border:1px solid var(--line); border-radius:999px; padding:6px 12px; margin:0 0 12px; }
     .quota-chip.err { color:#ffd6d8; border-color:#6b2a30; background:#3a1b20; }
@@ -446,6 +446,7 @@
       <img id="liveReview" class="hidden" alt="" />
       <button type="button" class="primary" id="liveSnap">Take photo</button>
       <div id="liveReviewBtns" class="row2 hidden" style="margin-top:8px">
+        <button type="button" class="ghost" id="liveRetake">Retake</button>
         <button type="button" class="ghost" id="liveRot">Rotate</button>
         <button type="button" class="primary" id="liveUse">Use photo</button>
       </div>
@@ -2244,7 +2245,7 @@ async function snapLive(){
   rev.classList.remove("hidden");
   $("liveSnap").classList.add("hidden");
   $("liveReviewBtns").classList.remove("hidden");
-  $("status").textContent = "Rotate until the card is right, then Use photo.";
+  $("status").textContent = "Retake, rotate, or Use photo.";
 }
 async function useReview(){
   if (!reviewData) return;
@@ -2273,6 +2274,7 @@ async function useReview(){
 $("shotFront") && ($("shotFront").onclick = () => openLive("front"));
 $("shotBack") && ($("shotBack").onclick = () => openLive("back"));
 $("liveSnap") && ($("liveSnap").onclick = snapLive);
+$("liveRetake") && ($("liveRetake").onclick = () => openLive(liveTarget || "front"));
 $("liveRot") && ($("liveRot").onclick = async () => {
   if (!reviewData) return;
   reviewData = await rotateData(reviewData);
