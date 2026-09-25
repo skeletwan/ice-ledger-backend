@@ -735,6 +735,22 @@ def _junk_title(title: str) -> bool:
         t,
     ))
 
+_AUTO_RX = re.compile(
+    r"\b(auto|autos|autograph|autographs|autographed|signed|signature|signatures|on-card|sticker auto|rpa|inked|inscription|inscribed|\bfwa\b|future watch auto)\b",
+    re.I,
+)
+
+def _text_is_auto(s: str) -> bool:
+    return bool(_AUTO_RX.search(s or ""))
+
+def _card_is_auto(card: dict | None) -> bool:
+    if not card:
+        return False
+    if card.get("auto"):
+        return True
+    blob = " ".join(str(card.get(k) or "") for k in ("insert", "parallel", "set", "notes", "product"))
+    return _text_is_auto(blob)
+
 def _is_yg(card_or_q) -> bool:
     s = ""
     if isinstance(card_or_q, dict):
@@ -850,6 +866,27 @@ def _sale_fits(title: str, q: str, player: str, parallel: str = "", number: str 
         return False
     required = (q or "").split(" -(")[0].lower()
     ql = required
+    want_auto = _text_is_auto(ql + " " + (parallel or ""))
+    if not want_auto and _text_is_auto(t):
+        return False
+    if want_auto and not _text_is_auto(t):
+        return False
+    mem_rx = r"\b(jersey|patch|patches|relic|relics|swatch|memorabilia|prime patch|logo patch|rpa|tag|laundry)\b"
+    plate_rx = r"\b(printing plate|cyan plate|magenta plate|yellow plate|black plate|1\/1 plate)\b"
+    size_rx = r"\b(5x7|5 x 7|oversized|oversize|giant|jumbo)\b"
+    redeem_rx = r"\b(redemption|unredeemed|expired redemption)\b"
+    want_mem = bool(re.search(mem_rx, ql + " " + (parallel or ""), flags=re.I))
+    want_plate = bool(re.search(r"\bplate\b", ql + " " + (parallel or ""), flags=re.I))
+    want_size = bool(re.search(size_rx, ql, flags=re.I))
+    want_redeem = bool(re.search(r"redemption", ql, flags=re.I))
+    if not want_mem and re.search(mem_rx, t, flags=re.I):
+        return False
+    if not want_plate and re.search(plate_rx, t, flags=re.I):
+        return False
+    if not want_size and re.search(size_rx, t, flags=re.I) and "jumbo" not in ql:
+        return False
+    if not want_redeem and re.search(redeem_rx, t, flags=re.I):
+        return False
     years_q = re.findall(r"\b((?:19|20)\d{2})\b", required)
     season = year or (years_q[0] if years_q else "")
     if season:
@@ -1066,6 +1103,18 @@ def search_queries(card: dict) -> list:
         if code:
             parts.append(code)
     q = " ".join(x for x in parts if x)
+    if _card_is_auto({"insert": ins, "parallel": par, "set": st}):
+        if "auto" not in q.lower():
+            q += " auto"
+    else:
+        q += " -(auto,autograph,autographed,signed,signature,rpa,inked,fwa)"
+        blob = f"{ins} {par} {st}".lower()
+        if not re.search(r"jersey|patch|relic|swatch|memorabilia", blob):
+            q += " -(jersey,patch,relic,swatch,memorabilia,rpa)"
+        if "plate" not in blob:
+            q += " -(plate)"
+        if "redemption" not in blob:
+            q += " -(redemption)"
     q += " -(lot,checklist,reprint,bundle)"
     return [q]
 
