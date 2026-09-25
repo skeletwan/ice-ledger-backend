@@ -568,7 +568,7 @@
   </section>
   <section class="page" id="searchPage">
     <button class="ghost" id="backBindFromSearch">Back to binder</button>
-    <input id="q" placeholder="Player, team, set, number…" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search" />
+    <input id="q" type="search" name="n-q" placeholder="Player, team, set, number…" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search" />
     <div id="searchList"></div>
   </section>
   <section class="page" id="copiesPage">
@@ -581,7 +581,7 @@
     <button class="ghost" id="backLedgerz">Back to community</button>
     <h2 style="font-size:18px;margin:12px 0 8px">Search Clappers</h2>
     <p class="muted">Player or team across every public binder.</p>
-    <input id="ledgerzQ" placeholder="Matthews, Leafs…" autocomplete="off" />
+    <input id="ledgerzQ" type="search" name="n-ledgerzQ" placeholder="Matthews, Leafs…" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search" />
     <div id="ledgerzList"></div>
   </section>
   <section class="page" id="findPage">
@@ -593,7 +593,7 @@
       <button class="ghost" id="openLedgerz">Search</button>
       <button class="ghost" id="openNotes">Alerts</button>
     </div>
-    <input id="findQ" placeholder="Screen name or player…" />
+    <input id="findQ" type="search" name="n-findQ" placeholder="Screen name or player…" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search" />
     <select id="findSort">
       <option value="cards">Most cards</option>
       <option value="value">Highest book</option>
@@ -620,16 +620,15 @@
   <section class="page" id="notesPage">
     <button class="ghost" id="backFindNotes">Community</button>
     <h2 style="font-size:18px;margin:12px 0 8px">Alerts</h2>
-    <p class="muted">Choose a category.</p>
-    <button class="ghost" id="noteCatCard">New cards</button>
-    <button class="ghost" id="noteCatBanner">Banners</button>
-    <button class="ghost" id="noteCatGrail">Grails</button>
-    <button class="ghost" id="noteCatLike">Likes</button>
-    <button class="ghost" id="noteCatComment">Comments</button>
-  </section>
-  <section class="page" id="notesCatPage">
-    <button class="ghost" id="backNotesHub">All alerts</button>
-    <h2 id="notesCatTitle" style="font-size:18px;margin:12px 0 8px">Alerts</h2>
+    <div class="comm-row" id="noteChips">
+      <button class="ghost on" data-nk="all">All</button>
+      <button class="ghost" data-nk="card">Cards</button>
+      <button class="ghost" data-nk="banner">Banners</button>
+      <button class="ghost" data-nk="grail">Grails</button>
+      <button class="ghost" data-nk="like">Likes</button>
+      <button class="ghost" data-nk="comment">Comments</button>
+      <button class="ghost" data-nk="mgmt">Clappers</button>
+    </div>
     <div id="notesList"></div>
   </section>
   <section class="page" id="pubPage">
@@ -708,12 +707,9 @@
       <div class="mini-trend-top"><span class="mini-last" id="pubTrendVal">—</span><span class="mini-chg flat" id="pubTrendNote"></span></div>
       <svg class="mini-spark" id="pubSpark" viewBox="0 0 300 86" preserveAspectRatio="none"></svg>
     </div>
-    <button type="button" class="ghost" id="pubMktBtn">Market</button>
-    <div id="pubMarket" class="hidden">
-    <div class="row2">
+    <div class="row2" style="margin-top:10px">
       <a class="ghost btn" id="pubEbay" target="_blank" rel="noopener">eBay sold</a>
       <a class="ghost btn" id="pubFan" target="_blank" rel="noopener">Fanatics</a>
-    </div>
     </div>
   </section>
   <section class="page" id="setPage">
@@ -725,7 +721,7 @@
         <button class="ghost" data-you="youBill">Clappers+ / Rip Night!</button>
       </div>
       <div class="you-group">
-        <button class="ghost" data-you="youAlerts">From Clappers</button>
+        <button class="ghost" id="youToAlerts">From Clappers</button>
         <button class="ghost" data-you="youPrefs">Notifications</button>
         <button class="ghost" data-you="youComm">Followers & likes</button>
       </div>
@@ -847,7 +843,7 @@
     <button class="ghost" data-you="youHub">Back</button>
     <h3 style="font-size:15px;margin:16px 0 8px">Delete account</h3>
     <p class="muted">This wipes your binder, comments, likes, and login. Type your password.</p>
-    <input id="gonePw" type="password" placeholder="Password" autocomplete="current-password" />
+    <input id="gonePw" type="text" placeholder="Password" autocomplete="off" />
     <button id="goneBtn">Delete my account</button>
     <p class="muted" id="goneNote"></p>
     </div>
@@ -996,8 +992,6 @@
       <div class="mini-trend-top"><span class="mini-last" id="cardTrendVal">—</span><span class="mini-chg flat" id="cardTrendNote"></span></div>
       <svg class="mini-spark" id="cardSpark" viewBox="0 0 300 86" preserveAspectRatio="none"></svg>
     </div>
-    <button type="button" class="ghost" id="dMktBtn">Market</button>
-    <div id="dMarket" class="hidden">
     <p class="muted" id="dNotes"></p>
     <div class="row2">
       <a class="ghost btn" id="dEbay" target="_blank" rel="noopener">eBay sold</a>
@@ -1005,7 +999,6 @@
     </div>
     <button class="ghost" id="shareCard">Copy public link</button>
     <p class="muted" id="shareCardNote"></p>
-    </div>
     <button class="danger" id="dDel">Remove from binder</button>
   </section>
   <section class="page" id="editPage">
@@ -1118,11 +1111,53 @@ function clearLocalAccount(){
   window.lastPlan = "";
   mySlug = "";
 }
+function muteAuthPasswords(mute){
+  ["password","newPw","newPw2","resetPw"].forEach(id => {
+    const el = $(id);
+    if (!el) return;
+    if (mute) {
+      el.disabled = true;
+      el.type = "text";
+      el.autocomplete = "off";
+      el.value = "";
+    } else {
+      el.disabled = false;
+      el.type = "password";
+      el.autocomplete = id === "password" ? "current-password" : "new-password";
+    }
+  });
+  const gone = $("gonePw");
+  if (gone) {
+    gone.autocomplete = "off";
+    if (mute) { gone.type = "text"; gone.value = ""; }
+  }
+}
+function stopSearchAutofill(){
+  document.querySelectorAll("#appShell input, #appShell textarea").forEach(el => {
+    if (el.type === "checkbox" || el.type === "color" || el.type === "hidden" || el.type === "file") return;
+    if (el.id === "gonePw") {
+      el.setAttribute("autocomplete", "off");
+      return;
+    }
+    el.setAttribute("autocomplete", "off");
+    el.setAttribute("autocorrect", "off");
+    el.setAttribute("spellcheck", "false");
+    if (el.tagName === "INPUT" && (el.type === "text" || el.type === "" || el.type === "search")) {
+      if (/q|find|search|ledger/i.test(el.id || "")) {
+        el.type = "search";
+        el.setAttribute("enterkeyhint", "search");
+      }
+      if (!el.name || /user|email|pass|username/i.test(el.name)) el.name = "n-" + (el.id || "field");
+    }
+  });
+}
 function showApp(){
   $("authPage").classList.remove("on");
   $("authPage").classList.add("hidden");
   $("appShell").classList.remove("hidden");
   document.body.classList.add("dock-on");
+  muteAuthPasswords(true);
+  stopSearchAutofill();
   loadNotePrefs(); scheduleDaily(); refreshNotesBadge(); checkGrails();
   Promise.resolve(refreshUsage()).catch(()=>{});
   loadMe().then(() => { paintTicker(); renderBinder(); }).catch(() => { paintTicker(); renderBinder(); });
@@ -1460,6 +1495,11 @@ function youShow(which){
   if (which==="youBill") refreshUsage();
   if (which==="youComm") loadCommunity();
   if (which==="youAlerts") paintYouInbox();
+  if ($("gonePw")) {
+    $("gonePw").type = which==="youGone" ? "password" : "text";
+    $("gonePw").autocomplete = "off";
+    if (which!=="youGone") $("gonePw").value = "";
+  }
 }
 async function paintYouInbox(){
   const box = $("youInbox");
@@ -4636,7 +4676,12 @@ $("findList") && ($("findList").onclick = e => {
 });
 $("backFind") && ($("backFind").onclick = () => show("find"));
 $("backFindNotes") && ($("backFindNotes").onclick = () => show("find"));
-$("openNotes") && ($("openNotes").onclick = () => { show("notes"); paintNotesHub(); });
+$("openNotes") && ($("openNotes").onclick = () => openNoteCat("all"));
+$("youToAlerts") && ($("youToAlerts").onclick = () => openNoteCat("mgmt"));
+$("noteChips") && ($("noteChips").onclick = e => {
+  const b = e.target.closest("[data-nk]");
+  if (b) openNoteCat(b.getAttribute("data-nk"));
+});
 $("openFeed") && ($("openFeed").onclick = () => { window.feedGrailMode = false; show("feed"); });
 $("openGrails") && ($("openGrails").onclick = () => { window.feedGrailMode = true; show("feed"); });
 $("openLedgerz") && ($("openLedgerz").onclick = () => { show("ledgerz"); if ($("ledgerzQ")) $("ledgerzQ").focus(); });
@@ -4727,10 +4772,36 @@ $("feedList") && ($("feedList").onclick = ev => {
   window.pubFrom = window.feedGrailMode ? "grails" : "feed";
   openPublic(art.getAttribute("data-feed-slug"), art.getAttribute("data-feed-card"));
 });
-$("backNotesHub") && ($("backNotesHub").onclick = () => { show("notes"); paintNotesHub(); });
-["noteCatCard","noteCatBanner","noteCatGrail","noteCatLike","noteCatComment"].forEach(id => {
-  $(id) && ($(id).onclick = () => openNoteCat(id==="noteCatLike"?"like":id==="noteCatComment"?"comment":id==="noteCatGrail"?"grail":id==="noteCatBanner"?"banner":"card"));
-});
+$("backNotesHub") && ($("backNotesHub").onclick = () => show("find"));
+async function paintNotesHub(){
+  const rows = await fetchNotes();
+  const count = k => rows.filter(n => noteKind(n)===k && !n.read).length;
+  document.querySelectorAll("#noteChips [data-nk]").forEach(b => {
+    const k = b.getAttribute("data-nk");
+    const base = { all:"All", card:"Cards", banner:"Banners", grail:"Grails", like:"Likes", comment:"Comments", mgmt:"Clappers" }[k] || k;
+    const n = k==="all" ? rows.filter(x => !x.read).length : count(k);
+    b.textContent = n ? (base+" · "+n) : base;
+    b.classList.toggle("ping", n>0);
+    b.classList.toggle("on", k===(window.noteKindFilter||"all"));
+  });
+}
+async function openNoteCat(kind){
+  window.noteKindFilter = kind || "all";
+  show("notes");
+  await paintNotesHub();
+  const box = $("notesList");
+  if (!box) return;
+  if (!token()) { box.innerHTML = "<p class=\"muted\">Sign in to see notifications.</p>"; return; }
+  const rows = (await fetchNotes()).filter(n => window.noteKindFilter==="all" || noteKind(n)===window.noteKindFilter);
+  box.innerHTML = rows.length ? rows.map(n =>
+    "<article class=\"item\" data-slug=\""+(n.slug||"")+"\" data-card=\""+(n.card_id||"")+"\"><b>"+(n.body||"")+"</b><div class=\"muted\">"+timeAgo(n.created)+(n.read?"":" · new")+"</div></article>"
+  ).join("") : "<p class=\"muted\">Nothing in here yet.</p>";
+  const ids = rows.filter(n => !n.read).map(n => n.id);
+  if (ids.length) {
+    await fetch("/notes/read", { method:"POST", headers:{ "Content-Type":"application/json", "x-token": token() }, body: JSON.stringify({ ids }) });
+  }
+  refreshNotesBadge();
+}
 function paintFollow(){
   if (!$("followBtn") || !viewSlug) return;
   $("followBtn").textContent = following[viewSlug] ? "Following" : "Follow";
@@ -4760,7 +4831,7 @@ async function refreshNotesBadge(){
     if ($("tabFind")) $("tabFind").classList.toggle("ping", social);
     if ($("openNotes")) $("openNotes").classList.toggle("ping", social);
     if ($("tabSet")) $("tabSet").classList.toggle("ping", mgmt);
-    document.querySelectorAll("[data-you=youAlerts]").forEach(el => el.classList.toggle("ping", mgmt));
+    document.querySelectorAll("#youToAlerts").forEach(el => el.classList.toggle("ping", mgmt));
     const last = +(localStorage.getItem("ice-note-unread")||0);
     const fresh = (d.notes||[]).filter(x => !x.read);
     const msg = (fresh[0] && fresh[0].body) || "";
@@ -4785,39 +4856,6 @@ async function fetchNotes(){
   const d = await r.json();
   notesCache = d.notes || [];
   return notesCache;
-}
-async function paintNotesHub(){
-  const rows = await fetchNotes();
-  const count = k => rows.filter(n => noteKind(n)===k && !n.read).length;
-  const label = (id, name, k) => {
-    if (!$(id)) return;
-    const n = count(k);
-    $(id).textContent = n ? (name+" · "+n+" new") : name;
-    $(id).classList.toggle("ping", n>0);
-  };
-  label("noteCatCard", "New cards", "card");
-  label("noteCatBanner", "Banners", "banner");
-  label("noteCatGrail", "Grails", "grail");
-  label("noteCatLike", "Likes", "like");
-  label("noteCatComment", "Comments", "comment");
-}
-async function openNoteCat(kind){
-  const titles = { card:"New cards", banner:"Banners", grail:"Grails", like:"Likes", comment:"Comments", mgmt:"Clappers Management" };
-  if ($("notesList")) $("notesList").innerHTML = "";
-  if ($("notesCatTitle")) $("notesCatTitle").textContent = titles[kind] || "Alerts";
-  show("notesCat");
-  const box = $("notesList");
-  if (!box) return;
-  if (!token()) { box.innerHTML = "<p class=\"muted\">Sign in to see notifications.</p>"; return; }
-  const rows = (await fetchNotes()).filter(n => noteKind(n)===kind);
-  box.innerHTML = rows.length ? rows.map(n =>
-    "<article class=\"item\" data-slug=\""+(n.slug||"")+"\" data-card=\""+(n.card_id||"")+"\"><b>"+(n.body||"")+"</b><div class=\"muted\">"+timeAgo(n.created)+(n.read?"":" · new")+"</div></article>"
-  ).join("") : "<p class=\"muted\">Nothing in here yet.</p>";
-  const ids = rows.filter(n => !n.read).map(n => n.id);
-  if (ids.length) {
-    await fetch("/notes/read", { method:"POST", headers:{ "Content-Type":"application/json", "x-token": token() }, body: JSON.stringify({ ids }) });
-  }
-  refreshNotesBadge();
 }
 $("notesList") && ($("notesList").onclick = e => {
   const art = e.target.closest("[data-slug]");
