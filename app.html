@@ -113,12 +113,14 @@
     .auth-card[data-mode="signup"] .reset-only { display:none; }
     .auth-card[data-mode="reset"] .signup-only,
     .auth-card[data-mode="reset"] .signin-actions,
-    .auth-card[data-mode="reset"] .signup-actions { display:none; }
+    .auth-card[data-mode="reset"] .signup-actions,
+    .auth-card[data-mode="reset"] .auth-show { display:none; }
     .auth-links { display:flex; justify-content:space-between; gap:12px; margin-top:12px; }
     .auth-links button { width:auto; margin:0; padding:0; background:none; border:0; color:var(--ice); font-size:13px; font-weight:600; }
     .pw-wrap { position:relative; }
-    .pw-wrap input { padding-right:76px; position:relative; z-index:1; }
-    .pw-wrap .eye { position:absolute; right:6px; top:4px; z-index:5; width:auto; margin:0; padding:8px 10px; font-size:12px; background:#121b22; border:0; color:var(--ice); }
+    .pw-wrap input { padding-right:16px; }
+    .show-pw { display:flex; align-items:center; gap:8px; margin:8px 0 0; font-size:13px; color:var(--muted); font-weight:600; }
+    .show-pw input { width:auto; margin:0; }
     .card { margin-top:14px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; }
     .card h2 { margin:0 0 4px; font-size:20px; }
     .line { color:var(--muted); font-size:14px; margin-bottom:10px; }
@@ -345,16 +347,12 @@
         <label>Email</label>
         <input id="email" type="email" autocomplete="username" />
         <label>Password</label>
-        <div class="pw-wrap">
-          <input id="password" type="password" name="password" autocomplete="current-password" placeholder="6+ characters" />
-          <button type="button" class="eye" data-eye="password">Show</button>
-        </div>
+        <input id="password" type="password" name="password" autocomplete="current-password" placeholder="6+ characters" />
         <div class="signup-only">
           <label>Confirm password</label>
-          <div class="pw-wrap">
-            <input id="password2" type="password" name="password_confirm" autocomplete="new-password" placeholder="Type it again" />
-            <button type="button" class="eye" data-eye="password2">Show</button>
-          </div>
+          <input id="password2" type="password" name="password_confirm" autocomplete="new-password" placeholder="Type it again" />
+        </div>
+        <label class="show-pw auth-show"><input type="checkbox" id="showPw" /> Show password</label>
           <label style="margin-top:14px"><input id="agreeLegal" type="checkbox" style="width:auto;margin-right:8px" /> I agree to the <a href="/terms#terms-of-service" target="_blank" rel="noopener">Terms</a>, <a href="/aup#acceptable-use-policy" target="_blank" rel="noopener">Acceptable Use</a>, and <a href="/privacy#privacy-policy" target="_blank" rel="noopener">Privacy Policy</a></label>
         </div>
         <div class="signin-actions">
@@ -375,10 +373,8 @@
           <label>Code from email</label>
           <input id="resetCode" autocomplete="one-time-code" />
           <label>New password</label>
-          <div class="pw-wrap">
-            <input id="resetPw" type="password" autocomplete="new-password" />
-            <button type="button" class="eye" data-eye="resetPw">Show</button>
-          </div>
+          <input id="resetPw" type="password" autocomplete="new-password" />
+          <label class="show-pw"><input type="checkbox" id="showResetPw" /> Show password</label>
           <button type="submit" id="resetBtn">Set new password</button>
           <div class="auth-links">
             <button type="button" id="resetBack">Back to sign in</button>
@@ -3869,16 +3865,11 @@ $("ripMake") && ($("ripMake").onclick = async () => {
     loadRipCodes();
   } catch(e) { if ($("ripMakeNoteOut")) $("ripMakeNoteOut").textContent = e.message; }
 });
-document.querySelectorAll(".eye").forEach(btn => {
-  btn.onclick = ev => {
-    ev.preventDefault();
-    const el = $(btn.getAttribute("data-eye"));
-    if (!el) return;
-    const on = el.type === "password";
-    el.type = on ? "text" : "password";
-    btn.textContent = on ? "Hide" : "Show";
-  };
-});
+function setPwVisible(on, ids){
+  ids.forEach(id => { if ($(id)) $(id).type = on ? "text" : "password"; });
+}
+$("showPw") && ($("showPw").onchange = () => setPwVisible($("showPw").checked, ["password","password2"]));
+$("showResetPw") && ($("showResetPw").onchange = () => setPwVisible($("showResetPw").checked, ["resetPw"]));
 function setAuthMode(mode){
   const card = document.querySelector(".auth-card");
   if (card) card.setAttribute("data-mode", mode);
