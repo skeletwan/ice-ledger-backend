@@ -110,7 +110,8 @@
     .auth-card[data-mode="signin"] .reset-only,
     .auth-card[data-mode="signin"] .signup-actions { display:none; }
     .auth-card[data-mode="signup"] .signin-actions,
-    .auth-card[data-mode="signup"] .reset-only { display:none; }
+    .auth-card[data-mode="signup"] .reset-only,
+    .auth-card[data-mode="signup"] .auth-pw { display:none; }
     .auth-card[data-mode="reset"] .signup-only,
     .auth-card[data-mode="reset"] .signin-actions,
     .auth-card[data-mode="reset"] .signup-actions,
@@ -345,17 +346,18 @@
         <p class="muted" id="authLead">Sign in to your binder.</p>
         <form id="authForm" action="#" method="post">
         <label>Email</label>
-        <input id="email" type="email" autocomplete="username" />
+        <input id="email" type="email" name="email" autocomplete="username" />
         <div class="auth-pw">
           <label>Password</label>
-          <input id="password" type="password" name="password" autocomplete="current-password" placeholder="Password" passwordrules="minlength: 8;" />
-          <div class="signup-only hidden" id="confirmWrap">
-            <label>Confirm password</label>
-            <input id="password2" type="text" name="password_confirm" autocomplete="off" placeholder="Confirm password" />
-          </div>
+          <input id="password" type="password" name="password" autocomplete="current-password" placeholder="Password" />
           <label class="show-pw"><input type="checkbox" id="showPw" /> Show password</label>
         </div>
         <div class="signup-only">
+          <label>Password</label>
+          <input id="newPw" type="password" name="new-password" autocomplete="new-password" placeholder="Password" />
+          <label>Confirm password</label>
+          <input id="newPw2" type="password" name="new-password-confirm" autocomplete="new-password" placeholder="Confirm password" />
+          <label class="show-pw"><input type="checkbox" id="showNewPw" /> Show password</label>
           <label style="margin-top:14px"><input id="agreeLegal" type="checkbox" style="width:auto;margin-right:8px" /> I agree to the <a href="/terms#terms-of-service" target="_blank" rel="noopener">Terms</a>, <a href="/aup#acceptable-use-policy" target="_blank" rel="noopener">Acceptable Use</a>, and <a href="/privacy#privacy-policy" target="_blank" rel="noopener">Privacy Policy</a></label>
         </div>
         <div class="signin-actions">
@@ -376,7 +378,33 @@
           <label>Code from email</label>
           <input id="resetCode" autocomplete="one-time-code" />
           <label>New password</label>
-          <input id="resetPw" type="password" autocomplete="new-password" />
+          <input id="resetPw" type="password" autocomplete="new-password" placeholder="Password" />
+          <label class="show-pw"><input type="checkbox" id="showResetPw" /> Show password</label>
+          <button type="submit" id="resetBtn">Set new password</button>
+          <div class="auth-links">
+            <button type="button" id="resetBack">Back to sign in</button>
+          </div>
+        </div>
+        </form>
+        <div class="signin-actions">
+          <button type="submit" id="loginBtn">Sign in</button>
+          <div class="auth-links">
+            <button type="button" id="toSignup">Create account</button>
+            <button type="button" id="showReset">Forgot password</button>
+          </div>
+        </div>
+        <div class="signup-actions">
+          <button type="submit" id="signupBtn" disabled>Create account</button>
+          <div class="auth-links">
+            <button type="button" id="toSignin">Already have an account</button>
+          </div>
+        </div>
+        <div class="reset-only" id="resetBox">
+          <button type="button" class="ghost" id="resetSend">Email me a code</button>
+          <label>Code from email</label>
+          <input id="resetCode" autocomplete="one-time-code" />
+          <label>New password</label>
+          <input id="resetPw" type="password" autocomplete="new-password" placeholder="Password" />
           <label class="show-pw"><input type="checkbox" id="showResetPw" /> Show password</label>
           <button type="submit" id="resetBtn">Set new password</button>
           <div class="auth-links">
@@ -3871,7 +3899,8 @@ $("ripMake") && ($("ripMake").onclick = async () => {
 function setPwVisible(on, ids){
   ids.forEach(id => { if ($(id)) $(id).type = on ? "text" : "password"; });
 }
-$("showPw") && ($("showPw").onchange = () => setPwVisible($("showPw").checked, ["password","password2"]));
+$("showPw") && ($("showPw").onchange = () => setPwVisible($("showPw").checked, ["password"]));
+$("showNewPw") && ($("showNewPw").onchange = () => setPwVisible($("showNewPw").checked, ["newPw","newPw2"]));
 $("showResetPw") && ($("showResetPw").onchange = () => setPwVisible($("showResetPw").checked, ["resetPw"]));
 function lockSignup(){
   if ($("signupBtn") && $("agreeLegal")) $("signupBtn").disabled = !$("agreeLegal").checked;
@@ -3883,33 +3912,8 @@ function setAuthMode(mode){
     $("authLead").textContent = mode === "signup" ? "Create an account." : mode === "reset" ? "We’ll email a code to reset your password." : "Sign in to your binder.";
   }
   if ($("authStatus")) { $("authStatus").className = "status"; $("authStatus").textContent = ""; }
-  if ($("password")) {
-    $("password").autocomplete = mode === "signup" ? "new-password" : "current-password";
-    $("password").placeholder = "Password";
-  }
-  if ($("password2")) {
-    $("password2").autocomplete = "off";
-    $("password2").type = "text";
-  }
-  if ($("confirmWrap")) $("confirmWrap").classList.add("hidden");
-  if (mode === "signup" && $("password")) {
-    setTimeout(() => { try { $("password").focus(); } catch(e) {} }, 80);
-  }
   lockSignup();
 }
-function revealConfirm(){
-  if (!$("confirmWrap") || !$("password2")) return;
-  $("confirmWrap").classList.remove("hidden");
-  $("password2").type = "password";
-}
-$("password") && $("password").addEventListener("blur", () => {
-  const mode = document.querySelector(".auth-card") && document.querySelector(".auth-card").getAttribute("data-mode");
-  if (mode === "signup" && ($("password").value || "").length >= 6) revealConfirm();
-});
-$("password") && $("password").addEventListener("input", () => {
-  const mode = document.querySelector(".auth-card") && document.querySelector(".auth-card").getAttribute("data-mode");
-  if (mode === "signup" && ($("password").value || "").length >= 8) revealConfirm();
-});
 function authEmail(){
   return (($("email") && $("email").value) || "").trim().toLowerCase();
 }
@@ -3926,8 +3930,8 @@ $("signupBtn") && ($("signupBtn").onclick = async ev => {
       flash("authStatus", "err", "Agree to the Terms and Privacy Policy first.");
       return;
     }
-    const pw = $("password").value || "";
-    const pw2 = ($("password2") && $("password2").value) || "";
+    const pw = ($("newPw") && $("newPw").value) || "";
+    const pw2 = ($("newPw2") && $("newPw2").value) || "";
     if (!authEmail() || authEmail().indexOf("@")<0) {
       flash("authStatus", "err", "Enter the email you want on this account.");
       return;
@@ -3937,7 +3941,7 @@ $("signupBtn") && ($("signupBtn").onclick = async ev => {
       return;
     }
     if (pw !== pw2) {
-      flash("authStatus", "err", "Password and confirm password have to match.");
+      flash("authStatus", "err", "Passwords have to match.");
       return;
     }
     const d = await authPost("/signup", { email: authEmail(), password:pw });
