@@ -855,42 +855,29 @@
   <section class="page" id="opsPage">
     <button class="ghost" id="backYouOps">Back to You</button>
     <h2 style="font-size:18px;margin:12px 0 8px">Owner tools</h2>
-    <p class="muted">Owner only. Unlock starts a 30-day Clappers+ window on this signed-in account.</p>
-    <label>App secret</label>
-    <input id="plusSecret" type="password" autocomplete="off" />
-    <button id="plusBtn">Unlock Clappers+ on this account</button>
-    <p class="muted" id="plusNote"></p>
-    <h3 style="font-size:15px;margin:16px 0 8px">Moderation</h3>
-    <p class="muted" id="modStats">Load the inbox to see reports. Hide and unhide from each card.</p>
-    <button class="ghost" id="modLoad">Load inbox</button>
-    <button class="ghost" id="modClearReviewed">Clear reviewed</button>
+
+    <h3 style="font-size:15px;margin:16px 0 8px">Reports</h3>
+    <p class="muted" id="modStats">Load inbox for reports.</p>
+    <div class="row2">
+      <button class="ghost" id="modLoad">Load inbox</button>
+      <button class="ghost" id="modClearReviewed">Clear reviewed</button>
+    </div>
     <button class="ghost" id="modClearInbox">Empty inbox</button>
     <div id="modList"></div>
-    <h3 style="font-size:15px;margin:16px 0 8px">Rip codes</h3>
-    <label>IDs on the code</label>
-    <input id="ripMakeScans" type="number" value="10" min="1" max="500" />
-    <label>How many people can use it</label>
-    <input id="ripMakeUses" type="number" value="1" min="1" max="200" />
-    <label>Note</label>
-    <input id="ripMakeNote" placeholder="failed scan / promo / friend" />
-    <button class="ghost" id="ripMake">Make code</button>
-    <p class="muted" id="ripMakeNoteOut"></p>
-    <div id="ripCodeList"></div>
-    <h3 style="font-size:15px;margin:16px 0 8px">All accounts</h3>
-    <button class="ghost" id="modUsersLoad">Load accounts</button>
-    <div id="modUsers"></div>
-    <h3 style="font-size:15px;margin:16px 0 8px">Look up a user</h3>
-    <p class="muted">Email or binder slug.</p>
+
+    <h3 style="font-size:15px;margin:16px 0 8px">Look up</h3>
+    <p class="muted">Email or slug. Actions below apply to that person only.</p>
     <input id="modUser" placeholder="email or slug" />
     <button class="ghost" id="modLookup">Look up</button>
     <div id="modUserCard"></div>
+    <p class="muted" id="modUserNote"></p>
     <div class="row2">
       <button class="ghost" id="modHidePhoto">Hide photo</button>
       <button class="ghost" id="modShowPhoto">Unhide photo</button>
     </div>
     <div class="row2">
-      <button class="ghost" id="modHideComments">Hide their comments</button>
-      <button class="ghost" id="modShowComments">Unhide their comments</button>
+      <button class="ghost" id="modHideComments">Hide comments</button>
+      <button class="ghost" id="modShowComments">Unhide comments</button>
     </div>
     <button class="ghost" id="modClearBanner">Remove banner</button>
     <div class="row2">
@@ -907,31 +894,44 @@
       <button class="ghost" id="modUnsuspend">Unsuspend</button>
     </div>
     <button class="danger" id="modDeleteUser">Delete account</button>
-    <p class="muted" id="modUserNote"></p>
-    <h3 style="font-size:15px;margin:16px 0 8px">Email users</h3>
-    <p class="muted">Sends from your Resend address. Email all asks first.</p>
-    <label>To (email or slug)</label>
-    <input id="modMailTo" placeholder="user@email or slug" />
-    <label>Subject</label>
-    <input id="modMailSub" placeholder="Clappers PC" />
-    <label>Message</label>
-    <textarea id="modMailBody" rows="5" placeholder="Keep it short."></textarea>
-    <div class="row2">
-      <button class="ghost" id="modMailOne">Send to this address</button>
-      <button class="ghost" id="modMailLookup">Send to looked-up user</button>
-    </div>
-    <button class="ghost" id="modMailAll">Email everyone</button>
-    <p class="muted" id="modMailNote"></p>
-    <h3 style="font-size:15px;margin:16px 0 8px">In-app message</h3>
-    <p class="muted">Shows in You → From Clappers. Can also email.</p>
+
+    <h3 style="font-size:15px;margin:16px 0 8px">Message this user</h3>
+    <p class="muted">Goes to the person you just looked up. Not everyone.</p>
     <label>In-app text</label>
-    <textarea id="modPushBody" rows="4" placeholder="Short notice from Clappers Management"></textarea>
-    <div class="row2">
-      <button class="ghost" id="modPushOne">Message looked-up user</button>
-      <button class="ghost" id="modPushAll">Message everyone in-app</button>
-    </div>
+    <textarea id="modPushBody" rows="3" placeholder="Short note from Clappers Management"></textarea>
+    <button class="ghost" id="modPushOne">Send in-app to this user</button>
+    <label>Email subject</label>
+    <input id="modMailSub" placeholder="Clappers PC" />
+    <label>Email body</label>
+    <textarea id="modMailBody" rows="4" placeholder="Keep it short."></textarea>
+    <button class="ghost" id="modMailLookup">Email this user</button>
     <p class="muted" id="modPushNote"></p>
+    <p class="muted" id="modMailNote"></p>
+
+    <h3 style="font-size:15px;margin:16px 0 8px">Everyone</h3>
+    <p class="muted">These hit every account. Confirm first.</p>
+    <button class="ghost" id="modPushAll">In-app to everyone</button>
+    <button class="ghost" id="modMailAll">Email everyone</button>
     <div id="modPushList"></div>
+
+    <h3 style="font-size:15px;margin:16px 0 8px">Rip codes</h3>
+    <label>IDs on the code</label>
+    <input id="ripMakeScans" type="number" value="10" min="1" max="500" />
+    <label>How many people can use it</label>
+    <input id="ripMakeUses" type="number" value="1" min="1" max="200" />
+    <label>Note</label>
+    <input id="ripMakeNote" placeholder="promo / failed scan" />
+    <button class="ghost" id="ripMake">Make code</button>
+    <p class="muted" id="ripMakeNoteOut"></p>
+    <div id="ripCodeList"></div>
+
+    <h3 style="font-size:15px;margin:16px 0 8px">Accounts</h3>
+    <button class="ghost" id="modUsersLoad">Load accounts</button>
+    <div id="modUsers"></div>
+    <input id="modMailTo" class="hidden" />
+    <input id="plusSecret" class="hidden" />
+    <button id="plusBtn" class="hidden">Unlock</button>
+    <p class="hidden" id="plusNote"></p>
   </section>
   <section class="page" id="helpPage">
     <button class="ghost" id="backYou">Back to You</button>
@@ -3795,6 +3795,7 @@ async function loadRipCodes(){
   ).join("") || "<p class=\"muted\">No codes yet.</p>";
 }
 let lastModSlug = "";
+let lastModEmail = "";
 async function modAccount(path, extra){
   const raw = (($("modUser")&&$("modUser").value)||"").trim();
   const body = Object.assign({}, extra||{});
@@ -3834,7 +3835,8 @@ $("modLookup") && ($("modLookup").onclick = async () => {
     const ban = d.banner ? (d.banner.title||"banner") : "none";
     $("modUserCard").innerHTML = "<div class=\"item\" style=\"cursor:default\"><b>"+(d.display||d.slug||"")+"</b><div class=\"muted\">"+d.email+" · /"+d.slug+"</div><div class=\"muted\">Joined "+String(d.created||"").slice(0,10)+" · "+(d.plan||"free")+" · "+(d.suspended?"SUSPENDED":"active")+"</div><div class=\"muted\">"+d.cards+" cards · "+d.comments+" comments ("+d.hidden_comments+" hidden) · "+d.reports+" reports · photo "+(d.avatar_hidden?"hidden":(d.has_avatar?"on":"none"))+" · banner "+ban+"</div></div>";
     lastModSlug = d.slug || "";
-    $("modUserNote").textContent = "Loaded. Use hide / unhide / suspend below.";
+    lastModEmail = d.email || "";
+    $("modUserNote").textContent = "Loaded "+(d.display||d.slug||d.email)+". Actions apply to this person only.";
   } catch(e) { $("modUserNote").textContent = e.message; if ($("modUserCard")) $("modUserCard").innerHTML = ""; }
 });
 async function modUserAction(path, extra){
@@ -3873,6 +3875,10 @@ $("modCreatorOff") && ($("modCreatorOff").onclick = async () => {
   try { const d = await modAccount("/admin/plan", { plan:"plus" }); $("modUserNote").textContent = "Creator off. Clappers+ for "+(d.email||d.slug); $("modLookup") && $("modLookup").click(); }
   catch(e){ $("modUserNote").textContent = e.message; }
 });
+$("modResetIds") && ($("modResetIds").onclick = async () => {
+  try { const d = await modAccount("/admin/reset-ids", {}); $("modUserNote").textContent = "IDs reset for "+(d.email||d.slug)+" · "+d.left+" left"; $("modLookup") && $("modLookup").click(); }
+  catch(e){ $("modUserNote").textContent = e.message; }
+});
 $("modMailOne") && ($("modMailOne").onclick = async () => {
   try {
     const d = await authPost("/admin/mail", {
@@ -3885,8 +3891,10 @@ $("modMailOne") && ($("modMailOne").onclick = async () => {
 });
 $("modMailLookup") && ($("modMailLookup").onclick = async () => {
   try {
+    const to = lastModEmail || lastModSlug || (($("modUser")&&$("modUser").value)||"");
+    if (!String(to).trim()) throw new Error("Look up a user first.");
     const d = await authPost("/admin/mail", {
-      to: ($("modUser")&&$("modUser").value)||"",
+      to,
       subject: ($("modMailSub")&&$("modMailSub").value)||"",
       body: ($("modMailBody")&&$("modMailBody").value)||""
     });
@@ -3895,8 +3903,10 @@ $("modMailLookup") && ($("modMailLookup").onclick = async () => {
 });
 async function sendAnnounce(all){
   const body = ($("modPushBody")&&$("modPushBody").value)||"";
-  const d = await authPost("/admin/announce", all ? { body } : { body, to: ($("modUser")&&$("modUser").value)||"" });
-  if ($("modPushNote")) $("modPushNote").textContent = "In-app sent to "+d.sent;
+  const to = lastModEmail || lastModSlug || (($("modUser")&&$("modUser").value)||"");
+  if (!all && !String(to).trim()) throw new Error("Look up a user first.");
+  const d = await authPost("/admin/announce", all ? { body, all:true } : { body, to, all:false });
+  if ($("modPushNote")) $("modPushNote").textContent = all ? ("Sent to "+d.sent+" accounts") : "Sent to the looked-up user";
   loadAnnounces();
 }
 $("modPushOne") && ($("modPushOne").onclick = async () => {

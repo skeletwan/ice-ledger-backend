@@ -4333,9 +4333,15 @@ async def admin_announce(payload: dict, request: Request, x_token: str | None = 
     text = "Clappers Management: " + raw
     text = text[:500]
     who = str(payload.get("to") or "").strip()
+    everyone = bool(payload.get("all"))
     batch = "a" + secrets.token_hex(8)
     con = db()
-    if who:
+    if everyone:
+        ids = con.execute("SELECT id, slug FROM users").fetchall()
+        for u in ids:
+            add_note(con, u["id"], u["slug"] if "slug" in u.keys() else "", text, "", batch)
+        n = len(ids)
+    elif who:
         row = _find_user(con, {"email": who, "slug": who})
         if not row:
             con.close()
@@ -4343,10 +4349,8 @@ async def admin_announce(payload: dict, request: Request, x_token: str | None = 
         add_note(con, row["id"], row["slug"] if "slug" in row.keys() else "", text, "", batch)
         n = 1
     else:
-        ids = con.execute("SELECT id, slug FROM users").fetchall()
-        for u in ids:
-            add_note(con, u["id"], u["slug"] if "slug" in u.keys() else "", text, "", batch)
-        n = len(ids)
+        con.close()
+        raise HTTPException(400, "look up a user first")
     con.commit()
     con.close()
     return {"ok": True, "sent": n, "batch": batch}
