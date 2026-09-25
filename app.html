@@ -220,7 +220,10 @@
     .board-post h3 { margin:0 0 4px; font-size:17px; font-weight:700; line-height:1.25; }
     .board-post .muted { margin:0; }
     .board-post .when { margin:4px 0 0; font-size:13px; font-weight:700; color:#fff; }
-    .live-chip { display:inline-block; margin-left:8px; padding:2px 8px; border-radius:999px; background:#d1263a; color:#fff; font-size:10px; font-weight:800; letter-spacing:.08em; vertical-align:middle; }
+    .board-post .ban-go { display:inline-block; margin-top:10px; padding:8px 14px; border-radius:8px; background:#14303a; color:#fff; font-weight:800; font-size:13px; text-decoration:none; border:1px solid var(--ice); }
+    .board-post.stream { background:#070c10; padding:16px 16px 14px; }
+    .board-post.stream h3 { font-size:18px; }
+    .board-post.show .k { color:var(--ice); }
     #banCard { border-radius:12px; overflow:hidden; }
     #banCard input, #banCard select { max-width:100%; min-width:0; box-sizing:border-box; }
     .ban-when {
@@ -816,7 +819,12 @@
       <h3 style="margin:0 0 6px;font-size:16px">Binder banner</h3>
       <p class="muted">One banner on your public binder. Add a start time so it can say when it goes live. After the window ends it drops off Community. A new save replaces the old one and pings people who follow you.</p>
       <div id="banPreview"></div>
-      <label>Title <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0"> · card show, YouTube break, episode, live</span></label>
+      <label>Layout</label>
+      <select id="banKind">
+        <option value="live">Stream / rip</option>
+        <option value="show">Card show</option>
+      </select>
+      <label>Title</label>
       <input id="banTitle" maxlength="80" placeholder="Saturday rip · Toronto card show" />
       <label>Starts</label>
       <div class="ban-when">
@@ -4410,14 +4418,19 @@ function bannerHtml(b, mine){
   const st = bannerState(b);
   if (st.done && !mine) return "";
   const col = b.color || "#8fd4ee";
-  const link = b.url ? "<div style=\"margin-top:8px\"><a href=\""+b.url.replace(/"/g,"")+"\" target=\"_blank\" rel=\"noopener\">Open link</a></div>" : "";
+  const kind = (b.kind === "show") ? "show" : "stream";
   const live = st.live ? "<span class=\"live-chip\">LIVE</span>" : "";
   const when = st.label ? "<div class=\"when\">"+st.label+(st.live?" · happening now":"")+"</div>" : "";
+  const body = b.body ? "<div class=\"muted\">"+String(b.body).replace(/[<>]/g,"")+"</div>" : "";
+  const goTxt = kind === "show" ? "Details" : "Watch";
+  const link = b.url ? "<a class=\"ban-go\" href=\""+b.url.replace(/"/g,"")+"\" target=\"_blank\" rel=\"noopener\">"+goTxt+"</a>" : "";
   const act = mine && !st.done ? "<button type=\"button\" class=\"ghost\" data-ban-end=\"1\" style=\"width:auto;margin-top:10px\">Cancel</button>" : "";
-  return "<div class=\"board-post\" style=\"border-color:"+col+"\"><h3>"+String(b.title||"").replace(/[<>]/g,"")+live+"</h3>"+when+(b.body?"<div class=\"muted\">"+String(b.body).replace(/[<>]/g,"")+"</div>":"")+link+act+"</div>";
+  const kicker = kind === "show" ? "<div class=\"k\">Card show</div>" : "<div class=\"k\">Stream / rip</div>";
+  return "<div class=\"board-post "+kind+"\" style=\"border-color:"+col+"\">"+kicker+"<h3>"+String(b.title||"").replace(/[<>]/g,"")+live+"</h3>"+when+body+link+act+"</div>";
 }
 function fillBannerForm(b){
   if (!b) return;
+  if ($("banKind")) $("banKind").value = (b.kind === "show") ? "show" : "live";
   if ($("banTitle")) $("banTitle").value = b.title || "";
   if ($("banBody")) $("banBody").value = b.body || "";
   if ($("banUrl")) $("banUrl").value = b.url || "";
@@ -4467,7 +4480,7 @@ $("banAdd") && ($("banAdd").onclick = async () => {
       if (!isNaN(+d)) starts = d.toISOString();
     }
     await authPost("/banners", {
-      kind: "note",
+      kind: ($("banKind")&&$("banKind").value) || "live",
       title: ($("banTitle")&&$("banTitle").value) || "",
       body: ($("banBody")&&$("banBody").value) || "",
       url: ($("banUrl")&&$("banUrl").value) || "",
