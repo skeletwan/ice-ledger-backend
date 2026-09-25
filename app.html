@@ -961,6 +961,8 @@
       </select>
     </div>
     <div class="val" style="margin-top:8px"><b id="vPick">—</b><span id="vPickLbl">Raw sold</span></div>
+    <button type="button" class="primary hidden" id="updOne">Update this card</button>
+    <p class="muted" id="updOneNote"></p>
     <div class="mini-trend">
       <div class="ranges" id="cardRanges">
         <button data-cr="7D">7D</button>
@@ -2753,7 +2755,9 @@ async function lookupSoldFor(c, noteId, after){
       body: JSON.stringify({
         player:c.player, year:c.year, set:c.set, number:c.number,
         parallel:c.parallel, insert:c.insert, team:c.team,
-        grader:c.grader, grade:c.grade
+        grader:c.grader, grade:c.grade,
+        force: !!window.lastOp,
+        skip_web: true
       })
     });
     const t = await r.text();
@@ -2847,7 +2851,7 @@ function gradeTier(g, gr){
 function asCad(v){
   if (v==null || v==="") return null;
   const n = parseFloat(String(v).replace(/[^0-9.]/g,""));
-  return (!isNaN(n) && n >= 1) ? n : null;
+  return (!isNaN(n) && n >= 2) ? n : null;
 }
 function binderCad(c){
   if (!c) return null;
@@ -3158,6 +3162,25 @@ $("pgSvc") && ($("pgSvc").onchange = paintPubGradePick);
 $("pgNum") && ($("pgNum").onchange = paintPubGradePick);
 $("backBind").onclick = () => show("bind");
 $("editCardBtn").onclick = () => { fillEdit(); show("edit"); };
+$("updOne") && ($("updOne").onclick = async () => {
+  const cards = load();
+  const c = cards.find(x => x.id===openId);
+  if (!c) return;
+  const note = $("updOneNote");
+  if (note) note.textContent = "Searching solds for this card…";
+  try {
+    await lookupSoldFor(c, "updOneNote", async (d) => {
+      applyCompObj(c, d || {});
+      saveAll(cards);
+      await pushCard(c).catch(()=>{});
+      openDetail(openId);
+      if (note) note.textContent = (d && (d.summary || d.error)) || "Updated this card.";
+      if (d && d.raw_cad != null && note) note.textContent += " · raw "+d.raw_cad;
+    });
+  } catch(e) {
+    if (note) note.textContent = (e && e.message) || "Update failed.";
+  }
+});
 function togMkt(btn, box){
   if (!$(box)) return;
   $(box).classList.toggle("hidden");
@@ -3255,8 +3278,8 @@ function orderGrades(card){
 function keepMoney(next, prev){
   const n = (next==null || next==="") ? null : +next;
   const p = (prev==null || prev==="") ? null : +prev;
-  const okN = n != null && !isNaN(n) && n >= 1;
-  const okP = p != null && !isNaN(p) && p >= 1;
+  const okN = n != null && !isNaN(n) && n >= 2;
+  const okP = p != null && !isNaN(p) && p >= 2;
   if (okN) return n;
   if (okP) return p;
   return null;
@@ -3525,6 +3548,8 @@ async function refreshUsage(){
   window.lastPlan = u.plan || "free";
   window.lastOp = !!u.operator;
   if ($("refreshBook")) $("refreshBook").classList.toggle("hidden", !u.operator);
+  if ($("updOne")) $("updOne").classList.toggle("hidden", !u.operator);
+  if ($("updOneNote")) $("updOneNote").classList.toggle("hidden", !u.operator);
   const bonus = u.bonus ? " + "+u.bonus+" extra" : "";
   const line = (u.plan==="plus"?"Clappers+":"Free")+" · "+u.left+" IDs left"+bonus;
   if ($("quotaBox")) {

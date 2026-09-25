@@ -1294,6 +1294,29 @@ async def fetch_card_api(q: str, player: str, fp: str = "", parallel: str = "", 
             _ingest(raw_rows, q, player, buckets, only_raw=True, sales=sales, parallel=parallel, number=number, year=year)
             _ingest(slab_rows, q, player, buckets, only_raw=False, sales=sales, parallel=parallel, number=number, year=year)
             _ingest(mixed, q, player, buckets, only_raw=None, sales=sales, parallel=parallel, number=number, year=year)
+            if mixed and not sales:
+                last = (player or "").strip().split()[-1].lower() if player else ""
+                for item in mixed:
+                    if not isinstance(item, dict):
+                        continue
+                    title = str(item.get("title") or "")
+                    tl = title.lower()
+                    if last and last not in tl:
+                        continue
+                    if re.search(r"checklist|lot of|bundle", tl):
+                        continue
+                    cad = _sale_cad(item)
+                    if not cad or cad < 2:
+                        continue
+                    key = _sale_bucket(item) or "raw_cad"
+                    buckets.setdefault(key, []).append(cad)
+                    sales.append({
+                        "id": _sale_id(item),
+                        "bucket": key,
+                        "cad": cad,
+                        "date": _sale_when(item),
+                        "title": title,
+                    })
     except Exception as e:
         return {"query": q, "error": str(e)[:180], "sample_count": 0, "summary": "Card API error: "+str(e)[:120]}
     if CARD_API_QUOTA and not sales:
@@ -1518,7 +1541,13 @@ async def comp(
             pass
     if ck.strip("|"):
         house = pack_house(ck)
-        if house and (CARD_API_QUOTA or house.get("close_day") == today_iso()):
+        house_ok = False
+        if house:
+            try:
+                house_ok = any(float(house.get(k) or 0) > 2 for k in ("raw_cad","psa10_cad","psa9_cad","psa8_cad","psa7_cad","suggested_cad"))
+            except (TypeError, ValueError):
+                house_ok = False
+        if house and house_ok and (CARD_API_QUOTA or house.get("close_day") == today_iso()):
             if CARD_API_QUOTA:
                 house["quota"] = True
                 house["summary"] = "Market feed paused until tomorrow. Using last close."
@@ -1661,13 +1690,10 @@ async def comp(
         if prior and any(prior.get(k) for k in money_keys):
             data = prior
             data["cached"] = True
-            data["summary"] = (data.get("summary") or "") + " Kept last baseline; no solds in this 14-day window."
+            data["summary"] = (data.get("summary") or "") + " Kept last baseline; no solds in this window."
         else:
-            data["raw_cad"] = 1
-            data["suggested_cad"] = 1
             data["sample_count"] = data.get("sample_count") or 0
-            data["summary"] = data.get("summary") or "No solds in the lookback; $1 floor."
-            data["floor"] = True
+            data["summary"] = data.get("summary") or "No solds in the lookback."
     data = _order_grades(data)
     data["model"] = used
     data["card"] = card
