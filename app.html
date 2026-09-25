@@ -863,6 +863,7 @@
     <h3 style="font-size:15px;margin:16px 0 8px">Moderation</h3>
     <p class="muted" id="modStats">Load the inbox to see reports. Hide and unhide from each card.</p>
     <button class="ghost" id="modLoad">Load inbox</button>
+    <button class="ghost" id="modClearReviewed">Clear reviewed</button>
     <button class="ghost" id="modClearInbox">Empty inbox</button>
     <div id="modList"></div>
     <h3 style="font-size:15px;margin:16px 0 8px">Rip codes</h3>
@@ -925,6 +926,7 @@
       <button class="ghost" id="modPushAll">Message everyone in-app</button>
     </div>
     <p class="muted" id="modPushNote"></p>
+    <div id="modPushList"></div>
   </section>
   <section class="page" id="helpPage">
     <button class="ghost" id="backYou">Back to You</button>
@@ -1537,7 +1539,7 @@ $("tabFind").onclick = () => show("find");
 $("tabSet").onclick = () => { loadNotePrefs(); loadMe(); show("set"); };
 $("tabHelp") && ($("tabHelp").onclick = () => show("help"));
 $("backYou") && ($("backYou").onclick = () => show("set"));
-$("ownerToolsBtn") && ($("ownerToolsBtn").onclick = () => { show("ops"); loadRipCodes(); if ($("modLoad")) $("modLoad").click(); });
+$("ownerToolsBtn") && ($("ownerToolsBtn").onclick = () => { show("ops"); loadRipCodes(); loadAnnounces(); if ($("modLoad")) $("modLoad").click(); });
 $("backYouOps") && ($("backYouOps").onclick = () => show("set"));
 $("fxCAD").onclick = () => setFx("CAD");
 $("fxUSD").onclick = () => setFx("USD");
@@ -3577,7 +3579,41 @@ async function unlockPlus(){
   if ($("plusNote")) $("plusNote").textContent = "Clappers+ on. "+p.left+" IDs this month.";
   if ($("quotaBox")) { $("quotaBox").textContent = "Clappers+ · "+p.left+" IDs"; $("quotaBox").className = "quota-chip ok"; }
 }
+$("modClearReviewed") && ($("modClearReviewed").onclick = async () => {
+  if (!confirm("Delete reports you already dismissed?")) return;
+  await fetch("/admin/clear-reviewed", { method:"POST", headers:{ "x-token": token() } });
+  if ($("modLoad")) $("modLoad").click();
+});
 $("modClearInbox") && ($("modClearInbox").onclick = async () => {
+  if (!confirm("Clear all reports from the inbox?")) return;
+  await fetch("/admin/clear-inbox", { method:"POST", headers:{ "x-token": token() } });
+  if ($("modLoad")) $("modLoad").click();
+});
+async function loadAnnounces(){
+  const box = $("modPushList");
+  if (!box) return;
+  try {
+    const r = await fetch("/admin/announces", { headers:{ "x-token": token() } });
+    const d = await r.json();
+    const rows = d.items || [];
+    box.innerHTML = rows.length
+      ? rows.map(x => {
+          const body = String(x.body||"").replace(/^Clappers Management:\s*/,"").replace(/[<>]/g,"");
+          return "<div class=\"item\"><b>"+(x.created||"").slice(0,16)+"</b> <span class=\"muted\">"+x.n+" inbox"+(x.n==1?"":"es")+"</span><p style=\"margin:6px 0 0\">"+body+"</p><button class=\"ghost\" data-unsend=\""+x.batch+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Unsend</button></div>";
+        }).join("")
+      : "<p class=\"muted\">No in-app messages sent yet.</p>";
+  } catch(e) { box.textContent = ""; }
+}
+$("modPushList") && ($("modPushList").onclick = async ev => {
+  const b = ev.target.closest("[data-unsend]");
+  if (!b) return;
+  if (!confirm("Pull this message out of every inbox?")) return;
+  try {
+    const d = await authPost("/admin/unsend", { batch: b.getAttribute("data-unsend") });
+    if ($("modPushNote")) $("modPushNote").textContent = "Removed from "+d.removed+" inboxes.";
+    loadAnnounces();
+  } catch(e) { if ($("modPushNote")) $("modPushNote").textContent = e.message; }
+});
   if (!confirm("Clear all reports from the inbox?")) return;
   await fetch("/admin/clear-inbox", { method:"POST", headers:{ "x-token": token() } });
   if ($("modLoad")) $("modLoad").click();
@@ -3589,7 +3625,7 @@ $("modLoad") && ($("modLoad").onclick = async () => {
   if (!r.ok) { box.textContent = t.slice(0,160); return; }
   const d = JSON.parse(t);
   if ($("modStats") && d.stats) {
-    $("modStats").textContent = d.stats.users+" accounts · "+d.stats.suspended+" suspended · "+d.stats.reports+" reports in view · "+d.stats.hidden_photos+" hidden photos · "+d.stats.hidden_comments+" hidden comments";
+    $("modStats").textContent = d.stats.users+" accounts · "+d.stats.suspended+" suspended · "+d.stats.reports+" open reports · "+(d.stats.reviewed||0)+" reviewed · "+d.stats.hidden_photos+" hidden photos · "+d.stats.hidden_comments+" hidden comments";
   }
   const reports = (d.reports||[]).map(x => {
     const kind = x.kind || "photo";
@@ -3851,6 +3887,7 @@ async function sendAnnounce(all){
   const body = ($("modPushBody")&&$("modPushBody").value)||"";
   const d = await authPost("/admin/announce", all ? { body } : { body, to: ($("modUser")&&$("modUser").value)||"" });
   if ($("modPushNote")) $("modPushNote").textContent = "In-app sent to "+d.sent;
+  loadAnnounces();
 }
 $("modPushOne") && ($("modPushOne").onclick = async () => {
   try { await sendAnnounce(false); } catch(e) { if ($("modPushNote")) $("modPushNote").textContent = e.message; }

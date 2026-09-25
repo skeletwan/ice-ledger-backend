@@ -2063,6 +2063,14 @@ def init_db():
         con.execute("ALTER TABLE notes ADD COLUMN card_id TEXT")
     except sqlite3.OperationalError:
         pass
+    try:
+        con.execute("ALTER TABLE notes ADD COLUMN batch TEXT")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        con.execute("ALTER TABLE reports ADD COLUMN reviewed INTEGER NOT NULL DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
     con.execute("""
     CREATE TABLE IF NOT EXISTS resets (
       email TEXT NOT NULL,
@@ -2300,12 +2308,12 @@ def require_operator(request: Request = None, x_token: str | None = None):
         raise HTTPException(403, "operator only")
     return uid
 
-def add_note(con, user_id, slug, body, card_id=""):
+def add_note(con, user_id, slug, body, card_id="", batch=""):
     if not user_id:
         return
     con.execute(
-        "INSERT INTO notes(user_id,slug,body,created,read,card_id) VALUES(?,?,?,?,0,?)",
-        (user_id, slug or "", body[:500], time.strftime("%Y-%m-%dT%H:%M:%SZ"), card_id or ""),
+        "INSERT INTO notes(user_id,slug,body,created,read,card_id,batch) VALUES(?,?,?,?,0,?,?)",
+        (user_id, slug or "", body[:500], time.strftime("%Y-%m-%dT%H:%M:%SZ"), card_id or "", batch or ""),
     )
 
 def notify_activity(con, owner_id, slug, body, card_id="", actor_id=None):
@@ -3876,7 +3884,7 @@ async def admin_inbox(request: Request, secret: str = "", x_token: str | None = 
     else:
         require_operator(request, x_token)
     con = db()
-    rows = con.execute("SELECT id,slug,reporter,reason,created FROM reports ORDER BY id DESC LIMIT 80").fetchall()
+    rows = con.execute("SELECT id,slug,reporter,reason,created FROM reports WHERE IFNULL(reviewed,0)=0 ORDER BY id DESC LIMIT 80").fetchall()
     photos = con.execute(
         "SELECT slug, display FROM users WHERE IFNULL(avatar_hidden,0)=1 AND slug IS NOT NULL AND slug != ''"
     ).fetchall()
@@ -3938,12 +3946,13 @@ async def admin_inbox(request: Request, secret: str = "", x_token: str | None = 
         reports.append(item)
     users_n = con.execute("SELECT COUNT(*) AS n FROM users").fetchone()["n"]
     sus_n = con.execute("SELECT COUNT(*) AS n FROM users WHERE IFNULL(suspended,0)=1").fetchone()["n"]
+    done = con.execute("SELECT COUNT(*) AS n FROM reports WHERE IFNULL(reviewed,0)=1").fetchone()["n"]
     con.close()
     return {
         "reports": reports,
         "hidden_photos": [dict(r) for r in photos],
         "hidden_comments": [dict(r) for r in comments],
-        "stats": {"users": users_n, "suspended": sus_n, "reports": len(reports), "hidden_photos": len(photos), "hidden_comments": len(comments)},
+        "stats": {"users": users_n, "suspended": sus_n, "reports": len(reports), "reviewed": done, "hidden_photos": len(photos), "hidden_comments": len(comments)},
     }
 
 @app.post("/admin/restore-photo")
@@ -3988,12 +3997,22 @@ async def admin_clear_inbox(request: Request, x_token: str | None = Header(defau
     con.close()
     return {"ok": True}
 
+@app.post("/admin/clear-reviewed")
+async def admin_clear_reviewed(request: Request, x_token: str | None = Header(default=None)):
+    require_operator(request, x_token)
+    con = db()
+    n = con.execute("SELECT COUNT(*) AS n FROM reports WHERE IFNULL(reviewed,0)=1").fetchone()["n"]
+    con.execute("DELETE FROM reports WHERE IFNULL(reviewed,0)=1")
+    con.commit()
+    con.close()
+    return {"ok": True, "cleared": n}
+
 @app.post("/admin/dismiss-report")
 async def admin_dismiss(payload: dict, request: Request, x_token: str | None = Header(default=None)):
     require_operator(request, x_token)
     rid = int(payload.get("id") or 0)
     con = db()
-    con.execute("DELETE FROM reports WHERE id=?", (rid,))
+    con.execute("UPDATE reports SET reviewed=1 WHERE id=?", (rid,))
     con.commit()
     con.close()
     return {"ok": True}
@@ -4137,22 +4156,48 @@ async def admin_announce(payload: dict, request: Request, x_token: str | None = 
     text = "Clappers Management: " + raw
     text = text[:500]
     who = str(payload.get("to") or "").strip()
+    batch = "a" + secrets.token_hex(8)
     con = db()
     if who:
         row = _find_user(con, {"email": who, "slug": who})
         if not row:
             con.close()
             raise HTTPException(404, "no user")
-        add_note(con, row["id"], row["slug"] if "slug" in row.keys() else "", text)
+        add_note(con, row["id"], row["slug"] if "slug" in row.keys() else "", text, "", batch)
         n = 1
     else:
         ids = con.execute("SELECT id, slug FROM users").fetchall()
         for u in ids:
-            add_note(con, u["id"], u["slug"] if "slug" in u.keys() else "", text)
+            add_note(con, u["id"], u["slug"] if "slug" in u.keys() else "", text, "", batch)
         n = len(ids)
     con.commit()
     con.close()
-    return {"ok": True, "sent": n}
+    return {"ok": True, "sent": n, "batch": batch}
+
+@app.get("/admin/announces")
+async def admin_announces(request: Request, x_token: str | None = Header(default=None)):
+    require_operator(request, x_token)
+    con = db()
+    rows = con.execute(
+        """SELECT batch, MIN(body) AS body, MIN(created) AS created, COUNT(*) AS n
+           FROM notes WHERE IFNULL(batch,'') != '' AND body LIKE 'Clappers Management:%'
+           GROUP BY batch ORDER BY MAX(id) DESC LIMIT 20"""
+    ).fetchall()
+    con.close()
+    return {"items": [dict(r) for r in rows]}
+
+@app.post("/admin/unsend")
+async def admin_unsend(payload: dict, request: Request, x_token: str | None = Header(default=None)):
+    require_operator(request, x_token)
+    batch = re.sub(r"[^a-zA-Z0-9]", "", str(payload.get("batch") or ""))
+    if len(batch) < 4:
+        raise HTTPException(400, "missing message")
+    con = db()
+    n = con.execute("SELECT COUNT(*) AS n FROM notes WHERE batch=?", (batch,)).fetchone()["n"]
+    con.execute("DELETE FROM notes WHERE batch=?", (batch,))
+    con.commit()
+    con.close()
+    return {"ok": True, "removed": n}
 
 @app.post("/admin/mail-all")
 async def admin_mail_all(payload: dict, request: Request, x_token: str | None = Header(default=None)):
