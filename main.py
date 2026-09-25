@@ -2929,13 +2929,41 @@ async def admin_rip_code(payload: dict, request: Request, x_token: str | None = 
     return {"code": code, "scans": scans, "max_uses": uses, "note": note, "expires": expires}
 
 
+def rip_expired(row) -> bool:
+    exp = None
+    try:
+        exp = parse_ts(row["expires"] if "expires" in row.keys() else None)
+    except Exception:
+        exp = parse_ts((row or {}).get("expires") if isinstance(row, dict) else None)
+    if not exp:
+        created = None
+        try:
+            created = parse_ts(row["created"] if "created" in row.keys() else None)
+        except Exception:
+            created = parse_ts((row or {}).get("created") if isinstance(row, dict) else None)
+        if created:
+            exp = created + timedelta(days=30)
+    return bool(exp and exp <= now_utc())
+
+
 @app.get("/admin/rip-codes")
 async def admin_rip_codes(request: Request, x_token: str | None = Header(default=None)):
     require_operator(request, x_token)
     con = db()
-    rows = con.execute("SELECT code,scans,max_uses,used,note,created,expires FROM rip_codes ORDER BY created DESC LIMIT 40").fetchall()
+    rows = con.execute("SELECT code,scans,max_uses,used,note,created,expires FROM rip_codes ORDER BY created DESC LIMIT 80").fetchall()
+    live = []
+    drop = []
+    for r in rows:
+        if rip_expired(r):
+            drop.append(r["code"])
+        else:
+            live.append(dict(r))
+    for code in drop:
+        con.execute("DELETE FROM rip_codes WHERE code=?", (code,))
+    if drop:
+        con.commit()
     con.close()
-    return {"codes": [dict(r) for r in rows]}
+    return {"codes": live}
 
 
 @app.post("/admin/grant-rip")
