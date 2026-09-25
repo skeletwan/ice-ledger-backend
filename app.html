@@ -220,6 +220,7 @@
     .board-post h3 { margin:0 0 4px; font-size:17px; font-weight:700; line-height:1.25; }
     .board-post .muted { margin:0; }
     .board-post .when { margin:4px 0 0; font-size:13px; font-weight:700; color:#fff; }
+    .live-chip { display:inline-block; margin-left:8px; padding:2px 8px; border-radius:999px; background:#d1263a; color:#fff; font-size:10px; font-weight:800; letter-spacing:.08em; vertical-align:middle; }
     #banCard { border-radius:12px; overflow:hidden; }
     #banCard input, #banCard select { max-width:100%; min-width:0; box-sizing:border-box; }
     .ban-when {
@@ -4368,7 +4369,9 @@ function bannerWhen(iso){
   }
 }
 function bannerState(b){
-  if (!b || !b.starts) return { label:"", live:false, done:false };
+  if (!b) return { label:"", live:false, done:false };
+  if (+b.off) return { label:"Cancelled", live:false, done:true };
+  if (!b.starts) return { label:"", live:false, done:false };
   const t = Date.parse(b.starts);
   if (isNaN(t)) return { label:"", live:false, done:false };
   const hrs = Math.max(1, Math.min(24, +(b.hours||4)));
@@ -4407,7 +4410,8 @@ function bannerHtml(b, mine){
   const link = b.url ? "<div style=\"margin-top:8px\"><a href=\""+b.url.replace(/"/g,"")+"\" target=\"_blank\" rel=\"noopener\">Open link</a></div>" : "";
   const live = st.live ? "<span class=\"live-chip\">LIVE</span>" : "";
   const when = st.label ? "<div class=\"when\">"+st.label+(st.live?" · happening now":"")+"</div>" : "";
-  return "<div class=\"board-post\" style=\"border-color:"+col+"\"><h3>"+String(b.title||"").replace(/[<>]/g,"")+live+"</h3>"+when+(b.body?"<div class=\"muted\">"+String(b.body).replace(/[<>]/g,"")+"</div>":"")+link+"</div>";
+  const act = mine && !st.done ? "<button type=\"button\" class=\"ghost\" data-ban-end=\"1\" style=\"width:auto;margin-top:10px\">Cancel</button>" : "";
+  return "<div class=\"board-post\" style=\"border-color:"+col+"\"><h3>"+String(b.title||"").replace(/[<>]/g,"")+live+"</h3>"+when+(b.body?"<div class=\"muted\">"+String(b.body).replace(/[<>]/g,"")+"</div>":"")+link+act+"</div>";
 }
 function fillBannerForm(b){
   if (!b) return;
@@ -4429,6 +4433,26 @@ async function loadBanners(){
   if (box) box.innerHTML = b ? bannerHtml(b, true) : "<p class=\"muted\">No banner yet.</p>";
   if (b) fillBannerForm(b);
 }
+async function cancelMyBanner(){
+  try {
+    await authPost("/banners/cancel", {});
+    if (window.myBanner) window.myBanner.off = 1;
+    if (window.pubBanners && window.pubBanners[0]) window.pubBanners[0].off = 1;
+    loadBanners();
+    if (viewSlug && viewSlug===mySlug) {
+      if ($("pubBanner")) $("pubBanner").innerHTML = "";
+    }
+    if ($("banNote")) $("banNote").textContent = "Banner cancelled.";
+  } catch(e) {
+    if ($("banNote")) $("banNote").textContent = e.message;
+  }
+}
+$("banPreview") && ($("banPreview").onclick = ev => {
+  if (ev.target.closest("[data-ban-end]")) cancelMyBanner();
+});
+$("pubBanner") && ($("pubBanner").onclick = ev => {
+  if (ev.target.closest("[data-ban-end]")) cancelMyBanner();
+});
 $("banStart") && ($("banStart").onchange = paintBanStartShow);
 $("banStart") && ($("banStart").oninput = paintBanStartShow);
 $("banAdd") && ($("banAdd").onclick = async () => {
@@ -5103,7 +5127,7 @@ async function openPublic(slug, cardId){
     $("pubAva").innerHTML = ini+"<img alt=\"\" src=\"/u/"+encodeURIComponent(viewSlug)+"/avatar\" onerror=\"this.remove()\" />";
   }
   window.pubBanners = d.banners || [];
-  if ($("pubBanner")) $("pubBanner").innerHTML = bannerHtml((window.pubBanners||[])[0]);
+  if ($("pubBanner")) $("pubBanner").innerHTML = bannerHtml((window.pubBanners||[])[0], viewSlug===mySlug);
   following[viewSlug] = !!d.following;
   paintFollow();
   paintBinderLike(d.likes||0, !!d.liked);
@@ -5170,7 +5194,7 @@ $("goneBtn") && ($("goneBtn").onclick = async () => {
 });
 function tickBanners(){
   if ($("pubBanner") && $("pubPage") && $("pubPage").classList.contains("on"))
-    $("pubBanner").innerHTML = bannerHtml((window.pubBanners||[])[0]);
+    $("pubBanner").innerHTML = bannerHtml((window.pubBanners||[])[0], viewSlug===mySlug);
   if ($("banPreview") && $("youBanner") && !$("youBanner").classList.contains("hidden") && window.myBanner)
     $("banPreview").innerHTML = bannerHtml(window.myBanner, true);
 }

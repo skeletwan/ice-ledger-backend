@@ -2202,6 +2202,10 @@ def init_db():
     except sqlite3.OperationalError:
         pass
     try:
+        con.execute("ALTER TABLE banner_posts ADD COLUMN off INTEGER NOT NULL DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+    try:
         con.execute("ALTER TABLE notes ADD COLUMN batch TEXT")
     except sqlite3.OperationalError:
         pass
@@ -3784,7 +3788,7 @@ async def public_binder(slug: str, request: Request, x_token: str | None = Heade
         liked = bool(con.execute("SELECT user_id FROM binder_likes WHERE slug=? AND user_id=?", (slug, me)).fetchone())
         is_following = bool(con.execute("SELECT slug FROM follows WHERE follower=? AND slug=?", (me, slug)).fetchone())
     banners = con.execute(
-        "SELECT id,kind,title,body,url,color,created,starts,hours FROM banner_posts WHERE user_id=? ORDER BY id DESC LIMIT 12",
+        "SELECT id,kind,title,body,url,color,created,starts,hours,off FROM banner_posts WHERE user_id=? ORDER BY id DESC LIMIT 12",
         (u["id"],),
     ).fetchall()
     con.close()
@@ -3820,11 +3824,14 @@ def banner_row(r) -> dict:
     except (TypeError, ValueError):
         d["hours"] = 4
     d["hours"] = max(1, min(24, d["hours"]))
+    d["off"] = int(d.get("off") or 0)
     return d
 
 def banner_ended(b) -> bool:
-    if not b or not b.get("starts"):
+    if not b:
         return False
+    if int(b.get("off") or 0):
+        return True
     raw = str(b.get("starts") or "").replace("Z", "+00:00")
     try:
         start = datetime.fromisoformat(raw)
@@ -3887,7 +3894,7 @@ async def my_banners(request: Request, x_token: str | None = Header(default=None
     uid = require_user(request, x_token)
     con = db()
     rows = con.execute(
-        "SELECT id,kind,title,body,url,color,created,starts,hours FROM banner_posts WHERE user_id=? ORDER BY id DESC LIMIT 12",
+        "SELECT id,kind,title,body,url,color,created,starts,hours,off FROM banner_posts WHERE user_id=? ORDER BY id DESC LIMIT 12",
         (uid,),
     ).fetchall()
     con.close()
@@ -3927,7 +3934,7 @@ async def add_banner(payload: dict, request: Request, x_token: str | None = Head
     con = db()
     con.execute("DELETE FROM banner_posts WHERE user_id=?", (uid,))
     con.execute(
-        "INSERT INTO banner_posts(user_id,kind,title,body,url,color,created,starts,hours) VALUES(?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO banner_posts(user_id,kind,title,body,url,color,created,starts,hours,off) VALUES(?,?,?,?,?,?,?,?,?,0)",
         (uid, kind, title, body, url, color, time.strftime("%Y-%m-%dT%H:%M:%SZ"), starts or None, hours),
     )
     con.commit()
@@ -3943,6 +3950,15 @@ async def add_banner(payload: dict, request: Request, x_token: str | None = Head
     con.close()
     return {"ok": True, "id": rid}
 
+
+@app.post("/banners/cancel")
+async def cancel_banner(request: Request, x_token: str | None = Header(default=None)):
+    uid = require_user(request, x_token)
+    con = db()
+    con.execute("UPDATE banner_posts SET off=1 WHERE user_id=?", (uid,))
+    con.commit()
+    con.close()
+    return {"ok": True}
 
 @app.delete("/banners/{bid}")
 async def del_banner(bid: int, request: Request, x_token: str | None = Header(default=None)):
