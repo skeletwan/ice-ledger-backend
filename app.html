@@ -348,10 +348,10 @@
         <input id="email" type="email" autocomplete="username" />
         <div class="auth-pw">
           <label>Password</label>
-          <input id="password" type="password" name="password" autocomplete="current-password" placeholder="6+ characters" />
+          <input id="password" type="password" name="password" autocomplete="current-password" placeholder="Password" passwordrules="minlength: 8;" />
           <div class="signup-only">
             <label>Confirm password</label>
-            <input id="password2" type="password" name="password_confirm" autocomplete="new-password" placeholder="Type it again" />
+            <input id="password2" type="password" name="password_confirm" autocomplete="off" placeholder="Confirm password" />
           </div>
           <label class="show-pw"><input type="checkbox" id="showPw" /> Show password</label>
         </div>
@@ -366,7 +366,7 @@
           </div>
         </div>
         <div class="signup-actions">
-          <button type="submit" id="signupBtn">Create account</button>
+          <button type="submit" id="signupBtn" disabled>Create account</button>
           <div class="auth-links">
             <button type="button" id="toSignin">Already have an account</button>
           </div>
@@ -3873,6 +3873,9 @@ function setPwVisible(on, ids){
 }
 $("showPw") && ($("showPw").onchange = () => setPwVisible($("showPw").checked, ["password","password2"]));
 $("showResetPw") && ($("showResetPw").onchange = () => setPwVisible($("showResetPw").checked, ["resetPw"]));
+function lockSignup(){
+  if ($("signupBtn") && $("agreeLegal")) $("signupBtn").disabled = !$("agreeLegal").checked;
+}
 function setAuthMode(mode){
   const card = document.querySelector(".auth-card");
   if (card) card.setAttribute("data-mode", mode);
@@ -3882,15 +3885,20 @@ function setAuthMode(mode){
   if ($("authStatus")) { $("authStatus").className = "status"; $("authStatus").textContent = ""; }
   if ($("password")) {
     $("password").autocomplete = mode === "signup" ? "new-password" : "current-password";
-    $("password").placeholder = mode === "signup" ? "Use a strong password" : "6+ characters";
+    $("password").placeholder = "Password";
   }
-  if ($("password2")) $("password2").autocomplete = "new-password";
+  if ($("password2")) $("password2").autocomplete = "off";
+  if (mode === "signup" && $("password")) {
+    setTimeout(() => { try { $("password").focus(); } catch(e) {} }, 50);
+  }
+  lockSignup();
 }
 function authEmail(){
   return (($("email") && $("email").value) || "").trim().toLowerCase();
 }
 setAuthMode("signin");
 $("toSignup") && ($("toSignup").onclick = ev => { ev.preventDefault(); setAuthMode("signup"); });
+$("agreeLegal") && ($("agreeLegal").onchange = lockSignup);
 $("toSignin") && ($("toSignin").onclick = ev => { ev.preventDefault(); setAuthMode("signin"); });
 $("showReset") && ($("showReset").onclick = ev => { ev.preventDefault(); setAuthMode("reset"); });
 $("resetBack") && ($("resetBack").onclick = ev => { ev.preventDefault(); setAuthMode("signin"); });
