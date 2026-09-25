@@ -4402,6 +4402,9 @@ function fillStartInputs(iso){
   $("banStart").value = d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+"T"+p(d.getHours())+":"+p(d.getMinutes());
   paintBanStartShow();
 }
+function ownBinder(){
+  return !!(mySlug && viewSlug && viewSlug === mySlug);
+}
 function bannerHtml(b, mine){
   if (!b || !b.title) return "";
   const st = bannerState(b);
@@ -4439,7 +4442,7 @@ async function cancelMyBanner(){
     if (window.myBanner) window.myBanner.off = 1;
     if (window.pubBanners && window.pubBanners[0]) window.pubBanners[0].off = 1;
     loadBanners();
-    if (viewSlug && viewSlug===mySlug) {
+    if (ownBinder()) {
       if ($("pubBanner")) $("pubBanner").innerHTML = "";
     }
     if ($("banNote")) $("banNote").textContent = "Banner cancelled.";
@@ -5127,7 +5130,7 @@ async function openPublic(slug, cardId){
     $("pubAva").innerHTML = ini+"<img alt=\"\" src=\"/u/"+encodeURIComponent(viewSlug)+"/avatar\" onerror=\"this.remove()\" />";
   }
   window.pubBanners = d.banners || [];
-  if ($("pubBanner")) $("pubBanner").innerHTML = bannerHtml((window.pubBanners||[])[0], viewSlug===mySlug);
+  if ($("pubBanner")) $("pubBanner").innerHTML = bannerHtml((window.pubBanners||[])[0], ownBinder());
   following[viewSlug] = !!d.following;
   paintFollow();
   paintBinderLike(d.likes||0, !!d.liked);
@@ -5194,7 +5197,7 @@ $("goneBtn") && ($("goneBtn").onclick = async () => {
 });
 function tickBanners(){
   if ($("pubBanner") && $("pubPage") && $("pubPage").classList.contains("on"))
-    $("pubBanner").innerHTML = bannerHtml((window.pubBanners||[])[0], viewSlug===mySlug);
+    $("pubBanner").innerHTML = bannerHtml((window.pubBanners||[])[0], ownBinder());
   if ($("banPreview") && $("youBanner") && !$("youBanner").classList.contains("hidden") && window.myBanner)
     $("banPreview").innerHTML = bannerHtml(window.myBanner, true);
 }
