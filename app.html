@@ -3045,7 +3045,7 @@ function soldForCopyFromApi(card, d){
 }
 function publicCad(c){
   if (!c) return null;
-  return asCad(c.sysComp) || asCad(c.comp);
+  return binderCad(c) || asCad(c.sysComp) || asCad(c.comp);
 }
 function tierFromCad(n){
   if (n==null || isNaN(+n) || +n < 5) return "";

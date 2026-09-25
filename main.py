@@ -2257,41 +2257,72 @@ def is_grail(c):
         return True
     return False
 
+def _cad(v):
+    if v is None or v == "":
+        return None
+    try:
+        n = float(str(v).replace(",", "").replace("$", "").strip())
+    except (TypeError, ValueError):
+        return None
+    if 1 <= n <= 20000:
+        return n
+    return None
+
+def _grade_tier(g, gr):
+    s = str(gr or "").lower()
+    svc = str(g or "").upper()
+    if svc == "BGS" and "black" in s:
+        return "Black"
+    if "9.5" in s:
+        return "9.5"
+    if re.search(r"(^|[^0-9])10([^0-9]|$)", s) or str(gr or "").strip() == "10":
+        return "10"
+    m = re.search(r"\b([6-9])(?:\.0)?\b", s)
+    return m.group(1) if m else str(gr or "").strip()
+
 def card_market(c):
     if not isinstance(c, dict):
         return None
     book = c.get("book") if isinstance(c.get("book"), dict) else {}
     g = str(c.get("grader") or "Raw").upper()
-    gr = str(c.get("grade") or "").strip()
-    keys = []
-    if g in ("", "RAW"):
-        keys = ["rawComp", "sysComp", "Raw", "raw"]
-    elif g == "PSA":
-        tier = "10" if gr.startswith("10") else ("9" if gr.startswith("9") else ("8" if gr.startswith("8") else ("7" if gr.startswith("7") else ("6" if gr.startswith("6") else ""))))
-        if tier:
-            keys = [f"psa{tier}Comp", f"PSA {tier}", f"PSA|{tier}", "sysComp"]
-    elif g == "BGS":
-        if "black" in gr.lower():
-            keys = ["bgsBlackComp", "BGS Black", "sysComp"]
-        elif "9.5" in gr:
-            keys = ["bgs95Comp", "BGS 9.5", "sysComp"]
-        elif gr.startswith("10"):
-            keys = ["bgs10Comp", "BGS 10", "sysComp"]
-        else:
-            keys = ["bgs9Comp", "BGS 9", "sysComp"]
-    else:
-        keys = ["sysComp"]
-    for k in keys:
-        v = c.get(k)
-        if v is None:
-            v = book.get(k)
-        try:
-            n = float(v)
-        except (TypeError, ValueError):
-            continue
-        if 1 <= n <= 20000:
-            return n
-    return None
+    tier = _grade_tier(g, c.get("grade"))
+    copy = _cad(c.get("sysComp")) or _cad(c.get("comp"))
+
+    def grab(*keys):
+        for k in keys:
+            if not k:
+                continue
+            n = _cad(c.get(k)) or _cad(book.get(k))
+            if n is not None:
+                return n
+        return None
+
+    if not g or g == "RAW":
+        return grab("rawComp", "Raw", "raw", "raw_cad") or copy
+    if g == "PSA":
+        field = {"6": "psa6Comp", "7": "psa7Comp", "8": "psa8Comp", "9": "psa9Comp", "10": "psa10Comp"}.get(tier)
+        return grab(field, f"PSA {tier}", f"PSA|{tier}", f"psa{tier}_cad") or copy
+    if g == "BGS":
+        if tier == "Black":
+            return grab("bgsBlackComp", "BGS Black", "bgs_black_cad") or copy
+        if tier == "9.5":
+            return grab("bgs95Comp", "BGS 9.5", "bgs95_cad") or copy
+        if tier == "10":
+            return grab("bgs10Comp", "BGS 10", "bgs10_cad") or copy
+        if tier == "9":
+            return grab("bgs9Comp", "BGS 9", "bgs9_cad") or copy
+        return grab(f"BGS {tier}") or copy
+    if g == "SGC":
+        return grab("sgc10Comp" if tier == "10" else "", f"SGC {tier}", "sgc10_cad") or copy
+    if g == "KSA":
+        if tier == "9.5":
+            return grab("ksa95Comp", "KSA 9.5") or copy
+        if tier == "10":
+            return grab("ksa10Comp", "KSA 10") or copy
+        if tier == "9":
+            return grab("ksa9Comp", "KSA 9") or copy
+        return grab(f"KSA {tier}") or copy
+    return grab(f"{g} {tier}") or copy
 
 def public_card(raw: dict) -> dict:
     c = dict(raw or {})
@@ -2316,6 +2347,20 @@ def public_card(raw: dict) -> dict:
         "added": c.get("added"),
         "grail": is_grail(c),
         "caption": str(c.get("caption") or "")[:140],
+        "rawComp": c.get("rawComp"),
+        "psa6Comp": c.get("psa6Comp"),
+        "psa7Comp": c.get("psa7Comp"),
+        "psa8Comp": c.get("psa8Comp"),
+        "psa9Comp": c.get("psa9Comp"),
+        "psa10Comp": c.get("psa10Comp"),
+        "bgs9Comp": c.get("bgs9Comp"),
+        "bgs95Comp": c.get("bgs95Comp"),
+        "bgs10Comp": c.get("bgs10Comp"),
+        "bgsBlackComp": c.get("bgsBlackComp"),
+        "sgc10Comp": c.get("sgc10Comp"),
+        "ksa9Comp": c.get("ksa9Comp"),
+        "ksa95Comp": c.get("ksa95Comp"),
+        "ksa10Comp": c.get("ksa10Comp"),
     }
 
 init_db()
