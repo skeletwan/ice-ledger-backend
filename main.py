@@ -1051,16 +1051,23 @@ def search_queries(card: dict) -> list:
     else:
         product = re.sub(r"^(upper deck|ud)\s+", "", st, flags=re.I).strip() or st
 
-    parts = [_player_q(player), _q_token(product)]
-    color = re.sub(r"/.*", "", par).strip()
-    run = re.search(r"/\s*(\d{1,4})", par)
-    if color and color.lower() not in (product.lower(), "base", "parallel"):
-        parts.append(_q_token(color))
-    if run:
-        parts.append("/" + run.group(1))
     code = _num_q(num)
-    if code:
-        parts.append(code)
+    letter_code = bool(re.search(r"[A-Za-z]", num) and re.search(r"\d", num))
+    if letter_code and code:
+        parts = [_player_q(player), code]
+        yq = _season_q(year)
+        if yq:
+            parts.append(yq)
+    else:
+        parts = [_player_q(player), _q_token(product)]
+        color = re.sub(r"/.*", "", par).strip()
+        run = re.search(r"/\s*(\d{1,4})", par)
+        if color and color.lower() not in (product.lower(), "base", "parallel"):
+            parts.append(_q_token(color))
+        if run:
+            parts.append("/" + run.group(1))
+        if code:
+            parts.append(code)
     q = " ".join(x for x in parts if x)
     q += " -(lot,checklist,reprint,bundle)"
     return [q]
