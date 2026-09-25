@@ -1243,7 +1243,7 @@ async def _card_api_rows(client, q: str, extra: dict) -> list:
     global CARD_API_QUOTA
     if CARD_API_QUOTA or not q:
         return []
-    start = (now_toronto() - timedelta(days=7)).date().isoformat()
+    start = (now_toronto() - timedelta(days=90)).date().isoformat()
     params = {"q": q, "limit": 25, "date_from": start}
     params.update(extra or {})
     r = await client.get(
