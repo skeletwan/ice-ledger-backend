@@ -655,24 +655,7 @@ Never use the card number, year, print run, or cert as a price.
 """
 
 def _order_grades(data: dict) -> dict:
-    if not isinstance(data, dict):
-        return data
-    def climb(keys):
-        floor = None
-        for k in keys:
-            try:
-                v = float(data.get(k))
-            except (TypeError, ValueError):
-                continue
-            if v < 1:
-                continue
-            if floor is not None and v < floor:
-                data[k] = floor
-            else:
-                floor = v
-    climb(("psa6_cad","psa7_cad","psa8_cad","psa9_cad","psa10_cad"))
-    climb(("bgs9_cad","bgs95_cad","bgs10_cad","bgs_black_cad"))
-    return data
+    return data if isinstance(data, dict) else data
 
 def _usd_to_cad(n):
     try:
@@ -3888,6 +3871,15 @@ async def admin_hide(payload: dict, request: Request, x_token: str | None = Head
     con.commit()
     con.close()
     send_mail("Clappers PC comment hidden", f"Comment {cid} hidden by operator")
+    return {"ok": True}
+
+@app.post("/admin/clear-inbox")
+async def admin_clear_inbox(request: Request, x_token: str | None = Header(default=None)):
+    require_operator(request, x_token)
+    con = db()
+    con.execute("DELETE FROM reports")
+    con.commit()
+    con.close()
     return {"ok": True}
 
 @app.post("/admin/dismiss-report")

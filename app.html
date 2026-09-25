@@ -117,8 +117,8 @@
     .auth-links { display:flex; justify-content:space-between; gap:12px; margin-top:12px; }
     .auth-links button { width:auto; margin:0; padding:0; background:none; border:0; color:var(--ice); font-size:13px; font-weight:600; }
     .pw-wrap { position:relative; }
-    .pw-wrap input { padding-right:72px; }
-    .pw-wrap .eye { position:absolute; right:6px; top:4px; width:auto; margin:0; padding:8px 10px; font-size:12px; background:transparent; border:0; color:var(--ice); }
+    .pw-wrap input { padding-right:76px; position:relative; z-index:1; }
+    .pw-wrap .eye { position:absolute; right:6px; top:4px; z-index:5; width:auto; margin:0; padding:8px 10px; font-size:12px; background:#121b22; border:0; color:var(--ice); }
     .card { margin-top:14px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; }
     .card h2 { margin:0 0 4px; font-size:20px; }
     .line { color:var(--muted); font-size:14px; margin-bottom:10px; }
@@ -346,13 +346,13 @@
         <input id="email" type="email" autocomplete="username" />
         <label>Password</label>
         <div class="pw-wrap">
-          <input id="password" type="password" autocomplete="current-password" placeholder="6+ characters" />
+          <input id="password" type="password" name="password" autocomplete="current-password" placeholder="6+ characters" />
           <button type="button" class="eye" data-eye="password">Show</button>
         </div>
         <div class="signup-only">
           <label>Confirm password</label>
           <div class="pw-wrap">
-            <input id="password2" type="password" autocomplete="new-password" placeholder="Type it again" />
+            <input id="password2" type="password" name="password_confirm" autocomplete="new-password" placeholder="Type it again" />
             <button type="button" class="eye" data-eye="password2">Show</button>
           </div>
           <label style="margin-top:14px"><input id="agreeLegal" type="checkbox" style="width:auto;margin-right:8px" /> I agree to the <a href="/terms#terms-of-service" target="_blank" rel="noopener">Terms</a>, <a href="/aup#acceptable-use-policy" target="_blank" rel="noopener">Acceptable Use</a>, and <a href="/privacy#privacy-policy" target="_blank" rel="noopener">Privacy Policy</a></label>
@@ -674,6 +674,13 @@
       <button class="ghost" id="likeBtn">Like · 0</button>
       <button class="ghost hidden" id="cardLikers" style="margin:0"></button>
     </div>
+    <button type="button" class="ghost" id="pubCmtBtn">Comments (0)</button>
+    <div id="pubCmtWrap" class="hidden">
+      <div id="pubComments"></div>
+      <textarea id="pubBody" rows="2" placeholder="Comment"></textarea>
+      <button id="pubPost">Post</button>
+      <p class="status" id="pubCStatus"></p>
+    </div>
     <div class="vals one">
       <div class="val"><b id="pubHold">—</b><span>This copy</span></div>
     </div>
@@ -699,11 +706,6 @@
       <div class="mini-trend-top"><span class="mini-last" id="pubTrendVal">—</span><span class="mini-chg flat" id="pubTrendNote"></span></div>
       <svg class="mini-spark" id="pubSpark" viewBox="0 0 300 86" preserveAspectRatio="none"></svg>
     </div>
-    <h3 style="font-size:14px;margin:16px 0 8px">Comments</h3>
-    <div id="pubComments"></div>
-    <textarea id="pubBody" rows="2" placeholder="Comment"></textarea>
-    <button id="pubPost">Post</button>
-    <p class="status" id="pubCStatus"></p>
     <button type="button" class="ghost" id="pubMktBtn">Market</button>
     <div id="pubMarket" class="hidden">
     <div class="row2">
@@ -829,9 +831,9 @@
     <h3 style="font-size:15px;margin:16px 0 8px">Clappers+ / Rip Night!</h3>
     <p class="muted" id="youQuota"></p>
     <button class="ghost" id="youPayBtn">Clappers+</button>
-    <p class="muted">$8 / 30 days · 200 IDs + 30 book refreshes</p>
+    <p class="muted">$8 / month · 200 IDs</p>
     <button class="ghost" id="youRipBtn">Rip Night!</button>
-    <p class="muted">$2.99 · 20 extra IDs for 30 days</p>
+    <p class="muted">$2.99 · 20 IDs</p>
     <label>Have a code?</label>
     <div class="row2" style="align-items:end">
       <input id="youRipCode" placeholder="RIP-XXXXXX" autocomplete="off" />
@@ -859,6 +861,7 @@
     <h3 style="font-size:15px;margin:16px 0 8px">Moderation</h3>
     <p class="muted" id="modStats">Load the inbox to see reports. Hide and unhide from each card.</p>
     <button class="ghost" id="modLoad">Load inbox</button>
+    <button class="ghost" id="modClearInbox">Empty inbox</button>
     <div id="modList"></div>
     <h3 style="font-size:15px;margin:16px 0 8px">Rip codes</h3>
     <label>IDs on the code</label>
@@ -947,6 +950,13 @@
     <h2 id="dPlayer" style="margin:14px 0 4px"></h2>
     <div id="dChips"></div>
     <p class="muted" id="dLine"></p>
+    <button type="button" class="ghost" id="ownCmtBtn">Comments (0)</button>
+    <div id="ownCmtWrap" class="hidden">
+      <div id="ownComments"></div>
+      <textarea id="ownBody" rows="2" placeholder="Comment"></textarea>
+      <button id="ownPost">Post</button>
+      <p class="muted" id="ownCNote"></p>
+    </div>
     <div class="vals">
       <div class="val"><b id="vHold">—</b><span>This copy</span></div>
       <div class="val"><b id="vPaid">—</b><span>Paid</span></div>
@@ -975,11 +985,6 @@
       <div class="mini-trend-top"><span class="mini-last" id="cardTrendVal">—</span><span class="mini-chg flat" id="cardTrendNote"></span></div>
       <svg class="mini-spark" id="cardSpark" viewBox="0 0 300 86" preserveAspectRatio="none"></svg>
     </div>
-    <h3 style="font-size:14px;margin:16px 0 8px">Comments</h3>
-    <div id="ownComments"></div>
-    <textarea id="ownBody" rows="2" placeholder="Comment"></textarea>
-    <button id="ownPost">Post</button>
-    <p class="muted" id="ownCNote"></p>
     <button type="button" class="ghost" id="dMktBtn">Market</button>
     <div id="dMarket" class="hidden">
     <p class="muted" id="dNotes"></p>
@@ -1789,7 +1794,7 @@ function scheduleDaily(){
   if (next <= now) next.setDate(next.getDate()+1);
   noteTimer = setTimeout(() => {
     const t = totals();
-    ping("Clappers PC daily", t.mktN ? ("Binder book "+money(t.mkt)+" · "+t.cards+" cards") : "Open Clappers PC to refresh comps.");
+    ping("Clappers PC daily", t.mktN ? ("Binder book "+money(t.mkt)+" · "+t.cards+" cards") : "Open Clappers PC.");
     scheduleDaily();
   }, next - now);
 }
@@ -3255,24 +3260,6 @@ $("dDel").onclick = () => {
   show("bind");
 };
 function orderGrades(card){
-  if (!card) return card;
-  const b = card.book || {};
-  const climb = rows => {
-    let floor = null;
-    rows.forEach(row => {
-      const k = row[0], f = row[1];
-      let v = keepMoney(card[f], b[k]);
-      if (v == null) return;
-      if (floor != null && v < floor) v = floor;
-      floor = v;
-      card[f] = v;
-      b[k] = v;
-    });
-  };
-  climb([["PSA 6","psa6Comp"],["PSA 7","psa7Comp"],["PSA 8","psa8Comp"],["PSA 9","psa9Comp"],["PSA 10","psa10Comp"]]);
-  climb([["BGS 9","bgs9Comp"],["BGS 9.5","bgs95Comp"],["BGS 10","bgs10Comp"],["BGS Black","bgsBlackComp"]]);
-  climb([["KSA 9","ksa9Comp"],["KSA 9.5","ksa95Comp"],["KSA 10","ksa10Comp"]]);
-  card.book = b;
   return card;
 }
 function keepMoney(next, prev){
@@ -3470,7 +3457,7 @@ async function refreshBookNow(auto){
   if (ok && !owner) localStorage.setItem("ice-book-day", day);
   if (ok && auto) localStorage.setItem("ice-book-auto", day);
   note.textContent = ok
-    ? ("Updated "+ok+" card"+(ok===1?"":"s")+"."+(owner?"":" Book point saved for today."))
+    ? ("Updated "+ok+" card"+(ok===1?"":"s")+".")
     : "Refresh ran but no new solds landed. Ticker still uses current binder total.";
   paintTicker();
   btn.textContent = "Refresh book";
@@ -3561,7 +3548,7 @@ async function refreshUsage(){
 }
 function showPaywall(msg){
   if ($("quotaBox")) {
-    $("quotaBox").textContent = msg || "No IDs left. Clappers+ is $8 / 30 days · 200 IDs.";
+    $("quotaBox").textContent = msg || "No IDs left. Clappers+ is $8 / month · 200 IDs.";
     $("quotaBox").className = "quota-chip err";
   }
   show("scan");
@@ -3571,9 +3558,14 @@ async function unlockPlus(){
   if (!secret) { if ($("plusNote")) $("plusNote").textContent = "Paste APP_SECRET from Railway first."; show("set"); return; }
   const p = await authPost("/plus", { secret, token: token() });
   await refreshUsage();
-  if ($("plusNote")) $("plusNote").textContent = "Clappers+ on. "+p.left+" IDs in this 30-day window.";
-  if ($("quotaBox")) { $("quotaBox").textContent = "Clappers+ · "+p.left+" IDs · 30 days"; $("quotaBox").className = "quota-chip ok"; }
+  if ($("plusNote")) $("plusNote").textContent = "Clappers+ on. "+p.left+" IDs this month.";
+  if ($("quotaBox")) { $("quotaBox").textContent = "Clappers+ · "+p.left+" IDs"; $("quotaBox").className = "quota-chip ok"; }
 }
+$("modClearInbox") && ($("modClearInbox").onclick = async () => {
+  if (!confirm("Clear all reports from the inbox?")) return;
+  await fetch("/admin/clear-inbox", { method:"POST", headers:{ "x-token": token() } });
+  if ($("modLoad")) $("modLoad").click();
+});
 $("modLoad") && ($("modLoad").onclick = async () => {
   const box = $("modList");
   const r = await fetch("/admin/inbox", { headers:{ "x-token": token() } });
@@ -3894,6 +3886,11 @@ function setAuthMode(mode){
     $("authLead").textContent = mode === "signup" ? "Create an account." : mode === "reset" ? "We’ll email a code to reset your password." : "Sign in to your binder.";
   }
   if ($("authStatus")) { $("authStatus").className = "status"; $("authStatus").textContent = ""; }
+  if ($("password")) {
+    $("password").autocomplete = mode === "signup" ? "new-password" : "current-password";
+    $("password").placeholder = mode === "signup" ? "Use a strong password" : "6+ characters";
+  }
+  if ($("password2")) $("password2").autocomplete = "new-password";
 }
 function authEmail(){
   return (($("email") && $("email").value) || "").trim().toLowerCase();
@@ -4302,6 +4299,8 @@ async function loadComments(slug, cid, box){
   const d = await r.json();
   const list = d.comments || [];
   box.innerHTML = list.length ? list.map(c => commentBlock(c, false)).join("") : "<p class=\"muted\">No comments yet.</p>";
+  if (box.id === "ownComments" && $("ownCmtBtn")) $("ownCmtBtn").textContent = "Comments ("+list.length+")";
+  if (box.id === "pubComments" && $("pubCmtBtn")) $("pubCmtBtn").textContent = "Comments ("+list.length+")";
   box.onclick = async ev => {
     const go = ev.target.closest("[data-open-user]");
     if (go) { openPublic(go.getAttribute("data-open-user")); return; }
@@ -4370,6 +4369,8 @@ async function postComment(slug, cid, ta, box, note, parentId){
   loadComments(slug, cid, box);
   refreshNotesBadge();
 }
+$("ownCmtBtn") && ($("ownCmtBtn").onclick = () => { if ($("ownCmtWrap")) $("ownCmtWrap").classList.toggle("hidden"); });
+$("pubCmtBtn") && ($("pubCmtBtn").onclick = () => { if ($("pubCmtWrap")) $("pubCmtWrap").classList.toggle("hidden"); });
 $("ownPost") && ($("ownPost").onclick = () => {
   if (mySlug && openId) postComment(mySlug, openId, $("ownBody"), $("ownComments"), $("ownCNote"));
 });
