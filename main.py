@@ -3452,12 +3452,32 @@ async def my_follows(request: Request, x_token: str | None = Header(default=None
     con.close()
     return {"slugs": [r["slug"] for r in rows]}
 
+def note_kind_body(body: str) -> str:
+    b = (body or "").lower()
+    if "clappers management" in b:
+        return "mgmt"
+    if "banner" in b:
+        return "banner"
+    if "grail" in b:
+        return "grail"
+    if "liked" in b:
+        return "like"
+    if "comment" in b or "replied" in b:
+        return "comment"
+    return "card"
+
+def prune_notes(con, uid: int):
+    cutoff = (now_utc() - timedelta(days=14)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    con.execute("DELETE FROM notes WHERE user_id=? AND created < ?", (uid, cutoff))
+
 @app.get("/notes")
 async def list_notes(request: Request, x_token: str | None = Header(default=None)):
     uid = require_user(request, x_token)
     con = db()
+    prune_notes(con, uid)
+    con.commit()
     rows = con.execute(
-        "SELECT id,slug,body,created,read,card_id FROM notes WHERE user_id=? ORDER BY id DESC LIMIT 60",
+        "SELECT id,slug,body,created,read,card_id FROM notes WHERE user_id=? ORDER BY id DESC LIMIT 400",
         (uid,),
     ).fetchall()
     unread = con.execute("SELECT COUNT(*) AS n FROM notes WHERE user_id=? AND read=0", (uid,)).fetchone()["n"]
@@ -3477,6 +3497,21 @@ async def read_notes(payload: dict | None = None, request: Request = None, x_tok
     con.commit()
     con.close()
     return {"ok": True}
+
+@app.post("/notes/clear")
+async def clear_notes(payload: dict | None = None, request: Request = None, x_token: str | None = Header(default=None)):
+    uid = require_user(request, x_token)
+    kind = str((payload or {}).get("kind") or "").strip().lower()
+    con = db()
+    prune_notes(con, uid)
+    rows = con.execute("SELECT id,body FROM notes WHERE user_id=?", (uid,)).fetchall()
+    drop = [r["id"] for r in rows if not kind or note_kind_body(r["body"]) == kind]
+    if drop:
+        q = ",".join("?" * len(drop))
+        con.execute(f"DELETE FROM notes WHERE user_id=? AND id IN ({q})", [uid, *drop])
+    con.commit()
+    con.close()
+    return {"ok": True, "cleared": len(drop)}
 
 @app.post("/u/{slug}/cards/{cid}/like")
 async def toggle_like(slug: str, cid: str, request: Request, x_token: str | None = Header(default=None)):
