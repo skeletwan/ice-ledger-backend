@@ -2789,7 +2789,7 @@ function openDetail(id){
   if (holdLbl) holdLbl.textContent = (!c.grader || c.grader==="Raw") ? "This copy · Raw" : ("This copy · "+[c.grader,c.grade].filter(Boolean).join(" "));
   $("vPaid").textContent = money(c.cost);
   if ($("gSvc")) $("gSvc").value = (!c.grader || c.grader==="Raw") ? "Raw" : c.grader;
-  if ($("gNum")) $("gNum").value = c.grade || "10";
+  if ($("gNum")) $("gNum").value = gradeTier((c.grader||"Raw"), c.grade) || c.grade || "10";
   paintGradePick();
   paintCardSpark(c);
   $("dNotes").textContent = c.notes || "";
@@ -2835,6 +2835,15 @@ function photoSrc(c, slug){
   if (s && c.id) return "/u/"+encodeURIComponent(s)+"/cards/"+encodeURIComponent(c.id)+"/photo";
   return "";
 }
+function gradeTier(g, gr){
+  const s = String(gr || "").toLowerCase();
+  const svc = String(g || "").toUpperCase();
+  if (svc === "BGS" && /black/.test(s)) return "Black";
+  if (/9\.5/.test(s)) return "9.5";
+  if (/(^|[^0-9])10([^0-9]|$)/.test(s)) return "10";
+  const m = s.match(/\b([6-9])(?:\.0)?\b/);
+  return m ? m[1] : String(gr || "").trim();
+}
 function asCad(v){
   if (v==null || v==="") return null;
   const n = parseFloat(String(v).replace(/[^0-9.]/g,""));
@@ -2843,49 +2852,43 @@ function asCad(v){
 function binderCad(c){
   if (!c) return null;
   const g = String(c.grader||"Raw").toUpperCase();
-  const gr = String(c.grade||"");
-  if (g==="PSA" && gr.startsWith("10")) return asCad(bookGet(c,"PSA","10")) || asCad(c.psa10Comp);
-  if (g==="PSA" && gr.startsWith("9") && gr.indexOf("9.5")<0) return asCad(bookGet(c,"PSA","9")) || asCad(c.psa9Comp);
-  if (g==="PSA" && gr.startsWith("8")) return asCad(bookGet(c,"PSA","8")) || asCad(c.psa8Comp);
-  if (g==="PSA" && gr.startsWith("7")) return asCad(bookGet(c,"PSA","7")) || asCad(c.psa7Comp);
-  if (g==="PSA" && gr.startsWith("6")) return asCad(bookGet(c,"PSA","6")) || asCad(c.psa6Comp);
-  if (g==="BGS" && gr.indexOf("9.5")>=0) return asCad(bookGet(c,"BGS","9.5")) || asCad(c.bgs95Comp);
-  if (g==="BGS" && /black/i.test(gr)) return asCad(bookGet(c,"BGS","Black")) || asCad(c.bgsBlackComp);
-  if (g==="BGS" && gr.startsWith("10")) return asCad(bookGet(c,"BGS","10")) || asCad(c.bgs10Comp);
-  if (g==="BGS" && gr.startsWith("9")) return asCad(bookGet(c,"BGS","9")) || asCad(c.bgs9Comp);
-  if (g==="SGC" && gr.startsWith("10")) return asCad(bookGet(c,"SGC","10")) || asCad(c.sgc10Comp);
-  if (g==="KSA" && gr.indexOf("9.5")>=0) return asCad(bookGet(c,"KSA","9.5")) || asCad(c.ksa95Comp);
-  if (g==="KSA" && gr.startsWith("10")) return asCad(bookGet(c,"KSA","10")) || asCad(c.ksa10Comp);
-  if (g==="KSA" && gr.startsWith("9")) return asCad(bookGet(c,"KSA","9")) || asCad(c.ksa9Comp);
-  if (!g || g==="RAW") {
-    return asCad(c.rawComp) || asCad(bookGet(c,"Raw",""));
+  const tier = gradeTier(g, c.grade);
+  if (!g || g==="RAW") return asCad(c.rawComp) || asCad(bookGet(c,"Raw",""));
+  if (g==="PSA") {
+    const field = ({6:"psa6Comp",7:"psa7Comp",8:"psa8Comp",9:"psa9Comp","10":"psa10Comp"})[tier];
+    return asCad(bookGet(c,"PSA",tier)) || asCad(field && c[field]);
   }
-  return asCad(bookGet(c, c.grader||"Raw", c.grade||""));
+  if (g==="BGS") {
+    if (tier==="Black") return asCad(bookGet(c,"BGS","Black")) || asCad(c.bgsBlackComp);
+    if (tier==="9.5") return asCad(bookGet(c,"BGS","9.5")) || asCad(c.bgs95Comp);
+    if (tier==="10") return asCad(bookGet(c,"BGS","10")) || asCad(c.bgs10Comp);
+    if (tier==="9") return asCad(bookGet(c,"BGS","9")) || asCad(c.bgs9Comp);
+  }
+  if (g==="SGC" && tier==="10") return asCad(bookGet(c,"SGC","10")) || asCad(c.sgc10Comp);
+  if (g==="KSA") {
+    if (tier==="9.5") return asCad(bookGet(c,"KSA","9.5")) || asCad(c.ksa95Comp);
+    if (tier==="10") return asCad(bookGet(c,"KSA","10")) || asCad(c.ksa10Comp);
+    if (tier==="9") return asCad(bookGet(c,"KSA","9")) || asCad(c.ksa9Comp);
+  }
+  return asCad(bookGet(c, g, tier));
 }
 function soldForCopyFromApi(card, d){
   d = d || {};
   const g = String(card.grader||"Raw").toUpperCase();
-  const gr = String(card.grade||"");
+  const tier = gradeTier(g, card.grade);
   if (!g || g==="RAW") return d.raw_cad;
-  if (g==="PSA") {
-    if (gr.startsWith("10")) return d.psa10_cad;
-    if (gr.indexOf("9.5")>=0) return d.psa9_cad;
-    if (gr.startsWith("9")) return d.psa9_cad;
-    if (gr.startsWith("8")) return d.psa8_cad;
-    if (gr.startsWith("7")) return d.psa7_cad;
-    if (gr.startsWith("6")) return d.psa6_cad;
-  }
+  if (g==="PSA") return d["psa"+tier+"_cad"] || d["psa"+tier.replace(".","")+"_cad"];
   if (g==="BGS") {
-    if (gr.indexOf("9.5")>=0) return d.bgs95_cad;
-    if (/black/i.test(gr)) return d.bgs_black_cad;
-    if (gr.startsWith("10")) return d.bgs10_cad;
-    if (gr.startsWith("9")) return d.bgs9_cad;
+    if (tier==="Black") return d.bgs_black_cad;
+    if (tier==="9.5") return d.bgs95_cad;
+    if (tier==="10") return d.bgs10_cad;
+    if (tier==="9") return d.bgs9_cad;
   }
-  if (g==="SGC" && gr.startsWith("10")) return d.sgc10_cad;
+  if (g==="SGC" && tier==="10") return d.sgc10_cad;
   if (g==="KSA") {
-    if (gr.indexOf("9.5")>=0) return d.ksa95_cad;
-    if (gr.startsWith("10")) return d.ksa10_cad;
-    if (gr.startsWith("9")) return d.ksa9_cad;
+    if (tier==="9.5") return d.ksa95_cad;
+    if (tier==="10") return d.ksa10_cad;
+    if (tier==="9") return d.ksa9_cad;
   }
   return null;
 }

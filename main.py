@@ -877,6 +877,16 @@ def _sale_fits(title: str, q: str, player: str, parallel: str = "", number: str 
         return False
     if "renewed" in t and "renewed" not in ql:
         return False
+    if re.search(r"checklist", t) and "checklist" not in ql:
+        return False
+    if re.search(r"\bjumbo\b", t) and "jumbo" not in ql:
+        return False
+    if re.search(r"exclusives|exclusive", t) and "exclusive" not in ql:
+        return False
+    if re.search(r"\bretro\b|\bt-47\b", t) and "retro" not in ql and "t-47" not in ql:
+        return False
+    if re.search(r"carlsson", t) and "carlsson" not in (player or "").lower():
+        return False
     need = _par_need(parallel)
     if need:
         for n in need:
@@ -1643,25 +1653,7 @@ async def comp(
         except Exception:
             pass
     if data.get("suggested_cad") is None:
-        g = str(card.get("grader") or "Raw").upper()
-        gr = str(card.get("grade") or "")
-        pick = None
-        if g in ("", "RAW"):
-            pick = data.get("raw_cad")
-        elif g == "PSA" and gr.startswith("10"):
-            pick = data.get("psa10_cad")
-        elif g == "PSA" and gr.startswith("9"):
-            pick = data.get("psa9_cad")
-        elif g == "PSA" and gr.startswith("8"):
-            pick = data.get("psa8_cad")
-        elif g == "BGS" and re.search(r"black", gr):
-            pick = data.get("bgs_black_cad")
-        elif g == "BGS" and "9.5" in gr:
-            pick = data.get("bgs95_cad")
-        elif g == "SGC" and gr.startswith("10"):
-            pick = data.get("sgc10_cad")
-        else:
-            pick = data.get("raw_cad")
+        pick = _copy_sold(card, data)
         if pick is not None:
             data["suggested_cad"] = pick
     if not any(data.get(k) for k in money_keys):
@@ -1702,30 +1694,35 @@ async def comp(
 def _card_fp(c: dict) -> str:
     return card_fp(c)
 
+def _grade_tier(grader: str, grade: str) -> str:
+    s = (grade or "").lower()
+    g = (grader or "").upper()
+    if g == "BGS" and "black" in s:
+        return "black"
+    if "9.5" in s:
+        return "9.5"
+    if re.search(r"(^|[^0-9])10([^0-9]|$)", s):
+        return "10"
+    m = re.search(r"\b([6-9])(?:\.0)?\b", s)
+    return m.group(1) if m else (grade or "").strip()
+
 def _copy_sold(c: dict, data: dict):
     g = str(c.get("grader") or "Raw").upper()
-    gr = str(c.get("grade") or "").strip()
-    if g in ("", "RAW") or not gr:
+    tier = _grade_tier(g, c.get("grade") or "")
+    if g in ("", "RAW"):
         return data.get("raw_cad")
-    if g == "PSA" and gr.startswith("10"):
-        return data.get("psa10_cad")
-    if g == "PSA" and gr.startswith("9"):
-        return data.get("psa9_cad")
-    if g == "PSA" and gr.startswith("8"):
-        return data.get("psa8_cad")
-    if g == "PSA" and gr.startswith("7"):
-        return data.get("psa7_cad")
-    if g == "PSA" and gr.startswith("6"):
-        return data.get("psa6_cad")
-    if g == "BGS" and "black" in gr:
-        return data.get("bgs_black_cad")
-    if g == "BGS" and "9.5" in gr:
-        return data.get("bgs95_cad")
-    if g == "BGS" and gr.startswith("9"):
-        return data.get("bgs9_cad")
-    if g == "BGS" and gr.startswith("10"):
-        return data.get("bgs10_cad")
-    if g == "SGC" and gr.startswith("10"):
+    if g == "PSA":
+        return data.get(f"psa{tier}_cad")
+    if g == "BGS":
+        if tier == "black":
+            return data.get("bgs_black_cad")
+        if tier == "9.5":
+            return data.get("bgs95_cad")
+        if tier == "10":
+            return data.get("bgs10_cad")
+        if tier == "9":
+            return data.get("bgs9_cad")
+    if g == "SGC" and tier == "10":
         return data.get("sgc10_cad")
     return None
 
