@@ -1113,7 +1113,7 @@ function showApp(){
   $("appShell").classList.remove("hidden");
   document.body.classList.add("dock-on");
   loadNotePrefs(); scheduleDaily(); refreshNotesBadge(); checkGrails();
-  Promise.resolve(refreshUsage()).then(() => maybeAutoBook()).catch(()=>{});
+  Promise.resolve(refreshUsage()).catch(()=>{});
   loadMe().then(() => { paintTicker(); renderBinder(); }).catch(() => { paintTicker(); renderBinder(); });
   if (!window._noteTick) window._noteTick = setInterval(refreshNotesBadge, 25000);
 }
@@ -1172,6 +1172,8 @@ async function pullCloud(){
     keep.forEach(k => {
       if (!alive(c[k]) && alive(prev[k])) out[k] = prev[k];
     });
+    if (c.cost != null && c.cost !== "" && !isNaN(+c.cost)) out.cost = +c.cost;
+    else if (prev.cost != null && prev.cost !== "" && !isNaN(+prev.cost)) out.cost = +prev.cost;
     map[c.id] = out;
   });
   try { localStorage.setItem(KEY, JSON.stringify(Object.values(map))); }
@@ -1205,8 +1207,9 @@ function toFx(cad){
   return fx()==="USD" ? (+cad / USD_CAD) : +cad;
 }
 function money(n){
+  if (n==null || n==="" || isNaN(+n)) return "—";
   const v = toFx(n);
-  if (v==null) return "—";
+  if (v==null || isNaN(+v)) return "—";
   const cur = fx();
   return (cur==="USD"?"US$":"C$")+Number(v).toLocaleString(cur==="USD"?"en-US":"en-CA",{minimumFractionDigits:0,maximumFractionDigits:0});
 }
@@ -1491,7 +1494,7 @@ function show(id){
   if (id!=="set" && $("pNote")) $("pNote").textContent = "";
   if ($("opsPage")) $("opsPage").classList.toggle("on", id==="ops");
   if (id==="set") youShow("youHub");
-  if (id==="bind") renderBinder();
+  if (id==="bind") { renderBinder(); paintTicker(); }
   if (id==="search") renderSearch();
   if (id==="find" || id==="pub" || id==="notes" || id==="notesCat" || id==="feed") refreshNotesBadge();
   if (id==="feed") loadFeed();
@@ -2680,6 +2683,7 @@ async function saveToBinder(ev){
   window.idPending = false;
   paintResume();
   show("bind");
+  paintTicker();
   return false;
   } catch(e) {
     saveNote((e && e.message) || "Could not save. Try again.", "err");
@@ -3258,6 +3262,8 @@ $("saveEdit").onclick = () => {
   pushCard(cards[i]).catch(()=>{});
   editPhoto = "";
   if ($("editNote")) $("editNote").textContent = "Saved.";
+  paintTicker();
+  renderBinder();
   openDetail(openId);
 };
 $("dDel").onclick = () => {
@@ -3473,11 +3479,7 @@ async function refreshBookNow(auto){
 }
 $("refreshBook") && ($("refreshBook").onclick = () => refreshBookNow());
 async function maybeAutoBook(){
-  if (!window.lastOp && window.lastPlan !== "plus") return;
-  if (localStorage.getItem("ice-book-auto") === localDay()) return;
-  if (!load().length) return;
-  if ($("bookNote")) $("bookNote").textContent = "Updating…";
-  await refreshBookNow(true);
+  return;
 }
 function noteKind(n){
   const b = (n.body||"").toLowerCase();

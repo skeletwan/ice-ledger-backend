@@ -1,4 +1,4 @@
-import os, json, base64, time, re, sqlite3, hashlib, secrets, hmac
+import os, json, base64, time, re, sqlite3, hashlib, secrets, hmac, asyncio
 from datetime import datetime, timedelta, timezone
 try:
     from zoneinfo import ZoneInfo
@@ -2146,6 +2146,86 @@ def public_card(raw: dict) -> dict:
 
 init_db()
 
+def _night_mark(day: str | None = None) -> str:
+    con = db()
+    con.execute("CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT)")
+    if day:
+        con.execute("INSERT OR REPLACE INTO kv(k,v) VALUES('book_night_day',?)", (day,))
+        con.commit()
+        con.close()
+        return day
+    row = con.execute("SELECT v FROM kv WHERE k='book_night_day'").fetchone()
+    con.close()
+    return (row["v"] if row else "") or ""
+
+async def run_night_books():
+    con = db()
+    rows = con.execute("SELECT data FROM cards").fetchall()
+    con.close()
+    seen = set()
+    batch = []
+    for r in rows:
+        try:
+            c = json.loads(r["data"])
+        except Exception:
+            continue
+        fp = card_fp(c)
+        if not fp.strip("|") or fp in seen:
+            continue
+        seen.add(fp)
+        batch.append(c)
+    for c in batch:
+        fp = card_fp(c)
+        house, _hf = pack_house_card(c)
+        house_ok = False
+        if house:
+            try:
+                house_ok = any(float(house.get(k) or 0) > 2 for k in ("raw_cad","psa10_cad","psa9_cad","psa8_cad","suggested_cad"))
+            except (TypeError, ValueError):
+                house_ok = False
+        if house and house_ok and house.get("close_day") == today_iso():
+            spread_comp(fp, house)
+            continue
+        if CARD_API_QUOTA:
+            if house:
+                spread_comp(fp, house)
+            continue
+        extra = None
+        for qtry in search_queries(c) or [c.get("player") or ""]:
+            extra = await fetch_card_api(
+                qtry, c.get("player") or "", fp,
+                c.get("parallel") or "", c.get("number") or "",
+                c.get("grader") or "", c.get("grade") or "", c.get("year") or "",
+            )
+            if extra and not extra.get("quota") and extra.get("sample_count"):
+                break
+        if extra and extra.get("sample_count"):
+            spread_comp(fp, extra)
+        elif house:
+            spread_comp(fp, house)
+        await asyncio.sleep(0.15)
+
+async def night_loop():
+    await asyncio.sleep(25)
+    while True:
+        try:
+            now = now_toronto()
+            day = now.date().isoformat()
+            last = _night_mark()
+            ready = last != day and (now.hour > 0 or now.minute >= 8)
+            if ready and now.hour < 6:
+                print("NIGHT_BOOK_START", day, "cards-unique")
+                await run_night_books()
+                _night_mark(day)
+                print("NIGHT_BOOK_DONE", day)
+        except Exception as e:
+            print("NIGHT_BOOK_FAIL", e)
+        await asyncio.sleep(180)
+
+@app.on_event("startup")
+async def _boot_night():
+    asyncio.create_task(night_loop())
+
 def hash_pw(pw: str) -> str:
     salt = secrets.token_hex(16)
     dk = hashlib.pbkdf2_hmac("sha256", pw.encode(), salt.encode(), 120000)
@@ -2787,6 +2867,9 @@ async def list_cards(request: Request, x_token: str | None = Header(default=None
         pc = public_card(raw)
         pc["cost"] = raw.get("cost")
         pc["notes"] = raw.get("notes")
+        for k in ("rawComp","psa6Comp","psa7Comp","psa8Comp","psa9Comp","psa10Comp","bgs9Comp","bgs95Comp","bgs10Comp","bgsBlackComp","sgc10Comp"):
+            if raw.get(k) is not None:
+                pc[k] = raw.get(k)
         pc["has_photo"] = photo_file_exists(uid, pc.get("id") or "") or pc.get("has_photo")
         out.append(pc)
     return {"cards": out}
