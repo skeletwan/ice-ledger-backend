@@ -1524,6 +1524,9 @@ async def comp(
     card = {k: payload.get(k) for k in ("player","year","set","number","parallel","insert","team","grader","grade","cert")}
     scrub_false_yg(card)
     ck = card_fp(card)
+    house, house_fp = pack_house_card(card)
+    if house_fp:
+        ck = ck or house_fp
     day = time.strftime("%Y-%m-%d")
     ck_day = f"{ck}|{day}"
     nightly = bool(payload.get("auto") or payload.get("skip_web") or payload.get("force"))
@@ -1542,15 +1545,14 @@ async def comp(
             con.close()
         except Exception:
             pass
-    if ck.strip("|"):
-        house = pack_house(ck)
+    if ck.strip("|") and not force:
         house_ok = False
         if house:
             try:
                 house_ok = any(float(house.get(k) or 0) > 2 for k in ("raw_cad","psa10_cad","psa9_cad","psa8_cad","psa7_cad","suggested_cad"))
             except (TypeError, ValueError):
                 house_ok = False
-        if (not force) and house and house_ok and (CARD_API_QUOTA or house.get("close_day") == today_iso()):
+        if house and house_ok and (CARD_API_QUOTA or house.get("close_day") == today_iso()):
             if CARD_API_QUOTA:
                 house["quota"] = True
                 house["summary"] = "Market feed paused until tomorrow. Using last close."
@@ -2256,6 +2258,69 @@ def today_iso():
     return now_toronto().date().isoformat()
 
 def season_key(year: str) -> str:
+    y = (year or "").strip()
+    m = re.match(r"((?:19|20)\d{2})\s*[-/]\s*(\d{2,4})", y)
+    if m:
+        a = m.group(1)
+        return f"{a}-{str(int(a)+1)[2:]}"
+    m = re.match(r"^(\d{2})\s*[-/]\s*(\d{2})$", y)
+    if m:
+        a = int(m.group(1))
+        cen = "19" if a >= 50 else "20"
+        start = f"{cen}{a:02d}"
+        return f"{start}-{str(int(start)+1)[2:]}"
+    if re.match(r"(?:19|20)\d{2}$", y[:4] or ""):
+        a = y[:4]
+        return f"{a}-{str(int(a)+1)[2:]}"
+    ys = _season_years(y)
+    if len(ys) >= 2 and ys[0][:2] in ("19", "20"):
+        return f"{ys[0]}-{ys[1][-2:]}"
+    return y.lower()
+
+def card_fp(card: dict) -> str:
+    return "|".join([
+        str(card.get("player") or "").strip().lower(),
+        season_key(card.get("year") or ""),
+        str(card.get("set") or "").strip().lower(),
+        str(card.get("number") or "").strip().lower(),
+        str(card.get("parallel") or "").strip().lower(),
+        str(card.get("insert") or "").strip().lower(),
+    ])
+
+def card_fp_aliases(card: dict) -> list:
+    """Same card with 2010 vs 2010-11 vs 2010/2011 vs 10/11."""
+    player = str(card.get("player") or "").strip().lower()
+    st = str(card.get("set") or "").strip().lower()
+    num = str(card.get("number") or "").strip().lower()
+    par = str(card.get("parallel") or "").strip().lower()
+    ins = str(card.get("insert") or "").strip().lower()
+    raw = str(card.get("year") or "").strip()
+    years = [season_key(raw), raw.lower()]
+    ys = _season_years(raw)
+    if ys:
+        years.append(ys[0])
+        years.append(ys[0] + "-" + (ys[1][-2:] if len(ys) > 1 else str(int(ys[0]) + 1)[2:]))
+        if len(ys) > 1:
+            years.append(ys[0] + "/" + ys[1])
+            years.append(ys[0] + "-" + ys[1])
+            years.append(ys[0][2:] + "/" + ys[1][2:])
+            years.append(ys[0][2:] + "-" + ys[1][2:])
+    out = []
+    seen = set()
+    for y in years:
+        y = (y or "").strip().lower()
+        fp = "|".join([player, y, st, num, par, ins])
+        if fp not in seen:
+            seen.add(fp)
+            out.append(fp)
+    return out
+
+def pack_house_card(card: dict):
+    for fp in card_fp_aliases(card):
+        house = pack_house(fp)
+        if house:
+            return house, fp
+    return None, card_fp(card)
     y = (year or "").strip()
     if re.match(r"(?:19|20)\d{2}$", y[:4] or ""):
         a = y[:4]
