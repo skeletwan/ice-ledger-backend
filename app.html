@@ -220,7 +220,8 @@
     .board-post h3 { margin:0 0 4px; font-size:17px; font-weight:700; line-height:1.25; }
     .board-post .muted { margin:0; }
     .board-post .when { margin:4px 0 0; font-size:13px; font-weight:700; color:#fff; }
-    .live-chip { display:inline-block; margin-left:8px; padding:2px 8px; border-radius:999px; background:#d1263a; color:#fff; font-size:10px; font-weight:800; letter-spacing:.08em; vertical-align:middle; }
+    #banCard { overflow:hidden; }
+    #banCard input, #banCard select { max-width:100%; min-width:0; box-sizing:border-box; }
     .thread { margin-top:8px; }
     .c-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
     .c-actions button { width:auto; margin:0; padding:6px 10px; font-size:12px; }
@@ -788,7 +789,10 @@
       <label>Title <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0"> · card show, YouTube break, episode, live</span></label>
       <input id="banTitle" maxlength="80" placeholder="Saturday rip · Toronto card show" />
       <label>Starts</label>
-      <input id="banStart" type="datetime-local" />
+      <div class="row2">
+        <div><input id="banDate" type="date" /></div>
+        <div><input id="banTime" type="time" /></div>
+      </div>
       <label>Length</label>
       <select id="banHours">
         <option value="1">1 hour</option>
@@ -4345,12 +4349,15 @@ function bannerState(b){
   if (now < end) return { label: bannerWhen(b.starts), live:true, done:false };
   return { label:"Ended", live:false, done:true };
 }
-function toLocalInput(iso){
-  if (!iso) return "";
+function fillStartInputs(iso){
+  if ($("banDate")) $("banDate").value = "";
+  if ($("banTime")) $("banTime").value = "";
+  if (!iso) return;
   const d = new Date(iso);
-  if (isNaN(+d)) return "";
+  if (isNaN(+d)) return;
   const p = n => String(n).padStart(2,"0");
-  return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+"T"+p(d.getHours())+":"+p(d.getMinutes());
+  if ($("banDate")) $("banDate").value = d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate());
+  if ($("banTime")) $("banTime").value = p(d.getHours())+":"+p(d.getMinutes());
 }
 function bannerHtml(b, mine){
   if (!b || !b.title) return "";
@@ -4368,7 +4375,7 @@ function fillBannerForm(b){
   if ($("banBody")) $("banBody").value = b.body || "";
   if ($("banUrl")) $("banUrl").value = b.url || "";
   if ($("banColor") && b.color) $("banColor").value = b.color;
-  if ($("banStart")) $("banStart").value = toLocalInput(b.starts);
+  fillStartInputs(b.starts);
   if ($("banHours")) $("banHours").value = String(b.hours || 4);
 }
 async function loadBanners(){
@@ -4378,15 +4385,17 @@ async function loadBanners(){
   if (!r.ok) return;
   const d = await r.json();
   const b = (d.banners||[])[0];
+  window.myBanner = b || null;
   if (box) box.innerHTML = b ? bannerHtml(b, true) : "<p class=\"muted\">No banner yet.</p>";
   if (b) fillBannerForm(b);
 }
 $("banAdd") && ($("banAdd").onclick = async () => {
   try {
-    const startEl = $("banStart") && $("banStart").value;
+    const day = ($("banDate")&&$("banDate").value) || "";
+    const tm = ($("banTime")&&$("banTime").value) || "19:00";
     let starts = "";
-    if (startEl) {
-      const d = new Date(startEl);
+    if (day) {
+      const d = new Date(day+"T"+tm);
       if (!isNaN(+d)) starts = d.toISOString();
     }
     await authPost("/banners", {
@@ -4407,8 +4416,9 @@ $("banClear") && ($("banClear").onclick = async () => {
   const d = await r.json().catch(()=>({}));
   const b = (d.banners||[])[0];
   if (b && b.id) await fetch("/banners/"+b.id, { method:"DELETE", headers:{ "x-token": token() } });
-  ["banTitle","banBody","banUrl","banStart"].forEach(id => { if ($(id)) $(id).value = ""; });
+  ["banTitle","banBody","banUrl","banDate","banTime"].forEach(id => { if ($(id)) $(id).value = ""; });
   if ($("banNote")) $("banNote").textContent = "Banner removed.";
+  window.myBanner = null;
   if ($("banPreview")) $("banPreview").innerHTML = "<p class=\"muted\">No banner yet.</p>";
 });
 $("banList") && ($("banList").onclick = async ev => {
@@ -5050,7 +5060,8 @@ async function openPublic(slug, cardId){
     $("pubAva").style.background = hue;
     $("pubAva").innerHTML = ini+"<img alt=\"\" src=\"/u/"+encodeURIComponent(viewSlug)+"/avatar\" onerror=\"this.remove()\" />";
   }
-  if ($("pubBanner")) $("pubBanner").innerHTML = bannerHtml((d.banners||[])[0]);
+  window.pubBanners = d.banners || [];
+  if ($("pubBanner")) $("pubBanner").innerHTML = bannerHtml((window.pubBanners||[])[0]);
   following[viewSlug] = !!d.following;
   paintFollow();
   paintBinderLike(d.likes||0, !!d.liked);
@@ -5115,6 +5126,14 @@ $("goneBtn") && ($("goneBtn").onclick = async () => {
     location.reload();
   } catch(e) { if ($("goneNote")) $("goneNote").textContent = e.message; }
 });
+function tickBanners(){
+  if ($("pubBanner") && $("pubPage") && $("pubPage").classList.contains("on"))
+    $("pubBanner").innerHTML = bannerHtml((window.pubBanners||[])[0]);
+  if ($("banPreview") && $("youBanner") && !$("youBanner").classList.contains("hidden") && window.myBanner)
+    $("banPreview").innerHTML = bannerHtml(window.myBanner, true);
+}
+if (!window._banTick) window._banTick = setInterval(tickBanners, 10000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) tickBanners(); });
 const guestB = new URLSearchParams(location.search).get("b");
 const guestC = new URLSearchParams(location.search).get("c");
 if (guestB) {
