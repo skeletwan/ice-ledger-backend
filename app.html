@@ -3070,7 +3070,7 @@ function priceCol(c, val, kind){
   const up = mv && mv.pct>=0;
   const label = kind==="pub"
     ? "Market"
-    : ((!c || !c.grader || c.grader==="Raw") ? "This copy · Raw" : ("This copy · "+[c.grader,c.grade].filter(Boolean).join(" ")));
+    : ((!c || !c.grader || c.grader==="Raw") ? "Raw" : [c.grader,c.grade].filter(Boolean).join(" "));
   return "<div class=\"item-px\"><span class=\"px-lbl\">"+label+"</span><span class=\"px-val\">"+(val!=null?money(val):"—")+"</span>"+
     (mv?("<div class=\"row-chg "+(up?"up":"dn")+"\">"+(up?"+":"")+mv.pct.toFixed(1)+"% "+rowSpark(mv.pts,up)+"</div>"):"")+
     "</div>";
