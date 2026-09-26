@@ -907,6 +907,11 @@ def _sale_fits(title: str, q: str, player: str, parallel: str = "", number: str 
             return False
     elif re.search(r"young guns|\byg\b", t) and "young guns" not in (parallel or "").lower():
         return False
+    if "future watch" in ql:
+        if not re.search(r"future watch|\bfw\b|\bfwrc\b", t):
+            return False
+    elif re.search(r"future watch|\bfwrc\b", t) and "future watch" not in (parallel or "").lower() and "future watch" not in (q or "").lower():
+        return False
     if "renewed" in t and "renewed" not in ql:
         return False
     if re.search(r"checklist", t) and "checklist" not in ql:
@@ -1086,6 +1091,11 @@ def _q_token(s: str) -> str:
     s = (s or "").strip()
     if not s:
         return ""
+    low = s.lower()
+    if low == "future watch":
+        return "(Future Watch,FW,FWRC)"
+    if low in ("sp authentic", "spa"):
+        return "(SP Authentic,SPA)"
     return f'"{s}"' if " " in s else s
 
 
