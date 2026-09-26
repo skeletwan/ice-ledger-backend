@@ -1044,6 +1044,10 @@
       <button class="ghost" id="modCreatorOn">Give creator scans</button>
       <button class="ghost" id="modCreatorOff">Remove creator scans</button>
     </div>
+    <div class="row2">
+      <button class="ghost" id="modEventsOn">Creator events on</button>
+      <button class="ghost" id="modEventsOff">Creator events off</button>
+    </div>
     <button class="ghost" id="modResetIds">Reset IDs this cycle</button>
     <div class="row2">
       <button class="ghost" id="modSuspend">Suspend</button>
@@ -1104,6 +1108,8 @@
       <p class="muted"><a href="mailto:hello@clapperspc.com" style="color:var(--ice)">hello@clapperspc.com</a></p>
       <a class="btn" href="mailto:hello@clapperspc.com?subject=Clappers%20PC%20feedback">Email support / feedback</a>
       <a class="ghost btn" href="mailto:hello@clapperspc.com?subject=Clappers%20PC%20scan%20miss&body=Player%3A%0AYear%3A%0ASet%3A%0ANumber%3A%0AWhat%20the%20app%20said%3A%0AWhat%20it%20should%20be%3A%0A">Report a scan miss</a>
+      <button type="button" class="ghost" id="askCreator">Request creator</button>
+      <p class="muted" id="askCreatorNote">Creator lets you post streams and card shows on your banner. Stock cover stays open for everyone.</p>
     </div>
     <div class="card" style="margin-top:12px">
       <h3 style="margin:0 0 8px;font-size:15px">Legal</h3>
@@ -4213,7 +4219,7 @@ $("modLookup") && ($("modLookup").onclick = async () => {
     if (!r.ok) throw new Error(t.slice(0,160));
     const d = JSON.parse(t);
     const ban = d.banner ? (d.banner.title||"banner") : "none";
-    $("modUserCard").innerHTML = "<div class=\"item\" style=\"cursor:default\"><b>"+(d.display||d.slug||"")+"</b><div class=\"muted\">"+d.email+" · /"+d.slug+"</div><div class=\"muted\">Joined "+String(d.created||"").slice(0,10)+" · "+(d.plan||"free")+" · "+(d.suspended?"SUSPENDED":"active")+"</div><div class=\"muted\">"+d.cards+" cards · "+d.comments+" comments ("+d.hidden_comments+" hidden) · "+d.reports+" reports · photo "+(d.avatar_hidden?"hidden":(d.has_avatar?"on":"none"))+" · banner "+ban+"</div></div>";
+    $("modUserCard").innerHTML = "<div class=\"item\" style=\"cursor:default\"><b>"+(d.display||d.slug||"")+"</b><div class=\"muted\">"+d.email+" · /"+d.slug+"</div><div class=\"muted\">Joined "+String(d.created||"").slice(0,10)+" · "+(d.plan||"free")+(d.creator?" · creator events":"")+(d.creator_asked && !d.creator?" · asked creator":"")+" · "+(d.suspended?"SUSPENDED":"active")+"</div><div class=\"muted\">"+d.cards+" cards · "+d.comments+" comments ("+d.hidden_comments+" hidden) · "+d.reports+" reports · photo "+(d.avatar_hidden?"hidden":(d.has_avatar?"on":"none"))+" · banner "+ban+"</div></div>";
     lastModSlug = d.slug || "";
     lastModEmail = d.email || "";
     $("modUserNote").textContent = "Loaded "+(d.display||d.slug||d.email)+". Actions apply to this person only.";
@@ -4253,7 +4259,15 @@ $("modCreatorOn") && ($("modCreatorOn").onclick = async () => {
   catch(e){ $("modUserNote").textContent = e.message; }
 });
 $("modCreatorOff") && ($("modCreatorOff").onclick = async () => {
-  try { const d = await modAccount("/admin/plan", { plan:"free" }); $("modUserNote").textContent = "Creator off. Free plan for "+(d.email||d.slug); $("modLookup") && $("modLookup").click(); }
+  try { const d = await modAccount("/admin/plan", { plan:"free" }); $("modUserNote").textContent = "Creator scans off for "+(d.email||d.slug); $("modLookup") && $("modLookup").click(); }
+  catch(e){ $("modUserNote").textContent = e.message; }
+});
+$("modEventsOn") && ($("modEventsOn").onclick = async () => {
+  try { const d = await modAccount("/admin/creator", { on:true }); $("modUserNote").textContent = "Creator events on for "+(d.email||d.slug); $("modLookup") && $("modLookup").click(); }
+  catch(e){ $("modUserNote").textContent = e.message; }
+});
+$("modEventsOff") && ($("modEventsOff").onclick = async () => {
+  try { const d = await modAccount("/admin/creator", { on:false }); $("modUserNote").textContent = "Creator events off for "+(d.email||d.slug); $("modLookup") && $("modLookup").click(); }
   catch(e){ $("modUserNote").textContent = e.message; }
 });
 $("modResetIds") && ($("modResetIds").onclick = async () => {
@@ -4572,6 +4586,9 @@ async function loadMe(){
     if ($("ownerToolsBtn")) $("ownerToolsBtn").classList.toggle("hidden", !d.operator);
     if ($("refreshBook")) $("refreshBook").classList.toggle("hidden", !d.operator);
     window.lastOp = !!d.operator;
+    window.amCreator = !!d.creator;
+    paintBanKindOptions();
+    paintCreatorAsk(d);
     seedHistFromCards();
     paintTicker();
     if (d.operator) loadRipCodes();
@@ -4974,6 +4991,51 @@ function paintBanCancel(){
   btn.style.margin = "8px 0 12px";
   btn.style.padding = "8px 12px";
 }
+function paintBanKindOptions(){
+  const sel = $("banKind");
+  if (!sel) return;
+  const keep = sel.value;
+  const creator = !!window.amCreator;
+  sel.innerHTML = creator
+    ? "<option value=\"stock\">Stock</option><option value=\"live\">Stream / rip</option><option value=\"show\">Card show</option>"
+    : "<option value=\"stock\">Stock</option>";
+  sel.value = (creator && (keep === "live" || keep === "show")) ? keep : "stock";
+  if (!creator) {
+    window.banKindNow = "stock";
+    window.banDrafts.live = null;
+    window.banDrafts.show = null;
+  }
+  syncBanLayout();
+}
+function paintCreatorAsk(d){
+  const btn = $("askCreator");
+  const note = $("askCreatorNote");
+  if (!btn) return;
+  if (d && d.creator) {
+    btn.textContent = "Creator on";
+    btn.disabled = true;
+    if (note) note.textContent = "You can post streams and card shows on your banner.";
+    return;
+  }
+  if (d && d.creator_asked) {
+    btn.textContent = "Request sent";
+    btn.disabled = true;
+    if (note) note.textContent = "Request is in. I’ll turn events on if it looks legit.";
+    return;
+  }
+  btn.textContent = "Request creator";
+  btn.disabled = false;
+  if (note) note.textContent = "Creator lets you post streams and card shows on your banner. Stock cover stays open for everyone.";
+}
+$("askCreator") && ($("askCreator").onclick = async () => {
+  try {
+    const d = await authPost("/creator/request", {});
+    paintCreatorAsk({ creator: d.status === "already", creator_asked: true });
+    if ($("askCreatorNote") && d.status === "already") $("askCreatorNote").textContent = "You can already post events.";
+  } catch(e) {
+    if ($("askCreatorNote")) $("askCreatorNote").textContent = e.message;
+  }
+});
 function syncBanLayout(){
   const kind = ($("banKind")&&$("banKind").value) || "stock";
   const stock = kind === "stock";
@@ -5010,7 +5072,11 @@ async function loadBanners(){
   window.myStock = rows.find(b => b.kind === "stock") || null;
   window.myShow = rows.find(b => b.kind === "show" && !+b.off && !bannerState(b).done) || null;
   window.myEvent = rows.find(b => b.kind && b.kind !== "stock" && b.kind !== "show" && !+b.off && !bannerState(b).done) || null;
-  const want = ($("banKind") && $("banKind").value) || "stock";
+  if (!window.amCreator) {
+    window.myShow = null;
+    window.myEvent = null;
+  }
+  const want = (!window.amCreator) ? "stock" : (($("banKind") && $("banKind").value) || "stock");
   let b = null;
   if (want === "stock") b = window.myStock;
   else if (want === "show") b = window.myShow;
@@ -5132,6 +5198,7 @@ $("banAdd") && ($("banAdd").onclick = async () => {
       const title = String(d.title||"").trim();
       const body = String(d.body||"").trim();
       const url = String(d.url||"").trim();
+      if (slot !== "stock" && !window.amCreator) continue;
       if (slot !== "stock" && (+d.off || !d.starts || (!title && !body && !url))) continue;
       await authPost("/banners", {
         kind: slot === "show" ? "show" : slot === "stock" ? "stock" : "live",

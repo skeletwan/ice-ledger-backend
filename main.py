@@ -2369,7 +2369,7 @@ def init_db():
         con.execute("ALTER TABLE users ADD COLUMN slug TEXT")
     except sqlite3.OperationalError:
         pass
-    for col, spec in (("display", "TEXT"), ("hue", "TEXT"), ("bio", "TEXT"), ("avatar", "TEXT"), ("cropx", "TEXT"), ("cropy", "TEXT"), ("cropz", "TEXT"), ("avatar_hidden", "INTEGER NOT NULL DEFAULT 0"), ("credits", "INTEGER NOT NULL DEFAULT 0"), ("credit_month", "TEXT"), ("credit_until", "TEXT"), ("plus_until", "TEXT"), ("cycle_start", "TEXT"), ("suspended", "INTEGER NOT NULL DEFAULT 0"), ("socials", "TEXT"), ("last_book_auto", "TEXT"), ("book_hist", "TEXT")):
+    for col, spec in (("display", "TEXT"), ("hue", "TEXT"), ("bio", "TEXT"), ("avatar", "TEXT"), ("cropx", "TEXT"), ("cropy", "TEXT"), ("cropz", "TEXT"), ("avatar_hidden", "INTEGER NOT NULL DEFAULT 0"), ("credits", "INTEGER NOT NULL DEFAULT 0"), ("credit_month", "TEXT"), ("credit_until", "TEXT"), ("plus_until", "TEXT"), ("cycle_start", "TEXT"), ("suspended", "INTEGER NOT NULL DEFAULT 0"), ("socials", "TEXT"), ("last_book_auto", "TEXT"), ("book_hist", "TEXT"), ("creator", "INTEGER NOT NULL DEFAULT 0"), ("creator_asked", "TEXT")):
         try:
             con.execute(f"ALTER TABLE users ADD COLUMN {col} {spec}")
         except sqlite3.OperationalError:
@@ -2772,6 +2772,14 @@ def email_of(uid: int) -> str:
 
 def is_operator(uid: int) -> bool:
     return email_of(uid) in operator_emails()
+
+def is_creator(uid: int) -> bool:
+    if is_operator(uid):
+        return True
+    con = db()
+    row = con.execute("SELECT IFNULL(creator,0) AS creator FROM users WHERE id=?", (uid,)).fetchone()
+    con.close()
+    return bool(row and int(row["creator"] or 0))
 
 def require_operator(request: Request = None, x_token: str | None = None):
     uid = require_user(request, x_token)
@@ -3642,11 +3650,13 @@ async def list_binders():
 async def list_events(request: Request, x_token: str | None = Header(default=None)):
     con = db()
     users = con.execute(
-        "SELECT id, slug, display, hue, IFNULL(suspended,0) AS suspended FROM users WHERE slug IS NOT NULL AND slug != ''"
+        "SELECT id, slug, display, hue, IFNULL(suspended,0) AS suspended, IFNULL(creator,0) AS creator FROM users WHERE slug IS NOT NULL AND slug != ''"
     ).fetchall()
     out = []
     for u in users:
         if int(u["suspended"] or 0):
+            continue
+        if not int(u["creator"] or 0) and email_of(u["id"]) not in operator_emails():
             continue
         rows = con.execute(
             "SELECT id,kind,title,body,url,color,created,starts,hours,off,art FROM banner_posts WHERE user_id=? ORDER BY id DESC LIMIT 8",
@@ -4049,7 +4059,7 @@ async def me(request: Request, x_token: str | None = Header(default=None)):
     uid = require_user(request, x_token)
     slug = ensure_slug(uid)
     con = db()
-    row = con.execute("SELECT email,display,hue,bio,avatar,cropx,cropy,cropz,socials,book_hist FROM users WHERE id=?", (uid,)).fetchone()
+    row = con.execute("SELECT email,display,hue,bio,avatar,cropx,cropy,cropz,socials,book_hist,IFNULL(creator,0) AS creator,creator_asked FROM users WHERE id=?", (uid,)).fetchone()
     con.close()
     hist = []
     try:
@@ -4060,6 +4070,8 @@ async def me(request: Request, x_token: str | None = Header(default=None)):
         "slug": slug,
         "url": f"/?b={slug}",
         "operator": is_operator(uid),
+        "creator": is_creator(uid),
+        "creator_asked": bool((row["creator_asked"] if row else "") or ""),
         "display": (row["display"] if row else None) or "",
         "hue": (row["hue"] if row else None) or "#8fd4ee",
         "bio": (row["bio"] if row else None) or "",
@@ -4369,6 +4381,8 @@ async def add_banner(payload: dict, request: Request, x_token: str | None = Head
     kind = (payload.get("kind") or "note").strip()[:24]
     if kind not in ("show", "break", "episode", "live", "note", "stock"):
         kind = "note"
+    if kind != "stock" and not is_creator(uid):
+        raise HTTPException(403, "creator events only")
     title = (payload.get("title") or "").strip()[:80]
     body = (payload.get("body") or "").strip()[:120]
     url = _clean_banner_url(payload.get("url") or "")
@@ -4869,6 +4883,8 @@ async def admin_lookup(q: str = "", request: Request = None, x_token: str | None
         "hidden_comments": hidden_c,
         "reports": reports,
         "banner": dict(ban) if ban else None,
+        "creator": int(row["creator"] or 0) if "creator" in row.keys() else 0,
+        "creator_asked": (row["creator_asked"] if "creator_asked" in row.keys() else "") or "",
     }
 
 @app.post("/admin/clear-banner")
@@ -5032,6 +5048,65 @@ async def admin_mail_all(payload: dict, request: Request, x_token: str | None = 
         else:
             fail += 1
     return {"ok": True, "sent": sent, "fail": fail}
+
+@app.post("/creator/request")
+async def request_creator(request: Request, x_token: str | None = Header(default=None)):
+    uid = require_user(request, x_token)
+    if is_creator(uid):
+        return {"ok": True, "status": "already"}
+    con = db()
+    row = con.execute(
+        "SELECT email,display,slug,creator_asked FROM users WHERE id=?",
+        (uid,),
+    ).fetchone()
+    last = (row["creator_asked"] if row else "") or ""
+    if last:
+        try:
+            prev = datetime.fromisoformat(last.replace("Z", "+00:00"))
+            if prev.tzinfo is None:
+                prev = prev.replace(tzinfo=timezone.utc)
+            if now_utc() - prev < timedelta(hours=20):
+                con.close()
+                return {"ok": True, "status": "pending"}
+        except Exception:
+            pass
+    stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ")
+    con.execute("UPDATE users SET creator_asked=? WHERE id=?", (stamp, uid))
+    con.commit()
+    con.close()
+    who = ((row["display"] if row else "") or "Collector")
+    email = ((row["email"] if row else "") or "")
+    slug = ((row["slug"] if row else "") or "")
+    send_mail(
+        "Creator request",
+        f"{who} ({email} / {slug}) asked to post streams and card shows.\nLook them up in owner tools and tap Creator events on if they check out.",
+    )
+    return {"ok": True, "status": "sent"}
+
+
+@app.post("/admin/creator")
+async def admin_creator(payload: dict, request: Request, x_token: str | None = Header(default=None)):
+    require_operator(request, x_token)
+    on = 1 if payload.get("on", True) else 0
+    con = db()
+    row = _find_user(con, payload)
+    if not row:
+        con.close()
+        raise HTTPException(404, "no user with that email or slug")
+    con.execute("UPDATE users SET creator=? WHERE id=?", (on, row["id"]))
+    if not on:
+        con.execute(
+            "DELETE FROM banner_posts WHERE user_id=? AND IFNULL(kind,'')!='stock'",
+            (row["id"],),
+        )
+    con.commit()
+    con.close()
+    send_mail(
+        "Creator events "+("on" if on else "off"),
+        f"{row['email']} / {row['slug']}",
+    )
+    return {"ok": True, "email": row["email"], "slug": row["slug"], "creator": bool(on)}
+
 
 @app.post("/admin/plan")
 async def admin_plan(payload: dict, request: Request, x_token: str | None = Header(default=None)):
