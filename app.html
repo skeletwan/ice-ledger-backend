@@ -111,16 +111,12 @@
     .auth-wrap { max-width:420px; margin:48px auto; padding:0 16px 40px; }
     .auth-card { background:linear-gradient(180deg,#18232d,#121b22); border:1px solid var(--line); border-radius:18px; padding:22px 20px 24px; box-shadow:0 18px 50px rgba(0,0,0,.35); }
     .mark { width:42px; height:42px; border-radius:12px; background:linear-gradient(135deg,#8fd4ee,#3d8fb0); margin-bottom:12px; }
-    .auth-card[data-mode="signin"] .signup-only,
-    .auth-card[data-mode="signin"] .reset-only,
-    .auth-card[data-mode="signin"] .signup-actions { display:none; }
-    .auth-card[data-mode="signup"] .signin-actions,
-    .auth-card[data-mode="signup"] .reset-only,
-    .auth-card[data-mode="signup"] .auth-pw { display:none; }
-    .auth-card[data-mode="reset"] .signup-only,
-    .auth-card[data-mode="reset"] .signin-actions,
-    .auth-card[data-mode="reset"] .signup-actions,
-    .auth-card[data-mode="reset"] .auth-pw { display:none; }
+    .auth-card[data-mode="signin"] #formSignup,
+    .auth-card[data-mode="signin"] #formReset,
+    .auth-card[data-mode="signup"] #formSignin,
+    .auth-card[data-mode="signup"] #formReset,
+    .auth-card[data-mode="reset"] #formSignin,
+    .auth-card[data-mode="reset"] #formSignup { display:none; }
     .auth-links { display:flex; justify-content:space-between; gap:12px; margin-top:12px; }
     .auth-links button { width:auto; margin:0; padding:0; background:none; border:0; color:var(--ice); font-size:13px; font-weight:600; }
     button.auth-text { width:auto; margin:8px 0 12px; padding:0; background:none; border:0; color:var(--ice); font-size:14px; font-weight:600; text-align:left; display:inline-block; }
@@ -444,36 +440,35 @@
         </div>
         <p class="auth-tag">Your exclusive hockey card community.</p>
         <p class="muted" id="authLead">Sign in to your binder.</p>
-        <form id="authForm" action="/" method="post" autocomplete="on">
-        <label>Email</label>
-        <input id="email" type="email" name="email" autocomplete="username" />
-        <div class="auth-pw">
+        <form id="formSignin" action="/login" method="post">
+          <label>Email</label>
+          <input id="email" type="email" name="username" autocomplete="username" />
           <label>Password</label>
           <input id="password" type="password" name="password" autocomplete="current-password" placeholder="Password" />
           <label class="show-pw"><input type="checkbox" id="showPw" /> Show password</label>
-        </div>
-        <div class="signup-only">
+          <button type="submit" id="loginBtn">Sign in</button>
+          <div class="auth-links">
+            <button type="button" id="toSignup">Create account</button>
+            <button type="button" id="showReset">Forgot password</button>
+          </div>
+        </form>
+        <form id="formSignup" action="/signup" method="post">
+          <label>Email</label>
+          <input id="emailSignup" type="email" name="username" autocomplete="username" />
           <label>Password</label>
           <input id="newPw" type="password" name="new-password" autocomplete="new-password" placeholder="Password" />
           <label>Confirm password</label>
           <input id="newPw2" type="password" name="new-password-confirm" autocomplete="new-password" placeholder="Confirm password" />
           <label class="show-pw"><input type="checkbox" id="showNewPw" /> Show password</label>
           <label style="margin-top:14px"><input id="agreeLegal" type="checkbox" style="width:auto;margin-right:8px" /> I agree to the <a href="/terms#terms-of-service" target="_blank" rel="noopener">Terms</a>, <a href="/aup#acceptable-use-policy" target="_blank" rel="noopener">Acceptable Use</a>, and <a href="/privacy#privacy-policy" target="_blank" rel="noopener">Privacy Policy</a></label>
-        </div>
-        <div class="signin-actions">
-          <button type="button" id="loginBtn">Sign in</button>
-          <div class="auth-links">
-            <button type="button" id="toSignup">Create account</button>
-            <button type="button" id="showReset">Forgot password</button>
-          </div>
-        </div>
-        <div class="signup-actions">
-          <button type="button" id="signupBtn" disabled>Create account</button>
+          <button type="submit" id="signupBtn" disabled>Create account</button>
           <div class="auth-links">
             <button type="button" id="toSignin">Already have an account</button>
           </div>
-        </div>
-        <div class="reset-only" id="resetBox">
+        </form>
+        <form id="formReset" action="/reset" method="post">
+          <label>Email</label>
+          <input id="emailReset" type="email" name="username" autocomplete="username" />
           <button type="button" class="auth-text" id="resetSend">Send reset code</button>
           <label>Code</label>
           <input id="resetCode" type="text" name="reset-code" autocomplete="off" autocapitalize="none" spellcheck="false" inputmode="text" placeholder="Code from your email" />
@@ -486,7 +481,6 @@
           <div class="auth-links">
             <button type="button" id="resetBack">Back to sign in</button>
           </div>
-        </div>
         </form>
         <p class="status" id="authStatus"></p>
       </div>
@@ -4312,16 +4306,37 @@ function lockSignup(){
   if ($("signupBtn") && $("agreeLegal")) $("signupBtn").disabled = !$("agreeLegal").checked;
 }
 function setAuthMode(mode){
+  const em = [
+    $("email") && $("email").value,
+    $("emailSignup") && $("emailSignup").value,
+    $("emailReset") && $("emailReset").value
+  ].map(v => (v||"").trim()).find(v => v) || "";
   const card = document.querySelector(".auth-card");
   if (card) card.setAttribute("data-mode", mode);
   if ($("authLead")) {
     $("authLead").textContent = mode === "signup" ? "Create an account." : mode === "reset" ? "Reset your password." : "Sign in to your binder.";
   }
   if ($("authStatus")) { $("authStatus").className = "status"; $("authStatus").textContent = ""; }
-  lockSignup();
+  ["email","emailSignup","emailReset"].forEach(id => { if ($(id) && em) $(id).value = em; });
+  const forms = { signin:"formSignin", signup:"formSignup", reset:"formReset" };
+  Object.keys(forms).forEach(k => {
+    const f = $(forms[k]);
+    if (!f) return;
+    f.querySelectorAll("input,button,select,textarea").forEach(el => {
+      if (el.type === "button" || el.id === "resetSend" || el.id === "toSignup" || el.id === "showReset" || el.id === "toSignin" || el.id === "resetBack") return;
+      if (el.id && el.id.indexOf("show")===0) return;
+      if (el.id === "agreeLegal") return;
+      el.disabled = (k !== mode);
+    });
+  });
+  if ($("agreeLegal")) $("agreeLegal").disabled = mode !== "signup";
+  if ($("signupBtn") && mode === "signup") lockSignup();
+  else if ($("signupBtn")) $("signupBtn").disabled = true;
 }
 function authEmail(){
-  return (($("email") && $("email").value) || "").trim().toLowerCase();
+  const mode = (document.querySelector(".auth-card") && document.querySelector(".auth-card").getAttribute("data-mode")) || "signin";
+  const id = mode==="signup" ? "emailSignup" : mode==="reset" ? "emailReset" : "email";
+  return (($(id) && $(id).value) || ($("email") && $("email").value) || ($("emailSignup") && $("emailSignup").value) || ($("emailReset") && $("emailReset").value) || "").trim().toLowerCase();
 }
 setAuthMode("signin");
 $("toSignup") && ($("toSignup").onclick = ev => { ev.preventDefault(); setAuthMode("signup"); });
@@ -4329,8 +4344,9 @@ $("agreeLegal") && ($("agreeLegal").onchange = lockSignup);
 $("toSignin") && ($("toSignin").onclick = ev => { ev.preventDefault(); setAuthMode("signin"); });
 $("showReset") && ($("showReset").onclick = ev => { ev.preventDefault(); setAuthMode("reset"); });
 $("resetBack") && ($("resetBack").onclick = ev => { ev.preventDefault(); setAuthMode("signin"); });
-$("signupBtn") && ($("signupBtn").onclick = async ev => {
-  if (ev) ev.preventDefault();
+$("signupBtn") && ($("signupBtn").onclick = null);
+$("formSignup") && ($("formSignup").onsubmit = async ev => {
+  ev.preventDefault();
   try {
     if (!$("agreeLegal") || !$("agreeLegal").checked) {
       flash("authStatus", "err", "Agree to the Terms and Privacy Policy first.");
@@ -4351,12 +4367,15 @@ $("signupBtn") && ($("signupBtn").onclick = async ev => {
       return;
     }
     const d = await authPost("/signup", { email: authEmail(), password:pw });
+    flash("authStatus", "ok", "Account created. Save the password if iPhone asks.");
+    await new Promise(r => setTimeout(r, 800));
     clearLocalAccount();
     setToken(d.token); showApp(); await pullCloud(); paintTicker(); renderBinder();
   } catch(e) { flash("authStatus", "err", e.message); }
 });
-$("loginBtn") && ($("loginBtn").onclick = async ev => {
-  if (ev) ev.preventDefault();
+$("loginBtn") && ($("loginBtn").onclick = null);
+$("formSignin") && ($("formSignin").onsubmit = async ev => {
+  ev.preventDefault();
   try {
     if (!authEmail() || !$("password").value) {
       flash("authStatus", "err", "Email and password both needed.");
@@ -4367,21 +4386,15 @@ $("loginBtn") && ($("loginBtn").onclick = async ev => {
     setToken(d.token); showApp(); await pullCloud(); paintTicker(); renderBinder();
   } catch(e) { flash("authStatus", "err", e.message); }
 });
-$("authForm") && ($("authForm").onsubmit = ev => {
-  ev.preventDefault();
-  const mode = (document.querySelector(".auth-card") && document.querySelector(".auth-card").getAttribute("data-mode")) || "signin";
-  if (mode==="signup" && $("signupBtn")) $("signupBtn").click();
-  else if (mode==="reset" && $("resetBtn")) $("resetBtn").click();
-  else if ($("loginBtn")) $("loginBtn").click();
-});
 $("resetSend") && ($("resetSend").onclick = async () => {
   try {
     await authPost("/reset", { email: authEmail() });
     flash("authStatus", "ok", "If that email has an account, a code is on the way.");
   } catch(e) { flash("authStatus", "err", e.message); }
 });
-$("resetBtn") && ($("resetBtn").onclick = async ev => {
-  if (ev) ev.preventDefault();
+$("resetBtn") && ($("resetBtn").onclick = null);
+$("formReset") && ($("formReset").onsubmit = async ev => {
+  ev.preventDefault();
   try {
     const pw = ($("resetPw") && $("resetPw").value) || "";
     const pw2 = ($("resetPw2") && $("resetPw2").value) || "";
