@@ -4923,10 +4923,14 @@ function applyBanDraft(kind){
   fillBannerForm(d);
 }
 function seedBanDraft(slot, row){
+  if (slot !== "stock" && (!row || +row.off || (row.starts && bannerState(row).done))) {
+    window.banDrafts[slot] = null;
+    return;
+  }
   if (!row) return;
-  if (window.banDrafts[slot]) {
+  if (window.banDrafts[slot] && slot === "stock") {
     window.banDrafts[slot].id = row.id;
-    window.banDrafts[slot].off = +row.off ? 1 : 0;
+    window.banDrafts[slot].off = 0;
     return;
   }
   window.banDrafts[slot] = {
@@ -5003,8 +5007,8 @@ async function loadBanners(){
   const d = await r.json();
   const rows = d.banners || [];
   window.myStock = rows.find(b => b.kind === "stock") || null;
-  window.myShow = rows.find(b => b.kind === "show") || null;
-  window.myEvent = rows.find(b => b.kind && b.kind !== "stock" && b.kind !== "show") || null;
+  window.myShow = rows.find(b => b.kind === "show" && !+b.off && !bannerState(b).done) || null;
+  window.myEvent = rows.find(b => b.kind && b.kind !== "stock" && b.kind !== "show" && !+b.off && !bannerState(b).done) || null;
   const want = ($("banKind") && $("banKind").value) || "stock";
   let b = null;
   if (want === "stock") b = window.myStock;
@@ -5018,26 +5022,42 @@ async function loadBanners(){
   paintBanCancel();
 }
 async function cancelMyBanner(){
+  const slot = banSlot(($("banKind") && $("banKind").value) || window.banKindNow);
+  if (slot === "stock") return;
+  const ev = slot === "show" ? window.myShow : window.myEvent;
   try {
-    const slot = banSlot(window.banKindNow);
-    const ev = slot === "show" ? window.myShow : (slot === "stock" ? null : window.myEvent);
-    if (!ev || !ev.id || +ev.off) {
-      paintBanCancel();
-      paintBanDraft();
-      return;
+    if (ev && ev.id) {
+      await fetch("/banners/"+ev.id, { method:"DELETE", headers:{ "x-token": token() } });
+    } else {
+      await authPost("/banners/cancel", {});
     }
-    await authPost("/banners/cancel", { id: ev.id });
-    ev.off = 1;
-    if (window.banDrafts[slot]) window.banDrafts[slot].off = 1;
-    if (slot === "show") window.myShow = ev;
-    else window.myEvent = ev;
-    await refreshPubBanners();
-    paintBanDraft();
-    paintPubBanner();
-    paintBanCancel();
   } catch(e) {
-    if ($("banNote")) $("banNote").textContent = e.message;
+    if ($("banNote")) $("banNote").textContent = e.message || "Could not cancel";
   }
+  window.banDrafts[slot] = null;
+  if (slot === "show") window.myShow = null;
+  else window.myEvent = null;
+  window.myBanner = window.myStock || null;
+  window.banKindNow = slot;
+  clearBanFields();
+  if ($("banTitle")) $("banTitle").value = "";
+  if ($("banBody")) $("banBody").value = "";
+  if ($("banUrl")) $("banUrl").value = "";
+  if ($("banStart")) $("banStart").value = "";
+  if ($("banStartShow")) {
+    $("banStartShow").textContent = "Tap to set date and time";
+    $("banStartShow").classList.add("empty");
+  }
+  if ($("banHours")) $("banHours").value = "4";
+  syncBanLayout();
+  paintBanDraft();
+  paintBanCancel();
+  if ($("banNote")) $("banNote").textContent = "Event cancelled.";
+  try { await loadBanners(); } catch(e) {}
+  paintBanDraft();
+  paintBanCancel();
+  await refreshPubBanners();
+  paintPubBanner();
 }
 $("banArts") && ($("banArts").onclick = ev => {
   const chip = ev.target.closest("[data-art]");
@@ -5098,7 +5118,7 @@ $("banAdd") && ($("banAdd").onclick = async () => {
       const title = String(d.title||"").trim();
       const body = String(d.body||"").trim();
       const url = String(d.url||"").trim();
-      if (slot !== "stock" && !title && !body && !d.starts && !url) continue;
+      if (slot !== "stock" && (+d.off || !d.starts || (!title && !body && !url))) continue;
       await authPost("/banners", {
         kind: slot === "show" ? "show" : slot === "stock" ? "stock" : "live",
         art: d.art || "ice",

@@ -4452,7 +4452,7 @@ async def cancel_banner(payload: dict, request: Request, x_token: str | None = H
         bid = int((pick or {}).get("id") or 0)
     if bid:
         con.execute(
-            "UPDATE banner_posts SET off=1 WHERE id=? AND user_id=? AND IFNULL(kind,'')!='stock'",
+            "DELETE FROM banner_posts WHERE id=? AND user_id=? AND IFNULL(kind,'')!='stock'",
             (bid, uid),
         )
         con.commit()
