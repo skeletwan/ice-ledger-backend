@@ -232,15 +232,17 @@
     .ban-arts .foil, .board-post.art-foil { background:linear-gradient(135deg,#c4b06a,#8a7a40 40%,#2a2410); }
     .ban-arts .rip, .board-post.art-rip { background:linear-gradient(160deg,#a02838,#7a2030 40%,#18080c); }
     .ban-arts .navy, .board-post.art-navy { background:#0b1116; }
-    .board-post.art-photo { background-size:cover; background-position:center; position:relative; min-height:160px; }
+    .board-post.art-photo { background-size:cover; background-position:center; position:relative; overflow:hidden; }
+    .board-post.art-photo.fitting { height:180px; min-height:180px; max-height:180px; }
     .board-post.art-photo:before { content:""; position:absolute; inset:0; background:rgba(0,0,0,.42); z-index:1; pointer-events:none; }
-    .board-post.art-photo > * { position:relative; z-index:2; }
+    .board-post.art-photo > *:not(.ban-cover) { position:relative; z-index:2; }
     .board-post.fitting { touch-action:none; }
-    .ban-cover { position:absolute; left:50%; top:50%; width:140%; max-width:none; height:auto; z-index:0; cursor:grab; user-select:none; pointer-events:auto; }
+    .ban-cover { position:absolute !important; left:50%; top:50%; width:160%; max-width:none; height:auto; z-index:0; cursor:grab; user-select:none; pointer-events:auto; -webkit-user-drag:none; }
     .ban-cover:active { cursor:grabbing; }
     .board-post.fitting .ban-copy { pointer-events:none; }
     #banFitBar { display:none; margin:0 0 12px; }
     #banFitBar.on { display:block; }
+    #banFitBar input { margin-top:6px; }
     #banCard { border-radius:12px; overflow:hidden; }
     #banCard input, #banCard select { max-width:100%; min-width:0; box-sizing:border-box; }
     .ban-when {
@@ -4487,18 +4489,20 @@ function bannerHtml(b, mine, slug){
   const body = b.body ? "<div class=\"muted\">"+String(b.body).replace(/[<>]/g,"")+"</div>" : "";
   const goTxt = kind === "show" ? "Details" : "Watch";
   const link = b.url ? "<a class=\"ban-go\" href=\""+b.url.replace(/"/g,"")+"\" target=\"_blank\" rel=\"noopener\">"+goTxt+"</a>" : "";
-  const act = mine && !st.done ? "<button type=\"button\" class=\"ghost\" data-ban-end=\"1\" style=\"width:auto;margin-top:10px\">Cancel</button>" : "";
-  const kicker = kind === "show" ? "<div class=\"k\">Card show</div>" : "<div class=\"k\">Stream / rip</div>";
   const fit = !!(mine && window.banFit && window.banFit.src);
+  const act = (!fit && mine && !st.done) ? "<button type=\"button\" class=\"ghost\" data-ban-end=\"1\" style=\"width:auto;margin-top:10px\">Cancel</button>" : "";
+  const kicker = kind === "show" ? "<div class=\"k\">Card show</div>" : "<div class=\"k\">Stream / rip</div>";
   let bg = "";
   let cover = "";
   if (art === "photo" && fit) {
-    cover = "<img class=\"ban-cover\" id=\"banCover\" alt=\"\" src=\""+String(window.banFit.src).replace(/"/g,"")+"\" />";
+    cover = "<img class=\"ban-cover\" id=\"banCover\" alt=\"\" draggable=\"false\" src=\""+String(window.banFit.src).replace(/"/g,"")+"\" />";
   } else if (art === "photo") {
     const src = (mine && window.bannerShot) ? window.bannerShot : ((slug || viewSlug || mySlug) ? "/u/"+encodeURIComponent(slug || viewSlug || mySlug)+"/banner/photo" : "");
     if (src) bg = "background-image:url('"+src.replace(/'/g,"")+"');";
   }
-  const copy = "<div class=\"ban-copy\">"+kicker+"<h3>"+String(b.title||"").replace(/[<>]/g,"")+live+"</h3>"+when+body+link+act+"</div>";
+  const copy = fit
+    ? "<div class=\"ban-copy\"><h3>"+String(b.title||"").replace(/[<>]/g,"")+"</h3></div>"
+    : "<div class=\"ban-copy\">"+kicker+"<h3>"+String(b.title||"").replace(/[<>]/g,"")+live+"</h3>"+when+body+link+act+"</div>";
   return "<div class=\"board-post "+kind+" art-"+art+(fit?" fitting":"")+"\" style=\"border-color:"+col+";"+bg+"\">"+cover+copy+"</div>";
 }
 function applyBanFit(){
@@ -4578,6 +4582,12 @@ function bannerDraft(){
 }
 function paintBanDraft(){
   paintBanArt();
+  if (window.banFit && $("banCover") && $("banPreview") && $("banPreview").querySelector(".fitting")) {
+    const h = $("banPreview").querySelector(".ban-copy h3");
+    if (h) h.textContent = ($("banTitle")&&$("banTitle").value) || "Your event";
+    applyBanFit();
+    return;
+  }
   if ($("banPreview")) $("banPreview").innerHTML = bannerHtml(bannerDraft(), true, mySlug);
   bindBanFit();
 }
@@ -5423,7 +5433,7 @@ $("goneBtn") && ($("goneBtn").onclick = async () => {
 function tickBanners(){
   if ($("pubBanner") && $("pubPage") && $("pubPage").classList.contains("on"))
     $("pubBanner").innerHTML = bannerHtml((window.pubBanners||[])[0], ownBinder(), viewSlug);
-  if ($("banPreview") && $("youBanner") && !$("youBanner").classList.contains("hidden"))
+  if ($("banPreview") && $("youBanner") && !$("youBanner").classList.contains("hidden") && !window.banFit)
     paintBanDraft();
 }
 if (!window._banTick) window._banTick = setInterval(tickBanners, 10000);
