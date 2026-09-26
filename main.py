@@ -1038,6 +1038,9 @@ def _player_q(player: str) -> str:
 
 def _num_q(num: str) -> str:
     raw = re.sub(r"^#+", "", (num or "").strip())
+    raw = re.sub(r"\d+\s*/\s*\d+", " ", raw)
+    raw = re.sub(r"/\s*\d+", " ", raw)
+    raw = re.sub(r"\s+", " ", raw).strip()
     if not raw:
         return ""
     compact = re.sub(r"[^A-Za-z0-9]", "", raw)
@@ -1139,6 +1142,10 @@ def search_queries(card: dict) -> list:
     if par.lower() in ("base", "none", "n/a"):
         par = ""
     num = re.sub(r"^#+", "", str(card.get("number") or "").strip())
+    run_from_num = re.search(r"/\s*(\d{1,4})", num)
+    num = re.sub(r"\d+\s*/\s*\d+", " ", num)
+    num = re.sub(r"/\s*\d+", " ", num)
+    num = re.sub(r"\s+", " ", num).strip()
     blob = f"{ins} {st} {par}".lower()
     yg = bool(re.search(r"young guns|\byg\b", blob))
     chk = "checklist" in blob
@@ -1159,7 +1166,7 @@ def search_queries(card: dict) -> list:
     letter_code = bool(re.search(r"[A-Za-z]", num) and re.search(r"\d", num))
     parts = [_player_q(player), _q_token(product)]
     color = re.sub(r"/.*", "", par).strip()
-    run = re.search(r"/\s*(\d{1,4})", par)
+    run = re.search(r"/\s*(\d{1,4})", par) or run_from_num
     named_run = color.lower() in ("deluxe", "ud exclusives", "exclusives", "high gloss")
     if color and color.lower() not in (product.lower(), "base", "parallel"):
         parts.append(_q_token(color))

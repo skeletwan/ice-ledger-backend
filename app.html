@@ -2057,12 +2057,13 @@ function scheduleDaily(){
   }, next - now);
 }
 function runOnly(v){
-  return String(v||"").replace(/\b\d+\s*\/\s*(\d+)\b/g, "/$1").replace(/\b\d+\s*of\s*(\d+)\b/gi, "/$1");
+  return String(v||"").replace(/\b\d+\s*\/\s*(\d+)\b/g, "/$1").replace(/\b\d+\s*of\s*(\d+)\b/gi, "/$1").replace(/(\S)(\/\d+)/g, "$1 $2");
 }
 function qstr(d){
   let num = String(d.number||"").trim();
   const m = num.match(/(\d+)\s*\/\s*(\d+)/);
   if (m) num = num.replace(m[0], "").trim();
+  num = num.replace(/\/\s*\d+/g, "").trim();
   const par = runOnly(d.parallel||"");
   const ins = runOnly(d.insert||"");
   const bits = [d.player];
@@ -2072,7 +2073,7 @@ function qstr(d){
   if (par && !/^base$/i.test(par)) bits.push(par);
   if (d.grader && d.grader !== "Raw") bits.push([d.grader, d.grade].filter(Boolean).join(" "));
   if (!/auto/i.test(ins+" "+par)) bits.push("-auto", "-autograph");
-  return encodeURIComponent(bits.filter(Boolean).join(" "));
+  return encodeURIComponent(bits.filter(Boolean).join(" ").replace(/(\d)\/(\d)/g, "$1 / $2").replace(/(\S)(\/\d+)/g, "$1 $2"));
 }
 function daysAgo(iso){
   if (!iso) return null;
