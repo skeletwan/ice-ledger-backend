@@ -1165,7 +1165,8 @@ def search_queries(card: dict) -> list:
         parts.append(_q_token(color))
     if run and not named_run:
         parts.append("/" + run.group(1))
-    if code and not named_run:
+    # Base YG titles often omit #479. Number in the API q hides real raws.
+    if code and not named_run and not (yg and not color):
         parts.append(code)
     q = " ".join(x for x in parts if x)
     if _card_is_auto({"insert": ins, "parallel": par, "set": st}):
@@ -1439,8 +1440,7 @@ async def _card_api_rows(client, q: str, extra: dict) -> list:
     global CARD_API_QUOTA
     if CARD_API_QUOTA or not q:
         return []
-    start = (now_toronto() - timedelta(days=90)).date().isoformat()
-    params = {"q": q, "limit": 25, "date_from": start}
+    params = {"q": q, "limit": 25}
     params.update(extra or {})
     r = await client.get(
         "https://www.thecardapi.com/api/v1/market/sales",
