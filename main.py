@@ -42,6 +42,10 @@ SMTP_PASS = _env("SMTP_PASS")
 APP_URL = _env("APP_URL")
 CARD_API_KEY = _env("CARD_API_KEY")
 CARD_API_QUOTA = False
+EBAY_APP_ID = _env("EBAY_APP_ID")
+EBAY_CERT_ID = _env("EBAY_CERT_ID")
+EBAY_MARKET = _env("EBAY_MARKET", "EBAY_CA")
+_ebay_tok = {"token": "", "exp": 0.0}
 MAIL_LAST_ERROR = ""
 
 def _from_address(raw: str) -> str:
@@ -313,6 +317,120 @@ def shrink(data: bytes) -> bytes:
     img.save(out, format="JPEG", quality=80)
     return out.getvalue()
 
+def ebay_ready() -> bool:
+    return bool(EBAY_APP_ID and EBAY_CERT_ID)
+
+async def ebay_app_token() -> str:
+    now = time.time()
+    if _ebay_tok["token"] and _ebay_tok["exp"] > now + 60:
+        return _ebay_tok["token"]
+    pair = base64.b64encode(f"{EBAY_APP_ID}:{EBAY_CERT_ID}".encode("ascii")).decode("ascii")
+    async with httpx.AsyncClient(timeout=20) as client:
+        r = await client.post(
+            "https://api.ebay.com/identity/v1/oauth2/token",
+            headers={
+                "Authorization": f"Basic {pair}",
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            data="grant_type=client_credentials&scope=https://api.ebay.com/oauth/api_scope",
+        )
+    if r.status_code >= 400:
+        print("EBAY_TOKEN_FAIL", r.status_code, (r.text or "")[:180])
+        return ""
+    body = r.json() if r.content else {}
+    tok = str(body.get("access_token") or "")
+    exp = float(body.get("expires_in") or 7200)
+    if tok:
+        _ebay_tok["token"] = tok
+        _ebay_tok["exp"] = now + exp
+    return tok
+
+def _browse_q(card: dict, q: str) -> str:
+    bits = []
+    pl = str((card or {}).get("player") or "").strip()
+    if pl:
+        bits.append(pl.split()[-1] if len(pl.split()) > 1 else pl)
+    ins = str((card or {}).get("insert") or "").strip()
+    if ins and ins.lower() not in ("base", "rookie", "rc"):
+        bits.append(ins)
+    num = str((card or {}).get("number") or "").strip().lstrip("#")
+    if num:
+        bits.append(num)
+    par = str((card or {}).get("parallel") or "").strip()
+    if par and par.lower() not in ("base", "none"):
+        bits.append(re.sub(r"^\d+\s*/", "/", par))
+    raw = " ".join(bits).strip() or (q or pl)
+    return raw[:80]
+
+async def ebay_browse_listings(card: dict, q: str) -> dict:
+    if not ebay_ready():
+        return {}
+    token = await ebay_app_token()
+    if not token:
+        return {"ebay_ok": False, "ebay_error": "token"}
+    query = _browse_q(card, q)
+    if len(query) < 4:
+        return {}
+    url = "https://api.ebay.com/buy/browse/v1/item_summary/search"
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.get(
+                url,
+                params={"q": query, "limit": 5},
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "X-EBAY-C-MARKETPLACE-ID": EBAY_MARKET or "EBAY_CA",
+                },
+            )
+    except Exception as e:
+        print("EBAY_BROWSE_FAIL", e)
+        return {"ebay_ok": False}
+    if r.status_code >= 400:
+        print("EBAY_BROWSE_FAIL", r.status_code, (r.text or "")[:160])
+        return {"ebay_ok": False, "ebay_status": r.status_code}
+    body = r.json() if r.content else {}
+    rows = body.get("itemSummaries") if isinstance(body, dict) else []
+    if not isinstance(rows, list):
+        rows = []
+    last = str((card or {}).get("player") or "").strip().split()[-1].lower() if card else ""
+    extra = ((card or {}).get("insert") or "") + " " + ((card or {}).get("parallel") or "")
+    prices = []
+    for it in rows:
+        if not isinstance(it, dict):
+            continue
+        title = str(it.get("title") or "")
+        tl = title.lower()
+        if last and last not in tl:
+            continue
+        if re.search(r"\b(lot|bundle|case break|hobby box)\b", tl):
+            continue
+        if re.search(r"\b(auto|autograph|rpa)\b", tl) and not re.search(r"auto", extra, re.I):
+            continue
+        if re.search(r"\b(deluxe|clear cut|canvas|outburst)\b", tl) and not re.search(r"deluxe|clear cut|canvas|outburst", extra, re.I):
+            continue
+        pr = (it.get("price") or {}) if isinstance(it.get("price"), dict) else {}
+        try:
+            val = float(pr.get("value") or 0)
+        except (TypeError, ValueError):
+            val = 0
+        cur = str(pr.get("currency") or "CAD").upper()
+        if val < 1 or val > 20000:
+            continue
+        if cur == "USD":
+            val *= 1.38
+        prices.append(val)
+    listed = None
+    if prices:
+        prices.sort()
+        listed = prices[len(prices)//2]
+    return {
+        "ebay_ok": True,
+        "listed_cad": listed,
+        "listed_n": len(prices),
+        "listed_q": query,
+        "sources_ebay": "browse",
+    }
+
 @app.get("/health")
 def health():
     return {
@@ -322,7 +440,9 @@ def health():
         "resend_key": bool(RESEND_API_KEY),
         "mail_from": MAIL_FROM,
         "mail_to": MAIL_TO,
-        "smtp_set": bool(SMTP_HOST and SMTP_USER and SMTP_PASS),
+        "card_api": bool(CARD_API_KEY),
+        "ebay_set": bool(EBAY_APP_ID and EBAY_CERT_ID),
+        "ebay_market": EBAY_MARKET,
     }
 
 async def _jpeg_part(up: UploadFile, label: str):
@@ -1767,6 +1887,11 @@ async def comp(
                 house["summary"] = "Market feed paused until tomorrow. Using last close."
             else:
                 house["cached"] = True
+            listed = await ebay_browse_listings(card, card.get("player") or "")
+            if listed:
+                house.update({k: v for k, v in listed.items() if v is not None})
+                if listed.get("listed_cad"):
+                    house["summary"] = (house.get("summary") or "") + f" Listed from ${listed['listed_cad']:.2f} CAD (ask, not sold)."
             return attach_hist_copy(house, card)
     qs = search_queries(card)
     q = qs[0] if qs else (card.get("player") or "")
@@ -1814,6 +1939,11 @@ async def comp(
             data = {"summary": (text or "")[:280], "needs_review": True}
     if not isinstance(data, dict):
         data = {"summary": str(data)[:280], "needs_review": True}
+    listed = await ebay_browse_listings(card, q)
+    if listed:
+        data.update({k: v for k, v in listed.items() if v is not None})
+        if listed.get("listed_cad") and "Listed from" not in str(data.get("summary") or ""):
+            data["summary"] = (data.get("summary") or "") + f" Listed from ${listed['listed_cad']:.2f} CAD (ask, not sold)."
     def _as_price(v):
         try:
             n = float(v)
@@ -2536,6 +2666,7 @@ async def run_night_books():
             spread_comp(fp, extra)
         elif house:
             spread_comp(fp, house)
+        await ebay_browse_listings(c, c.get("player") or "")
         await asyncio.sleep(0.15)
 
 async def night_loop():
