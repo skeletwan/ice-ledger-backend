@@ -892,13 +892,8 @@
       <div id="banPreview"></div>
       <button class="ghost" type="button" id="banCancel" style="width:auto;margin:8px 0 12px;padding:8px 12px">Cancel event</button>
       <div id="banFitBar">
-        <p class="muted">Use the sliders to move and zoom. You can also drag the banner. Then tap Done.</p>
-        <label>Zoom</label>
+        <p class="muted">Drag the photo to move it. Zoom to size it. Then tap Done.</p>
         <input id="banZoom" type="range" min="80" max="280" value="100" />
-        <label>Left / right</label>
-        <input id="banPanX" type="range" min="-220" max="220" value="0" />
-        <label>Up / down</label>
-        <input id="banPanY" type="range" min="-160" max="160" value="0" />
         <button type="button" id="banFitDone">Done</button>
       </div>
       <label>Background</label>
@@ -4654,9 +4649,6 @@ function applyBanFit(){
   const f = window.banFit;
   if (!img || !f) return;
   img.style.transform = "translate(calc(-50% + "+f.x+"px), calc(-50% + "+f.y+"px)) scale("+(f.z||1)+")";
-  if ($("banPanX") && document.activeElement !== $("banPanX")) $("banPanX").value = String(Math.max(-220, Math.min(220, Math.round(f.x))));
-  if ($("banPanY") && document.activeElement !== $("banPanY")) $("banPanY").value = String(Math.max(-160, Math.min(160, Math.round(f.y))));
-  if ($("banZoom") && document.activeElement !== $("banZoom")) $("banZoom").value = String(Math.round((f.z||1)*100));
 }
 function startBanFit(src){
   if (!src) return;
@@ -4664,10 +4656,8 @@ function startBanFit(src){
   window.bannerArt = "photo";
   window.banFit = { src, x:0, y:0, z:1, drag:false, sx:0, sy:0 };
   if ($("banZoom")) $("banZoom").value = 100;
-  if ($("banPanX")) $("banPanX").value = 0;
-  if ($("banPanY")) $("banPanY").value = 0;
   if ($("banFitBar")) $("banFitBar").classList.add("on");
-  if ($("banArtNote")) $("banArtNote").textContent = "Move with the sliders or drag the banner, then tap Done.";
+  if ($("banArtNote")) $("banArtNote").textContent = "Drag and zoom the photo on the banner.";
   paintBanDraft();
 }
 function bindBanFit(){
@@ -4964,16 +4954,6 @@ $("banStart") && ($("banStart").oninput = paintBanStartShow);
 $("banZoom") && ($("banZoom").oninput = () => {
   if (!window.banFit) return;
   window.banFit.z = Math.max(0.8, (+$("banZoom").value || 100) / 100);
-  applyBanFit();
-});
-$("banPanX") && ($("banPanX").oninput = () => {
-  if (!window.banFit) return;
-  window.banFit.x = +$("banPanX").value || 0;
-  applyBanFit();
-});
-$("banPanY") && ($("banPanY").oninput = () => {
-  if (!window.banFit) return;
-  window.banFit.y = +$("banPanY").value || 0;
   applyBanFit();
 });
 $("banAdjust") && ($("banAdjust").onclick = ev => {
