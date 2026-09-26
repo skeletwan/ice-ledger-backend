@@ -864,7 +864,7 @@
       <p class="muted" id="banArtNote"></p>
       <label>Layout</label>
       <select id="banKind">
-        <option value="stock">Stock / channel</option>
+        <option value="stock">Stock</option>
         <option value="live">Stream / rip</option>
         <option value="show">Card show</option>
       </select>
@@ -4693,11 +4693,13 @@ async function loadBanners(){
 async function cancelMyBanner(){
   try {
     await authPost("/banners/cancel", {});
-    if (window.myBanner) window.myBanner.off = 1;
-    if (window.pubBanners && window.pubBanners[0]) window.pubBanners[0].off = 1;
-    loadBanners();
-    if (ownBinder()) paintPubBanner();
-    if ($("banNote")) $("banNote").textContent = "Banner cancelled.";
+    window.pubBanners = [];
+    if (window.myEvent) window.myEvent.off = 1;
+    window.myEvent = null;
+    await loadBanners();
+    if (window.myStock) window.pubCover = window.myStock;
+    paintPubBanner();
+    if ($("banNote")) $("banNote").textContent = "Event cancelled. Stock is back up.";
   } catch(e) {
     if ($("banNote")) $("banNote").textContent = e.message;
   }
@@ -5402,9 +5404,14 @@ $("likeBtn") && ($("likeBtn").onclick = async () => {
     refreshNotesBadge();
   }
 });
+function liveEvent(b){
+  if (!b || b.cover || b.kind === "stock" || +b.off) return false;
+  const st = bannerState(b);
+  return !st.done && !!b.starts;
+}
 function paintPubBanner(){
-  const ev = (window.pubBanners||[])[0];
-  const cover = window.pubCover || {};
+  const ev = (window.pubBanners||[]).find(liveEvent);
+  const cover = window.pubCover || window.myStock || {};
   if (!$("pubBanner")) return;
   if (ev) $("pubBanner").innerHTML = bannerHtml(ev, ownBinder(), viewSlug);
   else $("pubBanner").innerHTML = bannerHtml({
@@ -5415,7 +5422,7 @@ function paintPubBanner(){
     art: cover.art || "ice",
     color: cover.color || "#8fd4ee",
     has_photo: !!cover.has_photo,
-    kind: cover.kind || "stock",
+    kind: "stock",
     starts: "",
     off: 0
   }, false, viewSlug);
