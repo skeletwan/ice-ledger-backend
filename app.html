@@ -251,7 +251,7 @@
     .board-post .ban-go { display:inline-block; margin-top:8px; padding:8px 14px; border-radius:8px; background:#14303a; color:#fff; font-weight:800; font-size:13px; text-decoration:none; border:1px solid var(--ice); flex:0 0 auto; }
     .board-post.stream h3 { font-size:18px; }
     .board-post.stock .k { display:none; }
-    #pubBanner .k { display:none; }
+    #pubBanner .k, #eventsList .k, #eventsPage .k { display:none; }
     .board-post .bio { margin:6px 0 0; font-size:13px; line-height:1.35; color:#d5e4ee; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
     .ban-arts { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; margin:6px 0 8px; }
     .ban-arts span { display:block; height:36px; border-radius:8px; border:2px solid transparent; cursor:pointer; }
@@ -929,7 +929,7 @@
       </div>
       <label id="banBodyLab">Bio</label>
       <textarea id="banBody" maxlength="120" rows="3" placeholder="What you rip, what you collect"></textarea>
-      <p class="muted" id="banBodyHint">Two lines on the banner. 120 characters.</p>
+      <p class="muted" id="banBodyHint">120 characters.</p>
       <label>Link</label>
       <input id="banUrl" placeholder="https://youtube.com/@yourchannel" />
       <label>Color</label>
@@ -4799,10 +4799,12 @@ function paintBanCancel(){
   btn.style.padding = "8px 12px";
 }
 function syncBanLayout(){
-  const stock = ($("banKind")&&$("banKind").value) === "stock";
+  const kind = ($("banKind")&&$("banKind").value) || "stock";
+  const stock = kind === "stock";
+  const show = kind === "show";
   if ($("banWhenWrap")) $("banWhenWrap").classList.toggle("hidden", stock);
   if ($("banBodyLab")) $("banBodyLab").textContent = stock ? "Bio" : "Details";
-  if ($("banBody")) $("banBody").placeholder = stock ? "What you rip, what you collect" : "Booth 14, 10am–4pm or episode notes";
+  if ($("banBody")) $("banBody").placeholder = stock ? "What you rip, what you collect" : (show ? "Booth 14, 10am–4pm" : "Booth 14, 10am–4pm or episode notes");
   if ($("banTitle")) $("banTitle").placeholder = stock ? "Your channel or binder name" : "Saturday rip · Toronto card show";
   if ($("banUrl")) $("banUrl").placeholder = stock ? "https://youtube.com/@yourchannel" : "https://youtube.com/…";
   paintBanCancel();
