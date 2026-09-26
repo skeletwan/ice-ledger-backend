@@ -907,6 +907,9 @@ def _sale_fits(title: str, q: str, player: str, parallel: str = "", number: str 
             return False
     elif re.search(r"young guns|\byg\b", t) and "young guns" not in (parallel or "").lower():
         return False
+    if "sizzle" in ql or re.search(r"^sr-?\d+", str(number or ""), flags=re.I):
+        if not re.search(r"sizzle|\bsr-?\d+", t):
+            return False
     if "future watch" in ql:
         if not re.search(r"future watch|\bfw\b|\bfwrc\b", t):
             return False
@@ -943,7 +946,7 @@ def _sale_fits(title: str, q: str, player: str, parallel: str = "", number: str 
             "orange", "gold vinyl", "superfractor", "printing plate",
             "outburst", "extravagance", "canvas", "acetate", "clear cut",
             "red rainbow", "green parallel", "blue parallel", "pink",
-            "future watch", "sizzle reel", "exclusives", "high gloss",
+            "future watch", "exclusives", "high gloss",
             "deluxe", "speckle", "holofoil", "limited red", "limited",
         )
         if any(flag in t and flag not in ql for flag in extra):
@@ -1161,7 +1164,14 @@ def search_queries(card: dict) -> list:
         q += " -(lot,reprint,bundle)"
     else:
         q += " -(lot,checklist,reprint,bundle)"
-    return [q]
+    out = [q]
+    if "sizzle" in f"{ins} {st}".lower() and code:
+        alt = " ".join(x for x in [_player_q(player), code] if x)
+        alt += " -(auto,autograph,autographed,signed,signature,rpa,inked,fwa)"
+        alt += " -(lot,checklist,reprint,bundle)"
+        if alt not in out:
+            out.append(alt)
+    return out
 
 def _clean_bucket(vals):
     vals = [v for v in vals if v and v >= 1]
