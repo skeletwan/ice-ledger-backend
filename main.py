@@ -4040,7 +4040,7 @@ async def add_banner(payload: dict, request: Request, x_token: str | None = Head
     if kind not in ("show", "break", "episode", "live", "note", "stock"):
         kind = "note"
     title = (payload.get("title") or "").strip()[:80]
-    body = (payload.get("body") or "").strip()[:400]
+    body = (payload.get("body") or "").strip()[:120]
     url = _clean_banner_url(payload.get("url") or "")
     color = (payload.get("color") or "#8fd4ee").strip()[:16]
     if not re.match(r"^#[0-9a-fA-F]{3,8}$", color):
