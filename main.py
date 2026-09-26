@@ -312,9 +312,9 @@ def shrink(data: bytes) -> bytes:
     except Exception:
         pass
     img = img.convert("RGB")
-    img.thumbnail((1280, 1280))
+    img.thumbnail((900, 900))
     out = BytesIO()
-    img.save(out, format="JPEG", quality=80)
+    img.save(out, format="JPEG", quality=70, optimize=True)
     return out.getvalue()
 
 def ebay_ready() -> bool:
