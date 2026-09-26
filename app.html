@@ -466,7 +466,7 @@
             <button type="button" id="toSignin">Already have an account</button>
           </div>
         </form>
-        <form id="formReset" action="/reset" method="post">
+        <form id="formReset" action="/reset-confirm" method="post">
           <label>Email</label>
           <input id="emailReset" type="email" name="username" autocomplete="username" />
           <button type="button" class="auth-text" id="resetSend">Send reset code</button>
@@ -4392,30 +4392,29 @@ $("resetSend") && ($("resetSend").onclick = async () => {
     flash("authStatus", "ok", "If that email has an account, a code is on the way.");
   } catch(e) { flash("authStatus", "err", e.message); }
 });
-$("resetBtn") && ($("resetBtn").onclick = null);
-$("formReset") && ($("formReset").onsubmit = async ev => {
-  ev.preventDefault();
-  try {
-    const pw = ($("resetPw") && $("resetPw").value) || "";
-    const pw2 = ($("resetPw2") && $("resetPw2").value) || "";
-    if (pw.length < 6) {
-      flash("authStatus", "err", "Password needs at least 6 characters.");
-      return;
-    }
-    if (pw !== pw2) {
-      flash("authStatus", "err", "Passwords have to match.");
-      return;
-    }
-    const d = await authPost("/reset-confirm", {
-      email: authEmail(),
-      code: $("resetCode").value,
-      password: pw
-    });
-    flash("authStatus", "ok", "Password updated. Save it when iPhone asks, then we’ll sign you in.");
-    await new Promise(r => setTimeout(r, 700));
-    clearLocalAccount();
-    setToken(d.token); showApp(); await pullCloud(); paintTicker(); renderBinder();
-  } catch(e) { flash("authStatus", "err", e.message); }
+$("formReset") && ($("formReset").onsubmit = ev => {
+  const pw = ($("resetPw") && $("resetPw").value) || "";
+  const pw2 = ($("resetPw2") && $("resetPw2").value) || "";
+  if (!authEmail() || authEmail().indexOf("@")<0) {
+    ev.preventDefault();
+    flash("authStatus", "err", "Enter the account email.");
+    return;
+  }
+  if ((($("resetCode") && $("resetCode").value) || "").trim().length < 4) {
+    ev.preventDefault();
+    flash("authStatus", "err", "Paste the code from your email.");
+    return;
+  }
+  if (pw.length < 6) {
+    ev.preventDefault();
+    flash("authStatus", "err", "Password needs at least 6 characters.");
+    return;
+  }
+  if (pw !== pw2) {
+    ev.preventDefault();
+    flash("authStatus", "err", "Passwords have to match.");
+    return;
+  }
 });
 $("nSave") && ($("nSave").onclick = async () => {
   localStorage.setItem(NOTE, JSON.stringify({

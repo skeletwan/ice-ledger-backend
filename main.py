@@ -3330,11 +3330,10 @@ async def mail_test(payload: dict):
     to = (payload.get("email") or MAIL_TO or "").strip().lower()
     return _mail_test_body(to)
 
-@app.post("/reset-confirm")
-async def reset_confirm(payload: dict):
-    email = (payload.get("email") or "").strip().lower()
-    code = (payload.get("code") or payload.get("token") or "").strip().lower()
-    pw = payload.get("password") or ""
+def _do_reset(email: str, code: str, pw: str) -> dict:
+    email = (email or "").strip().lower()
+    code = (code or "").strip().lower()
+    pw = pw or ""
     if "@" not in email or len(pw) < 6 or len(code) < 4:
         raise HTTPException(400, "email, reset code, and a new password (6+)")
     con = db()
@@ -3357,6 +3356,28 @@ async def reset_confirm(payload: dict):
     con.commit()
     con.close()
     return {"token": token, "email": email}
+
+@app.post("/reset-confirm")
+async def reset_confirm(request: Request):
+    ctype = (request.headers.get("content-type") or "").lower()
+    if "application/json" in ctype:
+        payload = await request.json()
+        return _do_reset(payload.get("email") or "", payload.get("code") or payload.get("token") or "", payload.get("password") or "")
+    form = await request.form()
+    out = _do_reset(
+        str(form.get("username") or form.get("email") or ""),
+        str(form.get("reset-code") or form.get("code") or ""),
+        str(form.get("new-password") or form.get("password") or ""),
+    )
+    tok = json.dumps(out["token"])
+    html = (
+        "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
+        "<title>Password updated</title>"
+        "<p style='font-family:-apple-system,sans-serif;padding:24px'>Password updated. Opening Clappers PC…</p>"
+        "<script>try{localStorage.setItem('ice-token',"+tok+");}catch(e){}"
+        "location.replace('/');</script>"
+    )
+    return HTMLResponse(html)
 
 @app.get("/cards")
 async def list_cards(request: Request, x_token: str | None = Header(default=None)):
