@@ -268,12 +268,12 @@
     .ban-arts .navy, .board-post.art-navy { background:#0b1116; }
     .board-post.art-photo { background-size:cover; background-repeat:no-repeat; background-position:center; position:relative; overflow:hidden; }
     .board-post.art-photo:before { content:""; position:absolute; inset:0; background:rgba(0,0,0,.42); z-index:1; pointer-events:none; }
-    .board-post.art-photo > *:not(.ban-cover):not(.live-chip):not(.ban-end) { position:relative; z-index:2; }
+    .board-post.art-photo > *:not(.ban-cover):not(.ban-drag):not(.live-chip):not(.ban-end) { position:relative; z-index:2; }
     .board-post.fitting { touch-action:none; }
     .ban-cover { position:absolute !important; left:50%; top:50%; width:160%; max-width:none; height:auto; z-index:0; pointer-events:none; -webkit-user-drag:none; user-select:none; }
     .board-post.fitting .ban-copy { pointer-events:none; }
     .ban-drag { display:none; }
-    .board-post.fitting .ban-drag { display:block; position:absolute; inset:0; z-index:5; touch-action:none; cursor:grab; }
+    .board-post.fitting .ban-drag { display:block; position:absolute !important; inset:0; z-index:8 !important; touch-action:none; cursor:grab; }
     .board-post.fitting .ban-drag:active { cursor:grabbing; }
     #banFitBar { display:none; margin:0 0 12px; }
     #banFitBar.on { display:block; }
@@ -1806,7 +1806,7 @@ function paintTicker(){
   const span = (hi-lo) || 1;
   const pctPos = t.mktN ? Math.max(0, Math.min(100, ((t.mkt-lo)/span)*100)) : 50;
   const plCls = t.pl==null ? "" : (t.pl>=0 ? "pos" : "neg");
-  const last = t.mktN ? money(t.mkt) : "—";
+  const last = t.mktN ? money(t.mkt) : "no comps";
   $("ticker").innerHTML =
     "<div class=\"quote\"><div class=\"quote-last "+(chCls)+"\">"+last+"</div>"+
     "<div class=\"quote-chg "+chCls+"\">"+chTxt+"</div></div>"+
@@ -2977,7 +2977,7 @@ function paintGradeBook(c, boxId){
   orderGrades(c||{});
   const b = bookOf(c||{});
   const rows = [["Raw", b.Raw],["PSA 6", b["PSA 6"]],["PSA 7", b["PSA 7"]],["PSA 8", b["PSA 8"]],["PSA 9", b["PSA 9"]],["PSA 10", b["PSA 10"]],["BGS 9", b["BGS 9"]],["BGS 9.5", b["BGS 9.5"]],["BGS 10", b["BGS 10"]],["SGC 10", b["SGC 10"]]];
-  box.innerHTML = rows.map(r => "<div class=\"gcell\"><span>"+r[0]+"</span><b>"+money(r[1])+"</b></div>").join("");
+  box.innerHTML = rows.map(r => "<div class=\"gcell\"><span>"+r[0]+"</span><b>"+compMoney(r[1])+"</b></div>").join("");
 }
 function bookGet(c, svc, num){
   const b = bookOf(c);
@@ -3001,7 +3001,7 @@ function paintGradePick(){
   fillGradeNums($("gNum"), svc, $("gNum") && $("gNum").value);
   const num = $("gNum").value;
   const v = bookGet(c, svc, num);
-  $("vPick").textContent = money(v);
+  $("vPick").textContent = compMoney(v);
   $("vPickLbl").textContent = svc==="Raw" ? "Raw sold" : (svc+" "+num+" sold");
   if ($("gNum")) $("gNum").style.visibility = svc==="Raw" ? "hidden" : "visible";
 }
@@ -3011,7 +3011,7 @@ function paintPubGradePick(){
   fillGradeNums($("pgNum"), svc, $("pgNum") && $("pgNum").value);
   const num = ($("pgNum")&&$("pgNum").value) || "10";
   const v = bookGet(viewCard, svc, num);
-  $("pubPick").textContent = money(v);
+  $("pubPick").textContent = compMoney(v);
   $("pubPickLbl").textContent = svc==="Raw" ? "Raw sold" : (svc+" "+num+" sold");
   if ($("pgNum")) $("pgNum").style.visibility = svc==="Raw" ? "hidden" : "visible";
 }
@@ -3066,7 +3066,7 @@ function openDetail(id){
     if ($("dCapAdd")) $("dCapAdd").textContent = cap ? "Edit caption" : "Add caption";
     if ($("dCapEdit")) $("dCapEdit").classList.add("hidden");
   }
-  $("vHold").textContent = money(binderCad(c));
+  $("vHold").textContent = compMoney(binderCad(c));
   const holdLbl = $("vHold") && $("vHold").nextElementSibling;
   if (holdLbl) holdLbl.textContent = (!c.grader || c.grader==="Raw") ? "This copy · Raw" : ("This copy · "+[c.grader,c.grade].filter(Boolean).join(" "));
   $("vPaid").textContent = money(c.cost);
@@ -3130,7 +3130,11 @@ function gradeTier(g, gr){
 function asCad(v){
   if (v==null || v==="") return null;
   const n = parseFloat(String(v).replace(/[^0-9.]/g,""));
-  return (!isNaN(n) && n >= 1) ? n : null;
+  return (!isNaN(n) && n > 1) ? n : null;
+}
+function compMoney(n){
+  const v = asCad(n);
+  return v==null ? "no comps" : money(v);
 }
 function binderCad(c){
   if (!c) return null;
@@ -3278,7 +3282,7 @@ function priceCol(c, val, kind){
   const label = kind==="pub"
     ? "Market"
     : ((!c || !c.grader || c.grader==="Raw") ? "Raw" : [c.grader,c.grade].filter(Boolean).join(" "));
-  return "<div class=\"item-px\"><span class=\"px-lbl\">"+label+"</span><span class=\"px-val\">"+(val!=null?money(val):"—")+"</span>"+
+  return "<div class=\"item-px\"><span class=\"px-lbl\">"+label+"</span><span class=\"px-val\">"+compMoney(val)+"</span>"+
     (mv?("<div class=\"row-chg "+(up?"up":"dn")+"\">"+(up?"+":"")+mv.pct.toFixed(1)+"% "+rowSpark(mv.pts,up)+"</div>"):"")+
     "</div>";
 }
@@ -4655,7 +4659,8 @@ function startBanFit(src){
 }
 function bindBanFit(){
   applyBanFit();
-  const pad = $("banDrag");
+  const box = $("banPreview") && $("banPreview").querySelector(".fitting");
+  const pad = $("banDrag") || box;
   const img = $("banCover");
   if (!pad || !img || !window.banFit) return;
   const pt = ev => {
@@ -4690,6 +4695,8 @@ function bindBanFit(){
   pad.ontouchstart = down;
   pad.ontouchmove = move;
   pad.ontouchend = up;
+  document.onpointermove = ev => { if (window.banFit && window.banFit.drag) move(ev); };
+  document.onpointerup = ev => { if (window.banFit && window.banFit.drag) up(ev); };
   img.onload = applyBanFit;
 }
 function finishBanFit(){
@@ -4754,6 +4761,7 @@ function paintBanDraft(){
     const h = $("banPreview").querySelector(".ban-copy h3");
     if (h) h.textContent = ($("banTitle")&&$("banTitle").value) || "Your event";
     applyBanFit();
+    bindBanFit();
     return;
   }
   if ($("banPreview")) $("banPreview").innerHTML = bannerHtml(bannerDraft(), true, mySlug);
@@ -5177,7 +5185,7 @@ function openPubCard(c){
     $("pubCap").textContent = cap;
     $("pubCap").classList.toggle("hidden", !cap);
   }
-  if ($("pubHold")) $("pubHold").textContent = money(publicCad(c));
+  if ($("pubHold")) $("pubHold").textContent = compMoney(publicCad(c));
   const pubLbl = $("pubHold") && $("pubHold").nextElementSibling;
   if (pubLbl) pubLbl.textContent = (!c.grader || c.grader==="Raw") ? "This copy · Raw" : ("This copy · "+[c.grader,c.grade].filter(Boolean).join(" "));
   if ($("pgSvc")) $("pgSvc").value = (!c.grader || c.grader==="Raw") ? "Raw" : (c.grader || "Raw");
@@ -5511,7 +5519,7 @@ function renderFeed(){
   box.innerHTML = rows.length ? rows.map(c => {
     const line = [c.team,c.year,c.set,c.number?"#"+c.number:""].filter(Boolean).join(" · ");
     const ft = tierFromCad(publicCad(c));
-    return "<article class=\"item"+grailCls(c)+(ft?" tier-"+ft:"")+"\" data-feed-slug=\""+c.slug+"\" data-feed-card=\""+c.id+"\"><div class=\"item-top\">"+thumbHtml(c, c.slug)+"<div><h3>"+(c.player||"—")+"</h3><div class=\"muted\">"+line+"</div><div class=\"item-ver\">"+rowVersion(c)+"</div><div class=\"muted\">"+(c.display||"Collector")+" · "+timeAgo(c.added)+"</div><div class=\"muted\">"+money(publicCad(c) || c.comp)+"</div></div></div>"+(cardLooksGrail(c)?"<span class=\"grail-tag\">Grail</span>":"")+(ft?"<span class=\"tier-tag "+ft+"\">"+tierLabel(ft)+"</span>":"")+"</article>";
+    return "<article class=\"item"+grailCls(c)+(ft?" tier-"+ft:"")+"\" data-feed-slug=\""+c.slug+"\" data-feed-card=\""+c.id+"\"><div class=\"item-top\">"+thumbHtml(c, c.slug)+"<div><h3>"+(c.player||"—")+"</h3><div class=\"muted\">"+line+"</div><div class=\"item-ver\">"+rowVersion(c)+"</div><div class=\"muted\">"+(c.display||"Collector")+" · "+timeAgo(c.added)+"</div><div class=\"muted\">"+compMoney(publicCad(c) || c.comp)+"</div></div></div>"+(cardLooksGrail(c)?"<span class=\"grail-tag\">Grail</span>":"")+(ft?"<span class=\"tier-tag "+ft+"\">"+tierLabel(ft)+"</span>":"")+"</article>";
   }).join("") : "<p class=\"muted\">No new cards yet.</p>";
 }
 $("feedSort") && ($("feedSort").onchange = renderFeed);
