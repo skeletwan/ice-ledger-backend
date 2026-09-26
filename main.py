@@ -3058,10 +3058,32 @@ def require_scan(request: Request, x_token: str | None = None):
     bump_usage(uid)
     return uid, usage_of(uid)
 
+def _auth_bounce(token: str, msg: str):
+    tok = json.dumps(token)
+    html = (
+        "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
+        f"<title>{msg}</title>"
+        f"<p style='font-family:-apple-system,sans-serif;padding:24px'>{msg}</p>"
+        "<script>try{localStorage.setItem('ice-token',"+tok+");}catch(e){}"
+        "location.replace('/');</script>"
+    )
+    return HTMLResponse(html)
+
 @app.post("/signup")
-async def signup(payload: dict):
-    email = (payload.get("email") or "").strip().lower()
-    pw = (payload.get("password") or "").strip()
+async def signup(request: Request):
+    ctype = (request.headers.get("content-type") or "").lower()
+    if "application/json" in ctype:
+        payload = await request.json()
+        email = payload.get("email") or ""
+        pw = payload.get("password") or ""
+        bounce = False
+    else:
+        form = await request.form()
+        email = str(form.get("username") or form.get("email") or "")
+        pw = str(form.get("new-password") or form.get("password") or "")
+        bounce = True
+    email = email.strip().lower()
+    pw = (pw or "").strip()
     if "@" not in email or len(pw) < 6:
         raise HTTPException(400, "email and password (6+ chars)")
     con = db()
@@ -3080,6 +3102,8 @@ async def signup(payload: dict):
                 (token, uid, time.strftime("%Y-%m-%dT%H:%M:%SZ")))
     con.commit()
     con.close()
+    if bounce:
+        return _auth_bounce(token, "Account created. Opening Clappers PC…")
     return {"token": token, "email": email}
 
 @app.post("/login")
@@ -3289,7 +3313,7 @@ async def reset_request(payload: dict):
     con = db()
     row = con.execute("SELECT id FROM users WHERE lower(email)=?", (email,)).fetchone()
     if row:
-        token = f"{secrets.randbelow(90000000) + 10000000}"
+        token = f"{secrets.randbelow(100000000):08d}"
         con.execute("DELETE FROM resets WHERE email=?", (email,))
         con.execute("INSERT INTO resets(email,token,created) VALUES(?,?,?)", (email, token, int(time.time())))
         con.commit()

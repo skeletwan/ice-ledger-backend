@@ -452,32 +452,32 @@
             <button type="button" id="showReset">Forgot password</button>
           </div>
         </form>
-        <form id="formSignup" action="#" method="post" onsubmit="return false">
+        <form id="formSignup" action="/signup" method="post">
           <label>Email</label>
           <input id="emailSignup" type="email" name="username" autocomplete="username" />
           <label>Password</label>
           <input id="newPw" type="password" name="new-password" autocomplete="new-password" placeholder="Password" />
           <label>Confirm password</label>
-          <input id="newPw2" type="password" name="new-password-confirm" autocomplete="new-password" placeholder="Confirm password" />
+          <input id="newPw2" type="password" autocomplete="off" placeholder="Confirm password" />
           <button type="button" class="auth-text" id="showNewPwBtn">Show password</button>
           <label style="margin-top:14px"><input id="agreeLegal" type="checkbox" style="width:auto;margin-right:8px" /> I agree to the <a href="/terms#terms-of-service" target="_blank" rel="noopener">Terms</a>, <a href="/aup#acceptable-use-policy" target="_blank" rel="noopener">Acceptable Use</a>, and <a href="/privacy#privacy-policy" target="_blank" rel="noopener">Privacy Policy</a></label>
-          <button type="button" id="signupBtn" disabled>Create account</button>
+          <button type="submit" id="signupBtn" disabled>Create account</button>
           <div class="auth-links">
             <button type="button" id="toSignin">Already have an account</button>
           </div>
         </form>
-        <form id="formReset" action="#" method="post" onsubmit="return false">
+        <form id="formReset" action="/reset-confirm" method="post">
           <label>Email</label>
-          <input id="emailReset" type="email" autocomplete="username" />
+          <input id="emailReset" type="email" name="username" autocomplete="username" />
           <button type="button" class="auth-text" id="resetSend">Send reset code</button>
           <label>Code</label>
-          <input id="resetCode" type="text" inputmode="numeric" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="8-digit code from email" />
+          <input id="resetCode" type="text" name="reset-code" inputmode="numeric" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Code from your email" />
           <label>New password</label>
-          <input id="resetPw" type="password" autocomplete="new-password" placeholder="Password" />
+          <input id="resetPw" type="password" name="new-password" autocomplete="new-password" placeholder="Password" />
           <label>Confirm password</label>
-          <input id="resetPw2" type="password" autocomplete="new-password" placeholder="Confirm password" />
+          <input id="resetPw2" type="password" autocomplete="off" placeholder="Confirm password" />
           <button type="button" class="auth-text" id="resetShowPw">Show password</button>
-          <button type="button" id="resetBtn">Save password</button>
+          <button type="submit" id="resetBtn">Save password</button>
           <div class="auth-links">
             <button type="button" id="resetBack">Back to sign in</button>
           </div>
@@ -4335,6 +4335,19 @@ function setAuthMode(mode){
   }
   if ($("authStatus")) { $("authStatus").className = "status"; $("authStatus").textContent = ""; }
   ["email","emailSignup","emailReset"].forEach(id => { if ($(id) && em) $(id).value = em; });
+  const map = {signin:"formSignin", signup:"formSignup", reset:"formReset"};
+  Object.keys(map).forEach(m => {
+    const f = $(map[m]);
+    if (!f) return;
+    f.querySelectorAll("input").forEach(el => {
+      if (m !== mode) {
+        if (el.name) el.setAttribute("data-name", el.name);
+        el.removeAttribute("name");
+      } else if (!el.name && el.getAttribute("data-name")) {
+        el.setAttribute("name", el.getAttribute("data-name"));
+      }
+    });
+  });
   if ($("signupBtn") && mode === "signup") lockSignup();
   else if ($("signupBtn")) $("signupBtn").disabled = true;
 }
@@ -4349,37 +4362,30 @@ $("agreeLegal") && ($("agreeLegal").onchange = lockSignup);
 $("toSignin") && ($("toSignin").onclick = ev => { ev.preventDefault(); setAuthMode("signin"); });
 $("showReset") && ($("showReset").onclick = ev => { ev.preventDefault(); setAuthMode("reset"); });
 $("resetBack") && ($("resetBack").onclick = ev => { ev.preventDefault(); setAuthMode("signin"); });
-$("signupBtn") && ($("signupBtn").onclick = ev => {
-  ev.preventDefault();
-  if ($("formSignup") && $("formSignup").onsubmit) $("formSignup").onsubmit(ev);
-});
-$("formSignup") && ($("formSignup").onsubmit = async ev => {
-  ev.preventDefault();
-  try {
-    if (!$("agreeLegal") || !$("agreeLegal").checked) {
-      flash("authStatus", "err", "Agree to the Terms and Privacy Policy first.");
-      return;
-    }
-    const pw = ($("newPw") && $("newPw").value) || "";
-    const pw2 = ($("newPw2") && $("newPw2").value) || "";
-    if (!authEmail() || authEmail().indexOf("@")<0) {
-      flash("authStatus", "err", "Enter the email you want on this account.");
-      return;
-    }
-    if (pw.length < 6) {
-      flash("authStatus", "err", "Password needs at least 6 characters.");
-      return;
-    }
-    if (pw !== pw2) {
-      flash("authStatus", "err", "Passwords have to match.");
-      return;
-    }
-    const d = await authPost("/signup", { email: authEmail(), password:pw });
-    flash("authStatus", "ok", "Account created. Save the password if iPhone asks.");
-    await new Promise(r => setTimeout(r, 800));
-    clearLocalAccount();
-    setToken(d.token); showApp(); await pullCloud(); paintTicker(); renderBinder();
-  } catch(e) { flash("authStatus", "err", e.message); }
+$("signupBtn") && ($("signupBtn").onclick = null);
+$("formSignup") && ($("formSignup").onsubmit = ev => {
+  if (!$("agreeLegal") || !$("agreeLegal").checked) {
+    ev.preventDefault();
+    flash("authStatus", "err", "Agree to the Terms and Privacy Policy first.");
+    return;
+  }
+  const pw = ($("newPw") && $("newPw").value) || "";
+  const pw2 = ($("newPw2") && $("newPw2").value) || "";
+  if (!authEmail() || authEmail().indexOf("@")<0) {
+    ev.preventDefault();
+    flash("authStatus", "err", "Enter the email you want on this account.");
+    return;
+  }
+  if (pw.length < 6) {
+    ev.preventDefault();
+    flash("authStatus", "err", "Password needs at least 6 characters.");
+    return;
+  }
+  if (pw !== pw2) {
+    ev.preventDefault();
+    flash("authStatus", "err", "Passwords have to match.");
+    return;
+  }
 });
 $("loginBtn") && ($("loginBtn").onclick = async ev => {
   if (ev) ev.preventDefault();
@@ -4400,38 +4406,31 @@ $("resetSend") && ($("resetSend").onclick = async () => {
     flash("authStatus", "ok", "If that email has an account, a code is on the way.");
   } catch(e) { flash("authStatus", "err", e.message); }
 });
-$("resetBtn") && ($("resetBtn").onclick = async ev => {
-  if (ev) ev.preventDefault();
+$("resetBtn") && ($("resetBtn").onclick = null);
+$("formReset") && ($("formReset").onsubmit = ev => {
   const pw = ($("resetPw") && $("resetPw").value) || "";
   const pw2 = ($("resetPw2") && $("resetPw2").value) || "";
   if (!authEmail() || authEmail().indexOf("@")<0) {
+    ev.preventDefault();
     flash("authStatus", "err", "Enter the account email.");
     return;
   }
-  if ((($("resetCode") && $("resetCode").value) || "").trim().length < 4) {
-    flash("authStatus", "err", "Paste the code from your email.");
+  if ((($("resetCode") && $("resetCode").value) || "").replace(/\D/g,"").length < 6) {
+    ev.preventDefault();
+    flash("authStatus", "err", "Enter the code from your email.");
     return;
   }
   if (pw.length < 6) {
+    ev.preventDefault();
     flash("authStatus", "err", "Password needs at least 6 characters.");
     return;
   }
   if (pw !== pw2) {
+    ev.preventDefault();
     flash("authStatus", "err", "Passwords have to match.");
     return;
   }
-  try {
-    await authPost("/reset-confirm", {
-      email: authEmail(),
-      code: $("resetCode").value,
-      password: pw
-    });
-    if ($("password")) $("password").value = "";
-    setAuthMode("signin");
-    flash("authStatus", "ok", "Password updated. Sign in with the new one.");
-  } catch(e) { flash("authStatus", "err", e.message); }
 });
-$("formReset") && ($("formReset").onsubmit = ev => { ev.preventDefault(); if ($("resetBtn")) $("resetBtn").click(); });
 $("nSave") && ($("nSave").onclick = async () => {
   localStorage.setItem(NOTE, JSON.stringify({
     on: $("nOn").checked,
