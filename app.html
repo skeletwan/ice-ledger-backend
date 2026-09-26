@@ -224,6 +224,22 @@
     .board-post.stream { background:#070c10; padding:16px 16px 14px; }
     .board-post.stream h3 { font-size:18px; }
     .board-post.show .k { color:var(--ice); }
+    .ban-arts { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; margin:6px 0 8px; }
+    .ban-arts button { margin:0; padding:0; height:36px; border-radius:8px; border:2px solid transparent; }
+    .ban-arts button.on { border-color:#fff; }
+    .ban-arts .ice { background:linear-gradient(160deg,#1a6a82,#0b303c); }
+    .ban-arts .rink { background:linear-gradient(180deg,#2a3d4d,#101820); }
+    .ban-arts .foil { background:linear-gradient(135deg,#8a7a40,#2a2410); }
+    .ban-arts .rip { background:linear-gradient(160deg,#7a2030,#18080c); }
+    .ban-arts .navy { background:#0b1116; }
+    .board-post.art-ice { background:linear-gradient(160deg,#0b3a4a,#082028 55%,#0e171e); }
+    .board-post.art-rink { background:linear-gradient(180deg,#1a2a38,#0c141c); }
+    .board-post.art-foil { background:linear-gradient(135deg,#3a3420,#8a7a40 42%,#1a1810); }
+    .board-post.art-rip { background:linear-gradient(160deg,#3a1018,#12080c); }
+    .board-post.art-navy { background:#070c10; }
+    .board-post.art-photo { background-size:cover; background-position:center; position:relative; }
+    .board-post.art-photo:before { content:""; position:absolute; inset:0; background:rgba(0,0,0,.45); }
+    .board-post.art-photo > * { position:relative; z-index:1; }
     #banCard { border-radius:12px; overflow:hidden; }
     #banCard input, #banCard select { max-width:100%; min-width:0; box-sizing:border-box; }
     .ban-when {
@@ -779,10 +795,11 @@
       <div class="row2" style="margin-top:12px;align-items:end">
         <div>
           <label>Widget photo</label>
-          <label class="shot-wrap" id="shotProfile" for="pPhoto" style="min-height:88px;margin-top:4px">
-            <input class="shot-file" id="pPhoto" type="file" accept="image/*" />
-            <div class="shot-ui">Photo</div>
-          </label>
+          <div class="row2" style="margin-top:4px">
+            <button class="ghost" type="button" id="pShot" style="margin:0;padding:8px 12px;font-size:13px">Take photo</button>
+            <button class="ghost" type="button" id="pUpload" style="margin:0;padding:8px 12px;font-size:13px">Upload photo</button>
+          </div>
+          <input id="pPhoto" type="file" accept="image/*" class="hidden" />
         </div>
         <div>
           <label>Border</label>
@@ -819,6 +836,18 @@
       <h3 style="margin:0 0 6px;font-size:16px">Binder banner</h3>
       <p class="muted">One banner on your public binder. Add a start time so it can say when it goes live. After the window ends it drops off Community. A new save replaces the old one and pings people who follow you.</p>
       <div id="banPreview"></div>
+      <label>Background</label>
+      <div class="ban-arts" id="banArts">
+        <button type="button" class="ice" data-art="ice" title="Ice"></button>
+        <button type="button" class="rink" data-art="rink" title="Rink"></button>
+        <button type="button" class="foil" data-art="foil" title="Foil"></button>
+        <button type="button" class="rip" data-art="rip" title="Rip"></button>
+        <button type="button" class="navy" data-art="navy" title="Night"></button>
+      </div>
+      <button class="ghost" type="button" id="banShot" style="width:auto;padding:8px 12px;font-size:13px">Take photo</button>
+      <button class="ghost" type="button" id="banUpload" style="width:auto;padding:8px 12px;font-size:13px">Upload photo</button>
+      <input id="banFile" type="file" accept="image/*" class="hidden" />
+      <p class="muted" id="banArtNote"></p>
       <label>Layout</label>
       <select id="banKind">
         <option value="live">Stream / rip</option>
@@ -2313,6 +2342,30 @@ async function snapLive(){
 }
 async function useReview(){
   if (!reviewData) return;
+  if (liveTarget === "profile") {
+    stopLive();
+    openCrop(reviewData);
+    reviewData = "";
+    show("set");
+    youShow("youProfile");
+    return;
+  }
+  if (liveTarget === "banner") {
+    window.bannerShot = reviewData;
+    window.bannerArt = "photo";
+    paintBanArt();
+    if (window.myBanner) {
+      window.myBanner.art = "photo";
+      window.myBanner.has_photo = true;
+      if ($("banPreview")) $("banPreview").innerHTML = bannerHtml(window.myBanner, true, mySlug);
+    }
+    if ($("banArtNote")) $("banArtNote").textContent = "Photo ready. Save the banner to keep it.";
+    reviewData = "";
+    stopLive();
+    show("set");
+    youShow("youBanner");
+    return;
+  }
   const data = await cropToCard(reviewData);
   const file = await dataToFile(data, liveTarget+".jpg");
   stopLive();
@@ -4342,6 +4395,8 @@ $("banFromHue") && ($("banFromHue").onclick = () => {
 });
 $("pDisplay") && ($("pDisplay").oninput = () => paintProfile($("pDisplay").value, $("pHue").value, myAvatar));
 ["pCropX","pCropY","pCropZ"].forEach(id => { $(id) && ($(id).oninput = () => paintProfile($("pDisplay").value||"Collector", $("pHue").value, myAvatar)); });
+$("pShot") && ($("pShot").onclick = () => openLive("profile"));
+$("pUpload") && ($("pUpload").onclick = () => $("pPhoto") && $("pPhoto").click());
 $("pPhoto") && ($("pPhoto").onchange = async () => {
   const f = $("pPhoto").files[0];
   if (!f) return;
@@ -4413,12 +4468,13 @@ function fillStartInputs(iso){
 function ownBinder(){
   return !!(mySlug && viewSlug && viewSlug === mySlug);
 }
-function bannerHtml(b, mine){
+function bannerHtml(b, mine, slug){
   if (!b || !b.title) return "";
   const st = bannerState(b);
   if (st.done && !mine) return "";
   const col = b.color || "#8fd4ee";
   const kind = (b.kind === "show") ? "show" : "stream";
+  const art = (b.art === "photo" && (b.has_photo || (mine && window.bannerShot))) ? "photo" : (b.art && b.art !== "photo" ? b.art : "ice");
   const live = st.live ? "<span class=\"live-chip\">LIVE</span>" : "";
   const when = st.label ? "<div class=\"when\">"+st.label+(st.live?" · happening now":"")+"</div>" : "";
   const body = b.body ? "<div class=\"muted\">"+String(b.body).replace(/[<>]/g,"")+"</div>" : "";
@@ -4426,8 +4482,19 @@ function bannerHtml(b, mine){
   const link = b.url ? "<a class=\"ban-go\" href=\""+b.url.replace(/"/g,"")+"\" target=\"_blank\" rel=\"noopener\">"+goTxt+"</a>" : "";
   const act = mine && !st.done ? "<button type=\"button\" class=\"ghost\" data-ban-end=\"1\" style=\"width:auto;margin-top:10px\">Cancel</button>" : "";
   const kicker = kind === "show" ? "<div class=\"k\">Card show</div>" : "<div class=\"k\">Stream / rip</div>";
-  return "<div class=\"board-post "+kind+"\" style=\"border-color:"+col+"\">"+kicker+"<h3>"+String(b.title||"").replace(/[<>]/g,"")+live+"</h3>"+when+body+link+act+"</div>";
+  let bg = "";
+  if (art === "photo") {
+    const src = (mine && window.bannerShot) ? window.bannerShot : ((slug || viewSlug || mySlug) ? "/u/"+encodeURIComponent(slug || viewSlug || mySlug)+"/banner/photo" : "");
+    if (src) bg = "background-image:url('"+src.replace(/'/g,"")+"');";
+  }
+  return "<div class=\"board-post "+kind+" art-"+art+"\" style=\"border-color:"+col+";"+bg+"\">"+kicker+"<h3>"+String(b.title||"").replace(/[<>]/g,"")+live+"</h3>"+when+body+link+act+"</div>";
 }
+function paintBanArt(){
+  const art = window.bannerArt || "ice";
+  document.querySelectorAll("#banArts [data-art]").forEach(btn => btn.classList.toggle("on", btn.getAttribute("data-art")===art));
+}
+window.bannerArt = "ice";
+window.bannerShot = "";
 function fillBannerForm(b){
   if (!b) return;
   if ($("banKind")) $("banKind").value = (b.kind === "show") ? "show" : "live";
@@ -4437,6 +4504,9 @@ function fillBannerForm(b){
   if ($("banColor") && b.color) $("banColor").value = b.color;
   fillStartInputs(b.starts);
   if ($("banHours")) $("banHours").value = String(b.hours || 4);
+  window.bannerArt = (b.art === "photo" && b.has_photo) ? "photo" : (b.art || "ice");
+  if (window.bannerArt !== "photo") window.bannerShot = "";
+  paintBanArt();
 }
 async function loadBanners(){
   const box = $("banPreview") || $("banList");
@@ -4446,7 +4516,7 @@ async function loadBanners(){
   const d = await r.json();
   const b = (d.banners||[])[0];
   window.myBanner = b || null;
-  if (box) box.innerHTML = b ? bannerHtml(b, true) : "<p class=\"muted\">No banner yet.</p>";
+  if (box) box.innerHTML = b ? bannerHtml(b, true, mySlug) : "<p class=\"muted\">No banner yet.</p>";
   if (b) fillBannerForm(b);
 }
 async function cancelMyBanner(){
@@ -4463,6 +4533,33 @@ async function cancelMyBanner(){
     if ($("banNote")) $("banNote").textContent = e.message;
   }
 }
+$("banArts") && ($("banArts").onclick = ev => {
+  const btn = ev.target.closest("[data-art]");
+  if (!btn) return;
+  window.bannerArt = btn.getAttribute("data-art");
+  window.bannerShot = "";
+  paintBanArt();
+  if ($("banArtNote")) $("banArtNote").textContent = "";
+});
+$("banShot") && ($("banShot").onclick = () => openLive("banner"));
+$("banUpload") && ($("banUpload").onclick = () => $("banFile") && $("banFile").click());
+$("banFile") && ($("banFile").onchange = () => {
+  const f = $("banFile").files && $("banFile").files[0];
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    window.bannerShot = reader.result;
+    window.bannerArt = "photo";
+    paintBanArt();
+    if ($("banArtNote")) $("banArtNote").textContent = "Photo ready. Save the banner to keep it.";
+    if (window.myBanner) {
+      window.myBanner.art = "photo";
+      window.myBanner.has_photo = true;
+      if ($("banPreview")) $("banPreview").innerHTML = bannerHtml(window.myBanner, true, mySlug);
+    }
+  };
+  reader.readAsDataURL(f);
+});
 $("banPreview") && ($("banPreview").onclick = ev => {
   if (ev.target.closest("[data-ban-end]")) cancelMyBanner();
 });
@@ -4481,6 +4578,8 @@ $("banAdd") && ($("banAdd").onclick = async () => {
     }
     await authPost("/banners", {
       kind: ($("banKind")&&$("banKind").value) || "live",
+      art: window.bannerArt || "ice",
+      photo: window.bannerArt === "photo" ? (window.bannerShot || "") : "",
       title: ($("banTitle")&&$("banTitle").value) || "",
       body: ($("banBody")&&$("banBody").value) || "",
       url: ($("banUrl")&&$("banUrl").value) || "",
@@ -5143,7 +5242,7 @@ async function openPublic(slug, cardId){
     $("pubAva").innerHTML = ini+"<img alt=\"\" src=\"/u/"+encodeURIComponent(viewSlug)+"/avatar\" onerror=\"this.remove()\" />";
   }
   window.pubBanners = d.banners || [];
-  if ($("pubBanner")) $("pubBanner").innerHTML = bannerHtml((window.pubBanners||[])[0], ownBinder());
+  if ($("pubBanner")) $("pubBanner").innerHTML = bannerHtml((window.pubBanners||[])[0], ownBinder(), viewSlug);
   following[viewSlug] = !!d.following;
   paintFollow();
   paintBinderLike(d.likes||0, !!d.liked);
@@ -5210,9 +5309,9 @@ $("goneBtn") && ($("goneBtn").onclick = async () => {
 });
 function tickBanners(){
   if ($("pubBanner") && $("pubPage") && $("pubPage").classList.contains("on"))
-    $("pubBanner").innerHTML = bannerHtml((window.pubBanners||[])[0], ownBinder());
+    $("pubBanner").innerHTML = bannerHtml((window.pubBanners||[])[0], ownBinder(), viewSlug);
   if ($("banPreview") && $("youBanner") && !$("youBanner").classList.contains("hidden") && window.myBanner)
-    $("banPreview").innerHTML = bannerHtml(window.myBanner, true);
+    $("banPreview").innerHTML = bannerHtml(window.myBanner, true, mySlug);
 }
 if (!window._banTick) window._banTick = setInterval(tickBanners, 10000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) tickBanners(); });

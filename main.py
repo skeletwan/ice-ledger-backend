@@ -2206,6 +2206,10 @@ def init_db():
     except sqlite3.OperationalError:
         pass
     try:
+        con.execute("ALTER TABLE banner_posts ADD COLUMN art TEXT")
+    except sqlite3.OperationalError:
+        pass
+    try:
         con.execute("ALTER TABLE notes ADD COLUMN batch TEXT")
     except sqlite3.OperationalError:
         pass
@@ -3833,7 +3837,7 @@ async def public_binder(slug: str, request: Request, x_token: str | None = Heade
         liked = bool(con.execute("SELECT user_id FROM binder_likes WHERE slug=? AND user_id=?", (slug, me)).fetchone())
         is_following = bool(con.execute("SELECT slug FROM follows WHERE follower=? AND slug=?", (me, slug)).fetchone())
     banners = con.execute(
-        "SELECT id,kind,title,body,url,color,created,starts,hours,off FROM banner_posts WHERE user_id=? ORDER BY id DESC LIMIT 12",
+        "SELECT id,kind,title,body,url,color,created,starts,hours,off,art FROM banner_posts WHERE user_id=? ORDER BY id DESC LIMIT 12",
         (u["id"],),
     ).fetchall()
     con.close()
@@ -3856,11 +3860,13 @@ async def public_binder(slug: str, request: Request, x_token: str | None = Heade
         "liked": liked,
         "following": is_following,
         "cards": cards,
-        "banners": [banner_row(b) for b in banners if not banner_ended(banner_row(b))],
+        "banners": [banner_row(b, u["id"]) for b in banners if not banner_ended(banner_row(b, u["id"]))],
     }
 
 
-def banner_row(r) -> dict:
+BANNER_ARTS = ("ice", "rink", "foil", "rip", "navy", "photo")
+
+def banner_row(r, uid=None) -> dict:
     if not r:
         return {}
     d = dict(r)
@@ -3870,6 +3876,11 @@ def banner_row(r) -> dict:
         d["hours"] = 4
     d["hours"] = max(1, min(24, d["hours"]))
     d["off"] = int(d.get("off") or 0)
+    art = str(d.get("art") or "ice")[:16]
+    if art not in BANNER_ARTS:
+        art = "ice"
+    d["art"] = art
+    d["has_photo"] = art == "photo" and bool(uid and photo_file_exists(uid, "banner"))
     return d
 
 def banner_ended(b) -> bool:
@@ -3939,11 +3950,11 @@ async def my_banners(request: Request, x_token: str | None = Header(default=None
     uid = require_user(request, x_token)
     con = db()
     rows = con.execute(
-        "SELECT id,kind,title,body,url,color,created,starts,hours,off FROM banner_posts WHERE user_id=? ORDER BY id DESC LIMIT 12",
+        "SELECT id,kind,title,body,url,color,created,starts,hours,off,art FROM banner_posts WHERE user_id=? ORDER BY id DESC LIMIT 12",
         (uid,),
     ).fetchall()
     con.close()
-    return {"banners": [banner_row(r) for r in rows]}
+    return {"banners": [banner_row(r, uid) for r in rows]}
 
 
 @app.post("/banners")
@@ -3972,6 +3983,15 @@ async def add_banner(payload: dict, request: Request, x_token: str | None = Head
         hours = max(1, min(24, int(payload.get("hours") or 4)))
     except (TypeError, ValueError):
         hours = 4
+    art = str(payload.get("art") or "ice").strip()[:16]
+    if art not in BANNER_ARTS:
+        art = "ice"
+    photo = payload.get("photo") or ""
+    if art == "photo":
+        if photo:
+            save_card_photo(uid, "banner", photo)
+        if not photo_file_exists(uid, "banner"):
+            art = "ice"
     if len(title) < 2:
         title = (body or "")[:80]
     if len(title) < 2:
@@ -3979,8 +3999,8 @@ async def add_banner(payload: dict, request: Request, x_token: str | None = Head
     con = db()
     con.execute("DELETE FROM banner_posts WHERE user_id=?", (uid,))
     con.execute(
-        "INSERT INTO banner_posts(user_id,kind,title,body,url,color,created,starts,hours,off) VALUES(?,?,?,?,?,?,?,?,?,0)",
-        (uid, kind, title, body, url, color, time.strftime("%Y-%m-%dT%H:%M:%SZ"), starts or None, hours),
+        "INSERT INTO banner_posts(user_id,kind,title,body,url,color,created,starts,hours,off,art) VALUES(?,?,?,?,?,?,?,?,?,0,?)",
+        (uid, kind, title, body, url, color, time.strftime("%Y-%m-%dT%H:%M:%SZ"), starts or None, hours, art),
     )
     con.commit()
     rid = con.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
@@ -4004,6 +4024,29 @@ async def cancel_banner(request: Request, x_token: str | None = Header(default=N
     con.commit()
     con.close()
     return {"ok": True}
+
+    return {"ok": True}
+
+@app.get("/u/{slug}/banner/photo")
+def public_banner_photo(slug: str):
+    con = db()
+    u = con.execute("SELECT id FROM users WHERE slug=?", (slug,)).fetchone()
+    con.close()
+    if not u:
+        raise HTTPException(404, "no user")
+    path = photo_path(u["id"], "banner")
+    if not path.is_file():
+        raise HTTPException(404, "no photo")
+    return FileResponse(path, media_type="image/jpeg")
+
+@app.get("/me/banner/photo")
+def my_banner_photo(request: Request, x_token: str | None = Header(default=None)):
+    tok = x_token or request.query_params.get("token")
+    uid = require_user(request, tok)
+    path = photo_path(uid, "banner")
+    if not path.is_file():
+        raise HTTPException(404, "no photo")
+    return FileResponse(path, media_type="image/jpeg")
 
 @app.delete("/banners/{bid}")
 async def del_banner(bid: int, request: Request, x_token: str | None = Header(default=None)):
