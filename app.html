@@ -221,22 +221,17 @@
     .board-post .muted { margin:0; }
     .board-post .when { margin:4px 0 0; font-size:13px; font-weight:700; color:#fff; }
     .board-post .ban-go { display:inline-block; margin-top:10px; padding:8px 14px; border-radius:8px; background:#14303a; color:#fff; font-weight:800; font-size:13px; text-decoration:none; border:1px solid var(--ice); }
-    .board-post.stream { background:#070c10; padding:16px 16px 14px; }
+    .board-post.stream { padding:16px 16px 14px; }
     .board-post.stream h3 { font-size:18px; }
     .board-post.show .k { color:var(--ice); }
     .ban-arts { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; margin:6px 0 8px; }
     .ban-arts span { display:block; height:36px; border-radius:8px; border:2px solid transparent; cursor:pointer; }
     .ban-arts span.on { border-color:#fff; }
-    .ban-arts .ice { background:linear-gradient(160deg,#1a6a82,#0b303c); }
-    .ban-arts .rink { background:linear-gradient(180deg,#2a3d4d,#101820); }
-    .ban-arts .foil { background:linear-gradient(135deg,#8a7a40,#2a2410); }
-    .ban-arts .rip { background:linear-gradient(160deg,#7a2030,#18080c); }
-    .ban-arts .navy { background:#0b1116; }
-    .board-post.art-ice { background:linear-gradient(160deg, var(--ban,#0b3a4a), #082028 55%, #0e171e); }
-    .board-post.art-rink { background:linear-gradient(180deg, var(--ban,#1a2a38), #0c141c); }
-    .board-post.art-foil { background:linear-gradient(135deg, var(--ban,#8a7a40), #1a1810); }
-    .board-post.art-rip { background:linear-gradient(160deg, var(--ban,#3a1018), #12080c); }
-    .board-post.art-navy { background:linear-gradient(180deg, var(--ban,#0b1116), #070c10); }
+    .ban-arts .ice, .board-post.art-ice { background:linear-gradient(160deg,#1a6a82,#0b303c 55%,#07141a); }
+    .ban-arts .rink, .board-post.art-rink { background:linear-gradient(180deg,#3a4d5c,#101820); }
+    .ban-arts .foil, .board-post.art-foil { background:linear-gradient(135deg,#c4b06a,#8a7a40 40%,#2a2410); }
+    .ban-arts .rip, .board-post.art-rip { background:linear-gradient(160deg,#a02838,#7a2030 40%,#18080c); }
+    .ban-arts .navy, .board-post.art-navy { background:#0b1116; }
     .board-post.art-photo { background-size:cover; background-position:center; position:relative; }
     .board-post.art-photo:before { content:""; position:absolute; inset:0; background:rgba(0,0,0,.45); }
     .board-post.art-photo > * { position:relative; z-index:1; }
@@ -4488,7 +4483,7 @@ function bannerHtml(b, mine, slug){
     const src = (mine && window.bannerShot) ? window.bannerShot : ((slug || viewSlug || mySlug) ? "/u/"+encodeURIComponent(slug || viewSlug || mySlug)+"/banner/photo" : "");
     if (src) bg = "background-image:url('"+src.replace(/'/g,"")+"');";
   }
-  return "<div class=\"board-post "+kind+" art-"+art+"\" style=\"--ban:"+col+";border-color:"+col+";"+bg+"\">"+kicker+"<h3>"+String(b.title||"").replace(/[<>]/g,"")+live+"</h3>"+when+body+link+act+"</div>";
+  return "<div class=\"board-post "+kind+" art-"+art+"\" style=\"border-color:"+col+";"+bg+"\">"+kicker+"<h3>"+String(b.title||"").replace(/[<>]/g,"")+live+"</h3>"+when+body+link+act+"</div>";
 }
 function bannerDraft(){
   const startEl = $("banStart") && $("banStart").value;
