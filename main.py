@@ -729,12 +729,13 @@ def _sale_bucket(item: dict) -> str | None:
         return "raw_cad"
     return "raw_cad"
 
-def _junk_title(title: str) -> bool:
+def _junk_title(title: str, allow_checklist: bool = False) -> bool:
     t = (title or "").lower()
-    return bool(re.search(
-        r"\b(lot|lots|lot of|\d+\s*card lot|bundle|collection|complete set|reprint|proxy|digital|nft|damaged|ripped|creased|wholesale|\d+x|x\d+|box break|team break|spot|shipping only|pwe|sticker only|code only|digital code|checklist)\b",
-        t,
-    ))
+    rx = r"\b(lot|lots|lot of|\d+\s*card lot|bundle|collection|complete set|reprint|proxy|digital|nft|damaged|ripped|creased|wholesale|\d+x|x\d+|box break|team break|spot|shipping only|pwe|sticker only|code only|digital code"
+    if not allow_checklist:
+        rx += r"|checklist"
+    rx += r")\b"
+    return bool(re.search(rx, t))
 
 _AUTO_RX = re.compile(
     r"\b(auto|autos|autograph|autographs|autographed|signed|signature|signatures|on-card|sticker auto|rpa|inked|inscription|inscribed|\bfwa\b|future watch auto)\b",
@@ -847,10 +848,16 @@ def _set_in_title(key: str, t: str) -> bool:
 
 def _sale_fits(title: str, q: str, player: str, parallel: str = "", number: str = "", year: str = "") -> bool:
     t = (title or "").lower()
-    parts = (player or "").strip().split()
-    last = parts[-1].lower() if parts else ""
-    first = parts[0].lower() if len(parts) > 1 else ""
-    if last:
+    raw_p = re.sub(r"\s+and\s+", "/", str(player or ""), flags=re.I).replace("&", "/")
+    people = [p.strip() for p in raw_p.split("/") if p.strip()]
+    lasts = [p.split()[-1].lower() for p in people if p.split()]
+    firsts = [p.split()[0].lower() for p in people if len(p.split()) > 1]
+    last = lasts[-1] if lasts else ""
+    first = firsts[0] if firsts else ""
+    if lasts:
+        if not any(a in t for a in lasts):
+            return False
+    elif last:
         alts = {last}
         if last.endswith("sky"):
             alts.add(last[:-1] + "i")
@@ -860,10 +867,11 @@ def _sale_fits(title: str, q: str, player: str, parallel: str = "", number: str 
             alts.add(last + "a")
         if not any(a in t for a in alts):
             return False
-    if first and len(first) > 3 and first not in ("alex", "john", "mike", "chris", "matt", "nick"):
+    if len(people) < 2 and first and len(first) > 3 and first not in ("alex", "john", "mike", "chris", "matt", "nick"):
         if first not in t and last not in t:
             return False
-    if _junk_title(title):
+    ql_pre = (q or "").split(" -(")[0].lower()
+    if _junk_title(title, allow_checklist="checklist" in ql_pre):
         return False
     required = (q or "").split(" -(")[0].lower()
     ql = required
@@ -902,6 +910,8 @@ def _sale_fits(title: str, q: str, player: str, parallel: str = "", number: str 
     if "renewed" in t and "renewed" not in ql:
         return False
     if re.search(r"checklist", t) and "checklist" not in ql:
+        return False
+    if "checklist" in ql and not re.search(r"checklist", t):
         return False
     if re.search(r"\bjumbo\b", t) and "jumbo" not in ql:
         return False
@@ -972,7 +982,20 @@ _NAME_OR = {
     "aleksei": "Alexei",
 }
 
+def _card_is_checklist(card: dict | None) -> bool:
+    if not card:
+        return False
+    blob = " ".join(str(card.get(k) or "") for k in ("insert", "parallel", "set", "player", "notes", "product"))
+    return "checklist" in blob.lower()
+
 def _player_q(player: str) -> str:
+    raw = re.sub(r"\s+and\s+", "/", str(player or ""), flags=re.I)
+    raw = raw.replace("&", "/")
+    names = [p.strip() for p in raw.split("/") if p.strip()]
+    if len(names) >= 2:
+        lasts = [n.split()[-1] for n in names if n.split()]
+        if lasts:
+            return "(" + ",".join(lasts) + ")" if len(lasts) > 1 else lasts[0]
     bits = [b for b in str(player or "").strip().split() if b]
     if not bits:
         return ""
@@ -1080,9 +1103,14 @@ def search_queries(card: dict) -> list:
     num = re.sub(r"^#+", "", str(card.get("number") or "").strip())
     blob = f"{ins} {st} {par}".lower()
     yg = bool(re.search(r"young guns|\byg\b", blob))
+    chk = "checklist" in blob
     unique = bool(ins) and ins.lower() not in _GENERIC_PRODUCT and not yg
 
-    if yg:
+    if yg and chk:
+        product = "Young Guns Checklist"
+    elif chk and "checklist" in ins.lower():
+        product = ins
+    elif yg:
         product = "Young Guns"
     elif unique and ins.lower() not in ("rookie", "rc", "base", "insert"):
         product = ins
@@ -1116,7 +1144,10 @@ def search_queries(card: dict) -> list:
             q += " -(plate)"
         if "redemption" not in blob:
             q += " -(redemption)"
-    q += " -(lot,checklist,reprint,bundle)"
+    if chk:
+        q += " -(lot,reprint,bundle)"
+    else:
+        q += " -(lot,checklist,reprint,bundle)"
     return [q]
 
 def _clean_bucket(vals):
@@ -1402,7 +1433,11 @@ async def fetch_card_api(q: str, player: str, fp: str = "", parallel: str = "", 
                     tl = title.lower()
                     if last and last not in tl:
                         continue
-                    if re.search(r"checklist|lot of|bundle", tl):
+                    if re.search(r"lot of|bundle", tl):
+                        continue
+                    if re.search(r"checklist", tl) and "checklist" not in (q or "").lower():
+                        continue
+                    if "checklist" in (q or "").lower() and not re.search(r"checklist", tl):
                         continue
                     cad = _sale_cad(item)
                     if not cad or cad < 2:
