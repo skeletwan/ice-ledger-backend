@@ -3841,8 +3841,9 @@ async def public_binder(slug: str, request: Request, x_token: str | None = Heade
         (u["id"],),
     ).fetchall()
     rows = [banner_row(b, u["id"]) for b in banners]
-    cover = rows[0] if rows else {"art": "ice", "color": u["hue"] or "#8fd4ee", "has_photo": False}
-    events = [b for b in rows if b.get("starts") and not banner_ended(b)]
+    stocks = [b for b in rows if (b.get("kind") or "") == "stock"]
+    cover = stocks[0] if stocks else next((b for b in rows if not b.get("starts")), {"art": "ice", "color": u["hue"] or "#8fd4ee", "has_photo": False, "kind": "stock"})
+    events = [b for b in rows if (b.get("kind") or "") != "stock" and b.get("starts") and not banner_ended(b)]
     con.close()
     book = sum((card_market(x) or 0) for x in raws)
     grails = sum(1 for x in raws if is_grail(x))
@@ -3863,7 +3864,15 @@ async def public_binder(slug: str, request: Request, x_token: str | None = Heade
         "liked": liked,
         "following": is_following,
         "cards": cards,
-        "cover": {"art": cover.get("art") or "ice", "color": cover.get("color") or "#8fd4ee", "has_photo": bool(cover.get("has_photo"))},
+        "cover": {
+            "art": cover.get("art") or "ice",
+            "color": cover.get("color") or "#8fd4ee",
+            "has_photo": bool(cover.get("has_photo")),
+            "kind": cover.get("kind") or "stock",
+            "title": cover.get("title") or "",
+            "body": cover.get("body") or "",
+            "url": cover.get("url") or "",
+        },
         "banners": events,
     }
 
@@ -3965,10 +3974,10 @@ async def my_banners(request: Request, x_token: str | None = Header(default=None
 async def add_banner(payload: dict, request: Request, x_token: str | None = Header(default=None)):
     uid = require_user(request, x_token)
     kind = (payload.get("kind") or "note").strip()[:24]
-    if kind not in ("show", "break", "episode", "live", "note"):
+    if kind not in ("show", "break", "episode", "live", "note", "stock"):
         kind = "note"
     title = (payload.get("title") or "").strip()[:80]
-    body = (payload.get("body") or "").strip()[:280]
+    body = (payload.get("body") or "").strip()[:400]
     url = _clean_banner_url(payload.get("url") or "")
     color = (payload.get("color") or "#8fd4ee").strip()[:16]
     if not re.match(r"^#[0-9a-fA-F]{3,8}$", color):
@@ -3987,6 +3996,8 @@ async def add_banner(payload: dict, request: Request, x_token: str | None = Head
         hours = max(1, min(24, int(payload.get("hours") or 4)))
     except (TypeError, ValueError):
         hours = 4
+    if kind == "stock":
+        starts = ""
     art = str(payload.get("art") or "ice").strip()[:16]
     if art not in BANNER_ARTS:
         art = "ice"
@@ -4001,7 +4012,10 @@ async def add_banner(payload: dict, request: Request, x_token: str | None = Head
     if len(title) < 2:
         title = ""
     con = db()
-    con.execute("DELETE FROM banner_posts WHERE user_id=?", (uid,))
+    if kind == "stock":
+        con.execute("DELETE FROM banner_posts WHERE user_id=? AND kind='stock'", (uid,))
+    else:
+        con.execute("DELETE FROM banner_posts WHERE user_id=? AND IFNULL(kind,'')!='stock'", (uid,))
     con.execute(
         "INSERT INTO banner_posts(user_id,kind,title,body,url,color,created,starts,hours,off,art) VALUES(?,?,?,?,?,?,?,?,?,0,?)",
         (uid, kind, title, body, url, color, time.strftime("%Y-%m-%dT%H:%M:%SZ"), starts or None, hours, art),
@@ -4024,7 +4038,7 @@ async def add_banner(payload: dict, request: Request, x_token: str | None = Head
 async def cancel_banner(request: Request, x_token: str | None = Header(default=None)):
     uid = require_user(request, x_token)
     con = db()
-    con.execute("UPDATE banner_posts SET off=1 WHERE user_id=?", (uid,))
+    con.execute("UPDATE banner_posts SET off=1 WHERE user_id=? AND IFNULL(kind,'')!='stock'", (uid,))
     con.commit()
     con.close()
     return {"ok": True}

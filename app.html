@@ -223,7 +223,8 @@
     .board-post .ban-go { display:inline-block; margin-top:10px; padding:8px 14px; border-radius:8px; background:#14303a; color:#fff; font-weight:800; font-size:13px; text-decoration:none; border:1px solid var(--ice); }
     .board-post.stream { padding:16px 16px 14px; }
     .board-post.stream h3 { font-size:18px; }
-    .board-post.show .k { color:var(--ice); }
+    .board-post.stock .k { color:var(--ice); }
+    .board-post .bio { margin:6px 0 0; font-size:13px; line-height:1.35; color:#d5e4ee; }
     .ban-arts { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; margin:6px 0 8px; }
     .ban-arts span { display:block; height:36px; border-radius:8px; border:2px solid transparent; cursor:pointer; }
     .ban-arts span.on { border-color:#fff; }
@@ -247,7 +248,8 @@
     #banFitBar.on { display:block; }
     #banFitBar input { margin-top:6px; }
     #banCard { border-radius:12px; overflow:hidden; }
-    #banCard input, #banCard select { max-width:100%; min-width:0; box-sizing:border-box; }
+    #banCard input, #banCard select, #banCard textarea { max-width:100%; min-width:0; box-sizing:border-box; }
+    #banBody { min-height:72px; resize:vertical; }
     .ban-when {
       position:relative;
       margin-top:4px;
@@ -862,11 +864,13 @@
       <p class="muted" id="banArtNote"></p>
       <label>Layout</label>
       <select id="banKind">
+        <option value="stock">Stock / channel</option>
         <option value="live">Stream / rip</option>
         <option value="show">Card show</option>
       </select>
       <label>Title</label>
-      <input id="banTitle" maxlength="80" placeholder="Saturday rip · Toronto card show" />
+      <input id="banTitle" maxlength="80" placeholder="Your channel or binder name" />
+      <div id="banWhenWrap">
       <label>Starts</label>
       <div class="ban-when">
         <span id="banStartShow" class="empty">Tap to set date and time</span>
@@ -883,10 +887,11 @@
         <option value="12">12 hours</option>
         <option value="24">24 hours</option>
       </select>
-      <label>Details</label>
-      <input id="banBody" maxlength="280" placeholder="Booth 14, 10am–4pm or episode notes" />
+      </div>
+      <label id="banBodyLab">Bio</label>
+      <textarea id="banBody" maxlength="400" rows="3" placeholder="What you rip, what you collect"></textarea>
       <label>Link</label>
-      <input id="banUrl" placeholder="https://youtube.com/…" />
+      <input id="banUrl" placeholder="https://youtube.com/@yourchannel" />
       <label>Color</label>
       <input id="banColor" class="hue-swatch" type="color" value="#8fd4ee" />
       <button class="ghost" type="button" id="banFromHue" style="width:auto;padding:6px 10px;font-size:12px;margin-top:6px">Use profile colour</button>
@@ -1602,6 +1607,7 @@ function youShow(which){
   ["youHub","youProfile","youBanner","youComm","youAlerts","youPrefs","youBill","youGone"].forEach(id => {
     if ($(id)) $(id).classList.toggle("hidden", id !== which);
   });
+  if (which==="youBanner") { loadBanners(); syncBanLayout(); }
   if (which==="youBill") refreshUsage();
   if (which==="youComm") loadCommunity();
   if (which==="youAlerts") paintYouInbox();
@@ -4402,7 +4408,15 @@ $("banFromHue") && ($("banFromHue").onclick = () => {
 $("banColor") && ($("banColor").oninput = paintBanDraft);
 ["banTitle","banBody","banUrl","banKind","banHours"].forEach(id => {
   $(id) && ($(id).oninput = paintBanDraft);
-  $(id) && ($(id).onchange = paintBanDraft);
+  $(id) && ($(id).onchange = () => {
+    if (id==="banKind") {
+      syncBanLayout();
+      const stock = $("banKind").value === "stock";
+      const b = stock ? window.myStock : window.myEvent;
+      if (b) fillBannerForm(b);
+    }
+    paintBanDraft();
+  });
 });
 $("pDisplay") && ($("pDisplay").oninput = () => paintProfile($("pDisplay").value, $("pHue").value, myAvatar));
 ["pCropX","pCropY","pCropZ"].forEach(id => { $(id) && ($(id).oninput = () => paintProfile($("pDisplay").value||"Collector", $("pHue").value, myAvatar)); });
@@ -4484,17 +4498,18 @@ function bannerHtml(b, mine, slug){
   if (!b) return "";
   const st = bannerState(b);
   if (st.done && !mine && !b.cover) return "";
+  const stock = b.kind === "stock" || b.cover;
   const col = b.color || "#8fd4ee";
-  const kind = (b.kind === "show") ? "show" : "stream";
+  const kind = (b.kind === "show") ? "show" : (stock ? "stock" : "stream");
   const art = (b.art === "photo" && (b.has_photo || (mine && window.bannerShot))) ? "photo" : (b.art && b.art !== "photo" ? b.art : "ice");
   const live = st.live ? "<span class=\"live-chip\">LIVE</span>" : "";
-  const when = st.label ? "<div class=\"when\">"+st.label+(st.live?" · happening now":"")+"</div>" : "";
-  const body = b.body ? "<div class=\"muted\">"+String(b.body).replace(/[<>]/g,"")+"</div>" : "";
-  const goTxt = kind === "show" ? "Details" : "Watch";
+  const when = (!stock && st.label) ? "<div class=\"when\">"+st.label+(st.live?" · happening now":"")+"</div>" : "";
+  const body = b.body ? "<div class=\""+(stock?"bio":"muted")+"\">"+String(b.body).replace(/[<>]/g,"")+"</div>" : "";
+  const goTxt = stock ? (/youtu/i.test(b.url||"") ? "YouTube" : "Visit") : (kind === "show" ? "Details" : "Watch");
   const link = b.url ? "<a class=\"ban-go\" href=\""+b.url.replace(/"/g,"")+"\" target=\"_blank\" rel=\"noopener\">"+goTxt+"</a>" : "";
   const fit = !!(mine && window.banFit && window.banFit.src);
-  const act = (!fit && mine && !st.done && b.starts) ? "<button type=\"button\" class=\"ghost\" data-ban-end=\"1\" style=\"width:auto;margin-top:10px\">Cancel</button>" : "";
-  const kicker = kind === "show" ? "<div class=\"k\">Card show</div>" : "<div class=\"k\">Stream / rip</div>";
+  const act = (!fit && mine && !st.done && b.starts && !stock) ? "<button type=\"button\" class=\"ghost\" data-ban-end=\"1\" style=\"width:auto;margin-top:10px\">Cancel</button>" : "";
+  const kicker = stock ? "" : (kind === "show" ? "<div class=\"k\">Card show</div>" : "<div class=\"k\">Stream / rip</div>");
   let bg = "";
   let cover = "";
   if (art === "photo" && fit) {
@@ -4503,12 +4518,14 @@ function bannerHtml(b, mine, slug){
     const src = (mine && window.bannerShot) ? window.bannerShot : ((slug || viewSlug || mySlug) ? "/u/"+encodeURIComponent(slug || viewSlug || mySlug)+"/banner/photo" : "");
     if (src) bg = "background-image:url('"+src.replace(/'/g,"")+"');";
   }
-  const idle = !!(b.cover || (!b.starts && !String(b.title||"").trim()));
+  const hasCopy = !!(String(b.title||"").trim() || String(b.body||"").trim() || b.url);
+  const idle = !hasCopy && !fit;
+  const title = String(b.title||"").replace(/[<>]/g,"");
   const copy = fit
-    ? "<div class=\"ban-copy\"><h3>"+String(b.title||"").replace(/[<>]/g,"")+"</h3></div>"
+    ? "<div class=\"ban-copy\"><h3>"+title+"</h3></div>"
     : idle
       ? "<div class=\"ban-copy\"></div>"
-      : "<div class=\"ban-copy\">"+kicker+"<h3>"+String(b.title||"").replace(/[<>]/g,"")+live+"</h3>"+when+body+link+act+"</div>";
+      : "<div class=\"ban-copy\">"+kicker+(title?"<h3>"+title+live+"</h3>":"")+when+body+link+act+"</div>";
   return "<div class=\"board-post "+kind+" art-"+art+(fit?" fitting":"")+(idle?" cover-only":"")+"\" style=\"border-color:"+col+";"+bg+"\">"+cover+copy+"</div>";
 }
 function applyBanFit(){
@@ -4600,18 +4617,19 @@ function finishBanFit(){
   paintBanDraft();
 }
 function bannerDraft(){
+  const kind = ($("banKind")&&$("banKind").value) || "stock";
   const startEl = $("banStart") && $("banStart").value;
   let starts = "";
-  if (startEl) {
+  if (kind !== "stock" && startEl) {
     const d = new Date(startEl);
     if (!isNaN(+d)) starts = d.toISOString();
   }
   return {
-    title: ($("banTitle")&&$("banTitle").value) || "Your event",
+    title: ($("banTitle")&&$("banTitle").value) || "",
     body: ($("banBody")&&$("banBody").value) || "",
     url: ($("banUrl")&&$("banUrl").value) || "",
     color: ($("banColor")&&$("banColor").value) || "#8fd4ee",
-    kind: ($("banKind")&&$("banKind").value) || "live",
+    kind,
     art: window.bannerArt || "ice",
     has_photo: window.bannerArt === "photo" && !!(window.bannerShot || (window.myBanner && window.myBanner.has_photo)),
     starts,
@@ -4636,9 +4654,18 @@ function paintBanArt(){
 }
 window.bannerArt = "ice";
 window.bannerShot = "";
+function syncBanLayout(){
+  const stock = ($("banKind")&&$("banKind").value) === "stock";
+  if ($("banWhenWrap")) $("banWhenWrap").classList.toggle("hidden", stock);
+  if ($("banBodyLab")) $("banBodyLab").textContent = stock ? "Bio" : "Details";
+  if ($("banBody")) $("banBody").placeholder = stock ? "What you rip, what you collect" : "Booth 14, 10am–4pm or episode notes";
+  if ($("banTitle")) $("banTitle").placeholder = stock ? "Your channel or binder name" : "Saturday rip · Toronto card show";
+  if ($("banUrl")) $("banUrl").placeholder = stock ? "https://youtube.com/@yourchannel" : "https://youtube.com/…";
+}
 function fillBannerForm(b){
   if (!b) return;
-  if ($("banKind")) $("banKind").value = (b.kind === "show") ? "show" : "live";
+  if ($("banKind")) $("banKind").value = (b.kind === "show") ? "show" : (b.kind === "stock" ? "stock" : "live");
+  syncBanLayout();
   if ($("banTitle")) $("banTitle").value = b.title || "";
   if ($("banBody")) $("banBody").value = b.body || "";
   if ($("banUrl")) $("banUrl").value = b.url || "";
@@ -4650,13 +4677,16 @@ function fillBannerForm(b){
   paintBanDraft();
 }
 async function loadBanners(){
-  const box = $("banPreview") || $("banList");
   if (!token()) return;
   const r = await fetch("/banners", { headers:{ "x-token": token() } });
   if (!r.ok) return;
   const d = await r.json();
-  const b = (d.banners||[])[0];
-  window.myBanner = b || null;
+  const rows = d.banners || [];
+  window.myStock = rows.find(b => b.kind === "stock") || null;
+  window.myEvent = rows.find(b => b.kind !== "stock") || null;
+  const want = ($("banKind") && $("banKind").value) || "stock";
+  const b = want === "stock" ? window.myStock : (window.myEvent || null);
+  window.myBanner = b || window.myStock || null;
   if (b) fillBannerForm(b);
   else paintBanDraft();
 }
@@ -4719,7 +4749,7 @@ $("banAdd") && ($("banAdd").onclick = async () => {
       if (!isNaN(+d)) starts = d.toISOString();
     }
     await authPost("/banners", {
-      kind: ($("banKind")&&$("banKind").value) || "live",
+      kind: ($("banKind")&&$("banKind").value) || "stock",
       art: window.bannerArt || "ice",
       photo: window.bannerArt === "photo" ? (window.bannerShot || "") : "",
       title: ($("banTitle")&&$("banTitle").value) || "",
@@ -5379,11 +5409,13 @@ function paintPubBanner(){
   if (ev) $("pubBanner").innerHTML = bannerHtml(ev, ownBinder(), viewSlug);
   else $("pubBanner").innerHTML = bannerHtml({
     cover: true,
-    title: "",
+    title: cover.title || "",
+    body: cover.body || "",
+    url: cover.url || "",
     art: cover.art || "ice",
     color: cover.color || "#8fd4ee",
     has_photo: !!cover.has_photo,
-    kind: "live",
+    kind: cover.kind || "stock",
     starts: "",
     off: 0
   }, false, viewSlug);
