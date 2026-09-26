@@ -245,7 +245,7 @@
       font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
     }
     .board-post .ban-end { position:absolute; top:8px; left:8px; z-index:4; width:auto; margin:0; padding:6px 10px; font-size:12px; }
-    .board-post .ban-copy { position:relative; z-index:2; height:100%; overflow:hidden; display:flex; flex-direction:column; justify-content:flex-end; padding-right:56px; }
+    .board-post .ban-copy { position:relative; z-index:2; overflow:hidden; padding-right:64px; }
     .board-post .muted { margin:0; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
     .board-post .when { margin:4px 0 0; font-size:13px; font-weight:700; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .board-post .ban-go { display:inline-block; margin-top:8px; padding:8px 14px; border-radius:8px; background:#14303a; color:#fff; font-weight:800; font-size:13px; text-decoration:none; border:1px solid var(--ice); flex:0 0 auto; }
@@ -4702,7 +4702,7 @@ function bannerDraft(slot){
     photo: (window.bannerArt === "photo") ? (window.bannerShot || "") : "",
     starts,
     hours: +(($("banHours")&&$("banHours").value) || 4),
-    off: 0
+    off: (window.banDrafts[slot] && +window.banDrafts[slot].off) ? 1 : ((slot==="show" ? window.myShow : window.myEvent) && +((slot==="show"?window.myShow:window.myEvent).off) ? 1 : 0)
   };
 }
 function paintBanDraft(){
@@ -4763,7 +4763,7 @@ function seedBanDraft(slot, row){
     photo: "",
     starts: row.starts || "",
     hours: row.hours || 4,
-    off: 0
+    off: +row.off ? 1 : 0
   };
 }
 function syncBanLayout(){
@@ -4811,14 +4811,22 @@ async function loadBanners(){
 }
 async function cancelMyBanner(){
   try {
-    const ev = pickPubEvent();
-    await authPost("/banners/cancel", ev && ev.id ? { id: ev.id } : {});
-    if (ev && window.myEvent && String(window.myEvent.id) === String(ev.id)) window.myEvent.off = 1;
-    if (ev && window.myShow && String(window.myShow.id) === String(ev.id)) window.myShow.off = 1;
+    const slot = banSlot(window.banKindNow);
+    const ev = slot === "show" ? window.myShow : (slot === "stock" ? null : window.myEvent);
+    if (!ev || !ev.id || +ev.off) {
+      if ($("banNote")) $("banNote").textContent = "Already cancelled.";
+      paintBanDraft();
+      return;
+    }
+    await authPost("/banners/cancel", { id: ev.id });
+    ev.off = 1;
+    if (window.banDrafts[slot]) window.banDrafts[slot].off = 1;
+    if (slot === "show") window.myShow = ev;
+    else window.myEvent = ev;
     await refreshPubBanners();
-    await loadBanners();
+    paintBanDraft();
     paintPubBanner();
-    if ($("banNote")) $("banNote").textContent = "Saved";
+    if ($("banNote")) $("banNote").textContent = "Cancelled";
   } catch(e) {
     if ($("banNote")) $("banNote").textContent = e.message;
   }
