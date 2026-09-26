@@ -271,6 +271,7 @@
     .board-post.art-photo > *:not(.ban-cover):not(.ban-drag):not(.live-chip):not(.ban-end) { position:relative; z-index:2; }
     .board-post.fitting { touch-action:none; }
     .ban-cover { position:absolute !important; left:50%; top:50%; width:160%; max-width:none; height:auto; z-index:0; pointer-events:none; -webkit-user-drag:none; user-select:none; }
+    .board-post.fitting .ban-cover { pointer-events:auto; }
     .board-post.fitting .ban-copy { pointer-events:none; }
     .ban-drag { display:none; }
     .board-post.fitting .ban-drag { display:block; position:absolute !important; inset:0; z-index:8 !important; touch-action:none; cursor:grab; }
@@ -891,8 +892,13 @@
       <div id="banPreview"></div>
       <button class="ghost" type="button" id="banCancel" style="width:auto;margin:8px 0 12px;padding:8px 12px">Cancel event</button>
       <div id="banFitBar">
-        <p class="muted">Drag the photo to move it. Zoom to size it. Then tap Done.</p>
+        <p class="muted">Use the sliders to move and zoom. You can also drag the banner. Then tap Done.</p>
+        <label>Zoom</label>
         <input id="banZoom" type="range" min="80" max="280" value="100" />
+        <label>Left / right</label>
+        <input id="banPanX" type="range" min="-220" max="220" value="0" />
+        <label>Up / down</label>
+        <input id="banPanY" type="range" min="-160" max="160" value="0" />
         <button type="button" id="banFitDone">Done</button>
       </div>
       <label>Background</label>
@@ -904,6 +910,7 @@
         <span class="navy" data-art="navy"></span>
       </div>
       <button class="ghost" type="button" id="banUpload" style="width:auto;padding:8px 12px;font-size:13px">Photo</button>
+      <button class="ghost" type="button" id="banAdjust" style="width:auto;padding:8px 12px;font-size:13px">Adjust photo</button>
       <input id="banFile" type="file" accept="image/*" class="hidden" />
       <p class="muted" id="banArtNote"></p>
       <label>Layout</label>
@@ -4647,34 +4654,41 @@ function applyBanFit(){
   const f = window.banFit;
   if (!img || !f) return;
   img.style.transform = "translate(calc(-50% + "+f.x+"px), calc(-50% + "+f.y+"px)) scale("+(f.z||1)+")";
+  if ($("banPanX") && document.activeElement !== $("banPanX")) $("banPanX").value = String(Math.max(-220, Math.min(220, Math.round(f.x))));
+  if ($("banPanY") && document.activeElement !== $("banPanY")) $("banPanY").value = String(Math.max(-160, Math.min(160, Math.round(f.y))));
+  if ($("banZoom") && document.activeElement !== $("banZoom")) $("banZoom").value = String(Math.round((f.z||1)*100));
 }
 function startBanFit(src){
+  if (!src) return;
   window.bannerShot = src;
   window.bannerArt = "photo";
   window.banFit = { src, x:0, y:0, z:1, drag:false, sx:0, sy:0 };
   if ($("banZoom")) $("banZoom").value = 100;
+  if ($("banPanX")) $("banPanX").value = 0;
+  if ($("banPanY")) $("banPanY").value = 0;
   if ($("banFitBar")) $("banFitBar").classList.add("on");
-  if ($("banArtNote")) $("banArtNote").textContent = "Drag and zoom the photo on the banner.";
+  if ($("banArtNote")) $("banArtNote").textContent = "Move with the sliders or drag the banner, then tap Done.";
   paintBanDraft();
 }
 function bindBanFit(){
   applyBanFit();
-  const box = $("banPreview") && $("banPreview").querySelector(".fitting");
-  const pad = $("banDrag") || box;
+  const box = $("banPreview");
   const img = $("banCover");
-  if (!pad || !img || !window.banFit) return;
+  if (img) img.onload = applyBanFit;
+  if (!box || box._fitOn) return;
+  box._fitOn = true;
   const pt = ev => {
-    const t = (ev.touches && ev.touches[0]) || (ev.changedTouches && ev.changedTouches[0]);
-    return t ? { x:t.clientX, y:t.clientY } : { x:ev.clientX, y:ev.clientY };
+    const t = (ev.touches && ev.touches[0]) || ev;
+    return { x: t.clientX, y: t.clientY };
   };
   const down = ev => {
     if (!window.banFit) return;
+    if (ev.target.closest && ev.target.closest("button,a,input,select,textarea")) return;
     ev.preventDefault();
     const p = pt(ev);
     window.banFit.drag = true;
     window.banFit.sx = p.x - window.banFit.x;
     window.banFit.sy = p.y - window.banFit.y;
-    try { pad.setPointerCapture && ev.pointerId != null && pad.setPointerCapture(ev.pointerId); } catch(err){}
   };
   const move = ev => {
     if (!window.banFit || !window.banFit.drag) return;
@@ -4684,20 +4698,13 @@ function bindBanFit(){
     window.banFit.y = p.y - window.banFit.sy;
     applyBanFit();
   };
-  const up = ev => {
-    if (window.banFit) window.banFit.drag = false;
-    if (ev && ev.preventDefault) ev.preventDefault();
-  };
-  pad.onpointerdown = down;
-  pad.onpointermove = move;
-  pad.onpointerup = up;
-  pad.onpointercancel = up;
-  pad.ontouchstart = down;
-  pad.ontouchmove = move;
-  pad.ontouchend = up;
-  document.onpointermove = ev => { if (window.banFit && window.banFit.drag) move(ev); };
-  document.onpointerup = ev => { if (window.banFit && window.banFit.drag) up(ev); };
-  img.onload = applyBanFit;
+  const up = () => { if (window.banFit) window.banFit.drag = false; };
+  box.addEventListener("pointerdown", down, { passive:false });
+  box.addEventListener("touchstart", down, { passive:false });
+  window.addEventListener("pointermove", move, { passive:false });
+  window.addEventListener("touchmove", move, { passive:false });
+  window.addEventListener("pointerup", up);
+  window.addEventListener("touchend", up);
 }
 function finishBanFit(){
   const box = $("banPreview") && $("banPreview").querySelector(".board-post");
@@ -4958,6 +4965,25 @@ $("banZoom") && ($("banZoom").oninput = () => {
   if (!window.banFit) return;
   window.banFit.z = Math.max(0.8, (+$("banZoom").value || 100) / 100);
   applyBanFit();
+});
+$("banPanX") && ($("banPanX").oninput = () => {
+  if (!window.banFit) return;
+  window.banFit.x = +$("banPanX").value || 0;
+  applyBanFit();
+});
+$("banPanY") && ($("banPanY").oninput = () => {
+  if (!window.banFit) return;
+  window.banFit.y = +$("banPanY").value || 0;
+  applyBanFit();
+});
+$("banAdjust") && ($("banAdjust").onclick = ev => {
+  ev.preventDefault();
+  const src = window.bannerShot || (mySlug ? "/u/"+encodeURIComponent(mySlug)+"/banner/photo?t="+Date.now() : "");
+  if (!src) {
+    if ($("banArtNote")) $("banArtNote").textContent = "Add a photo first.";
+    return;
+  }
+  startBanFit(src);
 });
 $("banFitDone") && ($("banFitDone").onclick = finishBanFit);
 $("banAdd") && ($("banAdd").onclick = async () => {
