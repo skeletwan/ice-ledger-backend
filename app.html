@@ -444,7 +444,7 @@
         </div>
         <p class="auth-tag">Your exclusive hockey card community.</p>
         <p class="muted" id="authLead">Sign in to your binder.</p>
-        <form id="authForm" action="/" method="post" onsubmit="return false">
+        <form id="authForm" action="/" method="post" autocomplete="on">
         <label>Email</label>
         <input id="email" type="email" name="email" autocomplete="username" />
         <div class="auth-pw">
@@ -478,11 +478,11 @@
           <label>Code</label>
           <input id="resetCode" type="text" name="reset-code" autocomplete="off" autocapitalize="none" spellcheck="false" inputmode="text" placeholder="Code from your email" />
           <label>New password</label>
-          <input id="resetPw" type="password" autocomplete="new-password" placeholder="Password" />
+          <input id="resetPw" type="password" name="new-password" autocomplete="new-password" placeholder="Password" />
           <label>Confirm password</label>
-          <input id="resetPw2" type="password" autocomplete="new-password" placeholder="Confirm password" />
+          <input id="resetPw2" type="password" name="new-password-confirm" autocomplete="new-password" placeholder="Confirm password" />
           <label class="show-pw"><input type="checkbox" id="showResetPw" /> Show password</label>
-          <button type="button" id="resetBtn">Save password</button>
+          <button type="submit" id="resetBtn">Save password</button>
           <div class="auth-links">
             <button type="button" id="resetBack">Back to sign in</button>
           </div>
@@ -4398,7 +4398,8 @@ $("resetBtn") && ($("resetBtn").onclick = async ev => {
       code: $("resetCode").value,
       password: pw
     });
-    flash("authStatus", "ok", "Password updated. Signing you in…");
+    flash("authStatus", "ok", "Password updated. Save it when iPhone asks, then we’ll sign you in.");
+    await new Promise(r => setTimeout(r, 700));
     clearLocalAccount();
     setToken(d.token); showApp(); await pullCloud(); paintTicker(); renderBinder();
   } catch(e) { flash("authStatus", "err", e.message); }
