@@ -5596,20 +5596,25 @@ function pickPubEvent(){
 }
 function paintPubBanner(){
   try {
+    const ev = pickPubEvent();
     const cover = window.pubCover || window.myStock || {};
     if (!$("pubBanner")) return;
-    $("pubBanner").innerHTML = bannerHtml({
-      cover: true,
-      title: cover.title || "",
-      body: cover.body || "",
-      url: cover.url || "",
-      art: cover.art || "ice",
-      color: cover.color || "#8fd4ee",
-      has_photo: !!cover.has_photo,
-      kind: "stock",
-      starts: "",
-      off: 0
-    }, false, viewSlug);
+    if (ev) {
+      $("pubBanner").innerHTML = bannerHtml(Object.assign({}, ev, { cover: false }), false, viewSlug);
+    } else {
+      $("pubBanner").innerHTML = bannerHtml({
+        cover: true,
+        title: cover.title || "",
+        body: cover.body || "",
+        url: cover.url || "",
+        art: cover.art || "ice",
+        color: cover.color || "#8fd4ee",
+        has_photo: !!cover.has_photo,
+        kind: "stock",
+        starts: "",
+        off: 0
+      }, false, viewSlug);
+    }
   } catch(err) {
     if ($("pubBanner")) $("pubBanner").innerHTML = "";
   }
