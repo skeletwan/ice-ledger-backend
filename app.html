@@ -1042,7 +1042,7 @@
     <button class="danger" id="modDeleteUser">Delete account</button>
 
     <h3 style="font-size:15px;margin:16px 0 8px">Message this user</h3>
-    <p class="muted">Goes to the person you just looked up. Not everyone.</p>
+    <p class="muted">Goes to the person you just looked up, or the address filled from a report.</p>
     <label>In-app text</label>
     <textarea id="modPushBody" rows="3" placeholder="Short note from Clappers Management"></textarea>
     <button class="ghost" id="modPushOne">Send in-app to this user</button>
@@ -1050,12 +1050,15 @@
     <input id="modMailSub" placeholder="Clappers PC" />
     <label>Email body</label>
     <textarea id="modMailBody" rows="4" placeholder="Keep it short."></textarea>
+    <label>Filled report address</label>
+    <input id="modMailTo" placeholder="tapped from a report" autocomplete="off" />
     <button class="ghost" id="modMailLookup">Email this user</button>
+    <button class="ghost" id="modMailOne">Email filled report address</button>
     <p class="muted" id="modPushNote"></p>
     <p class="muted" id="modMailNote"></p>
 
     <h3 style="font-size:15px;margin:16px 0 8px">Everyone</h3>
-    <p class="muted">These hit every account. Confirm first.</p>
+    <p class="muted">These hit every account. Separate confirm. Do not use for one person.</p>
     <button class="ghost" id="modPushAll">In-app to everyone</button>
     <button class="ghost" id="modMailAll">Email everyone</button>
     <div id="modPushList"></div>
@@ -1080,10 +1083,6 @@
     <h3 style="font-size:15px;margin:16px 0 8px">Accounts</h3>
     <button class="ghost" id="modUsersLoad">Load accounts</button>
     <div id="modUsers"></div>
-    <input id="modMailTo" class="hidden" />
-    <input id="plusSecret" class="hidden" />
-    <button id="plusBtn" class="hidden">Unlock</button>
-    <p class="hidden" id="plusNote"></p>
   </section>
   <section class="page" id="helpPage">
     <button class="ghost" id="backYou">Back to You</button>
@@ -3953,13 +3952,14 @@ $("modPushList") && ($("modPushList").onclick = async ev => {
   if (!b) return;
   if (!confirm("Pull this message out of every inbox?")) return;
   try {
-    const d = await authPost("/admin/unsend", { batch: b.getAttribute("data-unsend") });
-    if ($("modPushNote")) $("modPushNote").textContent = "Removed from "+d.removed+" inboxes.";
+    const d = await authPost("/admin/unsend", { batch: b.getAttribute("data-unsend"), body: (b.closest(".item") && b.closest(".item").querySelector("p") && b.closest(".item").querySelector("p").textContent) || "" });
+    if ($("modPushNote")) $("modPushNote").textContent = "Removed from "+d.removed+" inboxes"+(d.left!=null?(" · "+d.left+" management notes left"):"")+".";
     loadAnnounces();
   } catch(e) { if ($("modPushNote")) $("modPushNote").textContent = e.message; }
 });
 $("modLoad") && ($("modLoad").onclick = async () => {
   const box = $("modList");
+  if (box) box.innerHTML = "<p class=\"muted\">Loading inbox…</p>";
   const r = await fetch("/admin/inbox", { headers:{ "x-token": token() } });
   const t = await r.text();
   if (!r.ok) { box.textContent = t.slice(0,160); return; }
@@ -3976,6 +3976,8 @@ $("modLoad") && ($("modLoad").onclick = async () => {
     const who = String(x.reporter_name||"")+" "+String(x.reporter_email||"");
     const hide = kind==="comment"
       ? "<button class=\"ghost\" data-hide-comment=\""+(x.comment_id||"")+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Hide</button><button class=\"ghost\" data-restore-comment=\""+(x.comment_id||"")+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Unhide</button>"
+      : kind==="user"
+      ? "<button class=\"ghost\" data-suspend-slug=\""+(x.slug||"")+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Suspend</button><button class=\"ghost\" data-unsuspend-slug=\""+(x.slug||"")+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Unsuspend</button>"
       : "<button class=\"ghost\" data-hide-photo=\""+(x.slug||"")+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Hide</button><button class=\"ghost\" data-restore-photo=\""+(x.slug||"")+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Unhide</button>";
     return "<div class=\"item\" data-review-kind=\""+kind+"\" data-review-slug=\""+(x.slug||"")+"\" data-review-card=\""+(x.card_id||"")+"\"><b>"+label+" · "+(x.slug||"")+hidden+"</b> <span class=\"muted\">"+(x.created||"").slice(0,16)+" · "+(x.report_n||1)+" report(s)</span><p style=\"margin:6px 0 0\"><b>Why: </b>"+why+"</p><p class=\"muted\" style=\"margin:4px 0 0\">From "+who+"</p><p style=\"margin:6px 0 0\">"+prev+"</p><button class=\"ghost\" data-open-report=\"1\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Review</button>"+hide+"<button class=\"ghost\" data-dismiss-report=\""+x.id+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Dismiss</button>"+(x.reporter_email?"<button class=\"ghost\" data-mail-to=\""+String(x.reporter_email).replace(/"/g,"")+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Email reporter</button>":"")+"<button class=\"ghost\" data-mail-slug=\""+(x.slug||"")+"\" style=\"width:auto;margin-top:8px;padding:6px 10px\">Email reported</button></div>";
   }).join("") || "<p class=\"muted\">No reports yet.</p>";
@@ -3991,7 +3993,8 @@ $("modList") && ($("modList").onclick = async ev => {
   const mailTo = ev.target.closest("[data-mail-to]");
   if (mailTo) {
     if ($("modMailTo")) $("modMailTo").value = mailTo.getAttribute("data-mail-to") || "";
-    if ($("modMailNote")) $("modMailNote").textContent = "To filled. Write subject + message, then Send.";
+    lastModEmail = mailTo.getAttribute("data-mail-to") || lastModEmail;
+    if ($("modMailNote")) $("modMailNote").textContent = "To filled. Use Email filled report address.";
     $("modMailSub") && $("modMailSub").scrollIntoView({ behavior:"smooth", block:"center" });
     return;
   }
@@ -4028,6 +4031,15 @@ $("modList") && ($("modList").onclick = async ev => {
   }
   if (hc) {
     await fetch("/admin/hide-comment", { method:"POST", headers:{ "Content-Type":"application/json", "x-token": token() }, body: JSON.stringify({ id: +hc.getAttribute("data-hide-comment") }) });
+    if ($("modLoad")) $("modLoad").click();
+    return;
+  }
+  const sus = ev.target.closest("[data-suspend-slug]");
+  const uns = ev.target.closest("[data-unsuspend-slug]");
+  if (sus || uns) {
+    const slug = (sus||uns).getAttribute(sus?"data-suspend-slug":"data-unsuspend-slug");
+    if (sus && !confirm("Suspend /"+slug+"?")) return;
+    await authPost("/admin/suspend", { slug, email: slug, on: !!sus });
     if ($("modLoad")) $("modLoad").click();
     return;
   }
@@ -4190,6 +4202,7 @@ $("modHideComments") && ($("modHideComments").onclick = () => modUserAction("/ad
 $("modShowComments") && ($("modShowComments").onclick = () => modUserAction("/admin/hide-user-comments", { on:false }).catch(e => $("modUserNote").textContent = e.message));
 $("modClearBanner") && ($("modClearBanner").onclick = () => modUserAction("/admin/clear-banner").catch(e => $("modUserNote").textContent = e.message));
 $("modSuspend") && ($("modSuspend").onclick = async () => {
+  if (!confirm("Suspend this account? They will be signed out.")) return;
   try { const d = await modAccount("/admin/suspend", { on:true }); $("modUserNote").textContent = "Suspended "+(d.email||d.slug); }
   catch(e){ $("modUserNote").textContent = e.message; }
 });
@@ -4210,7 +4223,7 @@ $("modCreatorOn") && ($("modCreatorOn").onclick = async () => {
   catch(e){ $("modUserNote").textContent = e.message; }
 });
 $("modCreatorOff") && ($("modCreatorOff").onclick = async () => {
-  try { const d = await modAccount("/admin/plan", { plan:"plus" }); $("modUserNote").textContent = "Creator off. Clappers+ for "+(d.email||d.slug); $("modLookup") && $("modLookup").click(); }
+  try { const d = await modAccount("/admin/plan", { plan:"free" }); $("modUserNote").textContent = "Creator off. Free plan for "+(d.email||d.slug); $("modLookup") && $("modLookup").click(); }
   catch(e){ $("modUserNote").textContent = e.message; }
 });
 $("modResetIds") && ($("modResetIds").onclick = async () => {
@@ -4255,7 +4268,9 @@ $("modPushAll") && ($("modPushAll").onclick = async () => {
   try { await sendAnnounce(true); } catch(e) { if ($("modPushNote")) $("modPushNote").textContent = e.message; }
 });
 $("modMailAll") && ($("modMailAll").onclick = async () => {
-  if (!window.confirm("Email every account on Clappers PC?")) return;
+  if (!window.confirm("Email EVERY account on Clappers PC? This is not the one-user button.")) return;
+  const typed = window.prompt("Type EVERYONE to send this email to the whole list.");
+  if ((typed||"").trim().toUpperCase() !== "EVERYONE") { if ($("modMailNote")) $("modMailNote").textContent = "Cancelled."; return; }
   try {
     const d = await authPost("/admin/mail-all", {
       subject: ($("modMailSub")&&$("modMailSub").value)||"",

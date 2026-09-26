@@ -4889,9 +4889,10 @@ async def admin_announces(request: Request, x_token: str | None = Header(default
     require_operator(request, x_token)
     con = db()
     rows = con.execute(
-        """SELECT batch, MIN(body) AS body, MIN(created) AS created, COUNT(*) AS n
-           FROM notes WHERE IFNULL(batch,'') != '' AND body LIKE 'Clappers Management:%'
-           GROUP BY batch ORDER BY MAX(id) DESC LIMIT 20"""
+        """SELECT IFNULL(batch,'') AS batch, MIN(body) AS body, MIN(created) AS created, COUNT(*) AS n
+           FROM notes WHERE body LIKE 'Clappers Management:%'
+           GROUP BY CASE WHEN IFNULL(batch,'')='' THEN body ELSE batch END
+           ORDER BY MAX(id) DESC LIMIT 20"""
     ).fetchall()
     con.close()
     return {"items": [dict(r) for r in rows]}
@@ -4900,14 +4901,26 @@ async def admin_announces(request: Request, x_token: str | None = Header(default
 async def admin_unsend(payload: dict, request: Request, x_token: str | None = Header(default=None)):
     require_operator(request, x_token)
     batch = re.sub(r"[^a-zA-Z0-9]", "", str(payload.get("batch") or ""))
-    if len(batch) < 4:
+    raw = str(payload.get("body") or "").strip()
+    if raw.lower().startswith("clappers management:"):
+        raw = raw.split(":", 1)[-1].strip()
+    needle = ("Clappers Management: " + raw) if raw else ""
+    if len(batch) < 4 and not needle:
         raise HTTPException(400, "missing message")
     con = db()
-    n = con.execute("SELECT COUNT(*) AS n FROM notes WHERE batch=?", (batch,)).fetchone()["n"]
-    con.execute("DELETE FROM notes WHERE batch=?", (batch,))
+    n = 0
+    if len(batch) >= 4:
+        n += con.execute("SELECT COUNT(*) AS n FROM notes WHERE batch=?", (batch,)).fetchone()["n"]
+        con.execute("DELETE FROM notes WHERE batch=?", (batch,))
+    if needle:
+        n += con.execute("SELECT COUNT(*) AS n FROM notes WHERE body=?", (needle,)).fetchone()["n"]
+        con.execute("DELETE FROM notes WHERE body=?", (needle,))
+    left = con.execute(
+        "SELECT COUNT(*) AS n FROM notes WHERE body LIKE 'Clappers Management:%'"
+    ).fetchone()["n"]
     con.commit()
     con.close()
-    return {"ok": True, "removed": n}
+    return {"ok": True, "removed": n, "left": left}
 
 @app.post("/admin/mail-all")
 async def admin_mail_all(payload: dict, request: Request, x_token: str | None = Header(default=None)):
@@ -4960,7 +4973,10 @@ async def admin_plan(payload: dict, request: Request, x_token: str | None = Head
             (row["id"],),
         )
     else:
-        con.execute("UPDATE users SET plan='free', plus_until=NULL WHERE id=?", (row["id"],))
+        con.execute(
+            "UPDATE users SET plan='free', plus_until=NULL WHERE id=?",
+            (row["id"],),
+        )
     con.commit()
     con.close()
     send_mail("Clappers PC plan "+want, f"{row['email']} / {row['slug'] if 'slug' in row.keys() else ''}")
