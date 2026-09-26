@@ -250,13 +250,13 @@
     }
     .board-post .ban-end { position:absolute; top:8px; left:8px; z-index:4; width:auto; margin:0; padding:6px 10px; font-size:12px; }
     .board-post .ban-copy { position:relative; z-index:2; overflow:hidden; padding-right:64px; }
-    .board-post .muted { margin:0; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+    .board-post .muted { margin:0; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
     .board-post .when { margin:4px 0 0; font-size:13px; font-weight:700; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .board-post .ban-go { display:inline-block; margin-top:8px; padding:8px 14px; border-radius:8px; background:#14303a; color:#fff; font-weight:800; font-size:13px; text-decoration:none; border:1px solid var(--ice); flex:0 0 auto; }
     .board-post.stream h3 { font-size:18px; }
     .board-post.stock .k { display:none; }
     #pubBanner .k, #eventsList .k, #eventsPage .k { display:none; }
-    .board-post .bio { margin:6px 0 0; font-size:13px; line-height:1.35; color:#d5e4ee; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+    .board-post .bio { margin:6px 0 0; font-size:13px; line-height:1.35; color:#d5e4ee; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
     .ban-arts { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; margin:6px 0 8px; }
     .ban-arts span { display:block; height:36px; border-radius:8px; border:2px solid transparent; cursor:pointer; }
     .ban-arts span.on { border-color:#fff; }
@@ -933,7 +933,7 @@
       </div>
       <label id="banBodyLab">Bio</label>
       <textarea id="banBody" maxlength="120" rows="3" placeholder="What you rip, what you collect"></textarea>
-      <p class="muted" id="banBodyHint">120 characters.</p>
+      <p class="muted" id="banBodyHint"><span id="banBodyCount">0</span>/120</p>
       <label>Link</label>
       <input id="banUrl" placeholder="https://youtube.com/@yourchannel" />
       <label>Color</label>
@@ -4720,6 +4720,10 @@ function paintBanDraft(){
   }
   if ($("banPreview")) $("banPreview").innerHTML = bannerHtml(bannerDraft(), true, mySlug);
   bindBanFit();
+  paintBanBodyCount();
+}
+function paintBanBodyCount(){
+  if ($("banBodyCount") && $("banBody")) $("banBodyCount").textContent = String(($("banBody").value||"").length);
 }
 function paintBanArt(){
   const art = window.bannerArt || "ice";
@@ -4819,6 +4823,7 @@ function fillBannerForm(b){
   syncBanLayout();
   if ($("banTitle")) $("banTitle").value = b.title || "";
   if ($("banBody")) $("banBody").value = b.body || "";
+  paintBanBodyCount();
   if ($("banUrl")) $("banUrl").value = b.url || "";
   if ($("banColor") && b.color) $("banColor").value = b.color;
   fillStartInputs(b.starts);
