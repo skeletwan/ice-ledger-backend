@@ -2,7 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#081118" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Clappers PC" />
+  <link rel="apple-touch-icon" href="/logo.jpg" />
+  <link rel="manifest" href="/manifest.webmanifest" />
   <title>Clappers PC</title>
   <style>
 :root { --bg:#081118; --card:#121c24; --line:#2a3b48; --text:#eef6fb; --muted:#8aa3b5; --ice:#8fd4ee; --btn:#2a9bbd; --warn:#e6c07b; --bad:#f07178; --good:#6ee7a8; --ink:#0c141b; }
@@ -78,7 +85,7 @@
       background:#5a1008; border:1px solid #ff3b1a;
       box-shadow:0 0 10px rgba(255,40,0,.55);
     }
-    header { padding:12px 16px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; }
+    header { padding:calc(12px + env(safe-area-inset-top)) 16px 12px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; }
     h1 { font-size:18px; margin:0; } h1 span { color:var(--ice); }
     .brand { display:flex; align-items:center; }
     .brand-logo { height:28px; width:auto; display:block; }
@@ -875,6 +882,8 @@
         <input id="s_x" placeholder="@handle or link" />
         <label>eBay</label>
         <input id="s_ebay" placeholder="username or store link" />
+        <label>Whatnot</label>
+        <input id="s_whatnot" placeholder="@handle or link" />
         <label>TikTok</label>
         <input id="s_tiktok" placeholder="@handle or link" />
         <label>Website</label>
@@ -1697,7 +1706,7 @@ document.addEventListener("click", ev => {
 });
 const pageScroll = {};
 let lastPage = "";
-function show(id){
+function show(id, how){
   if (lastPage==="bind" || lastPage==="pub" || lastPage==="find") pageScroll[lastPage] = window.scrollY || window.pageYOffset || 0;
   if (id!=="scan") document.body.classList.remove("scan-ready");
   $("scanPage").classList.toggle("on", id==="scan");
@@ -1737,6 +1746,13 @@ function show(id){
   });
   window.scrollTo(0,0);
   lastPage = id;
+  if (how !== "pop") {
+    const h = "#/"+id;
+    const st = { page: id };
+    if (!window._navReady) history.replaceState(st, "", h);
+    else if (location.hash !== h) history.pushState(st, "", h);
+  }
+  window._navReady = true;
   if ((id==="bind" || id==="pub" || id==="find") && pageScroll[id]) {
     const y = pageScroll[id];
     requestAnimationFrame(() => window.scrollTo(0, y));
@@ -1747,6 +1763,19 @@ function paintResume(){
   const on = !!window.idPending;
   if ($("resumeId")) $("resumeId").classList.toggle("hidden", !on);
 }
+window.addEventListener("popstate", ev => {
+  const fromHash = (location.hash || "").replace(/^#\/?/, "");
+  const id = (ev.state && ev.state.page) || fromHash || "scan";
+  if (window.idPending && lastPage === "result" && id !== "result") {
+    if (!window.confirm("Leave without saving? This scan already used an ID. Cancel to stay and save it to your binder.")) {
+      history.pushState({ page: "result" }, "", "#/result");
+      return;
+    }
+    window.idPending = false;
+    paintResume();
+  }
+  show(id, "pop");
+});
 $("tabScan").onclick = () => {
   if (window.idPending) show("result");
   else show("scan");
@@ -4535,7 +4564,7 @@ async function loadMe(){
     if ($("pHue") && d.hue) $("pHue").value = d.hue;
     if ($("pBio")) $("pBio").value = d.bio || "";
     const so = d.socials || {};
-    ["instagram","youtube","x","ebay","tiktok","site"].forEach(k => { if ($("s_"+k)) $("s_"+k).value = so[k] || ""; });
+    ["instagram","youtube","x","ebay","whatnot","tiktok","site"].forEach(k => { if ($("s_"+k)) $("s_"+k).value = so[k] || ""; });
     if ($("pCropX")) $("pCropX").value = d.cropx || "50";
     if ($("pCropY")) $("pCropY").value = d.cropy || "50";
     if ($("pCropZ")) $("pCropZ").value = d.cropz || "100";
@@ -4645,7 +4674,7 @@ $("pSave") && ($("pSave").onclick = async () => {
     const r = await fetch("/profile", {
       method:"POST",
       headers:{ "Content-Type":"application/json", "x-token": token() },
-      body: JSON.stringify({ display:$("pDisplay").value, hue:$("pHue").value, bio:$("pBio").value, avatar: myAvatar, cropx:$("pCropX")&&$("pCropX").value, cropy:$("pCropY")&&$("pCropY").value, cropz:$("pCropZ")&&$("pCropZ").value, socials:{ instagram:$("s_instagram")&&$("s_instagram").value, youtube:$("s_youtube")&&$("s_youtube").value, x:$("s_x")&&$("s_x").value, ebay:$("s_ebay")&&$("s_ebay").value, tiktok:$("s_tiktok")&&$("s_tiktok").value, site:$("s_site")&&$("s_site").value } })
+      body: JSON.stringify({ display:$("pDisplay").value, hue:$("pHue").value, bio:$("pBio").value, avatar: myAvatar, cropx:$("pCropX")&&$("pCropX").value, cropy:$("pCropY")&&$("pCropY").value, cropz:$("pCropZ")&&$("pCropZ").value, socials:{ instagram:$("s_instagram")&&$("s_instagram").value, youtube:$("s_youtube")&&$("s_youtube").value, x:$("s_x")&&$("s_x").value, ebay:$("s_ebay")&&$("s_ebay").value, whatnot:$("s_whatnot")&&$("s_whatnot").value, tiktok:$("s_tiktok")&&$("s_tiktok").value, site:$("s_site")&&$("s_site").value } })
     });
     const t = await r.text();
     if (!r.ok) throw new Error(t.slice(0,160));
@@ -5870,7 +5899,7 @@ async function openPublic(slug, cardId){
     $("pubBio").style.display = d.bio ? "block" : "none";
   }
   $("pubHead").textContent = d.count+" cards"+(d.grails?" · "+d.grails+" grails":"")+" · "+(d.book?money(d.book):"—")+" book";
-  const labs = { instagram:"Instagram", youtube:"YouTube", x:"X", ebay:"eBay", tiktok:"TikTok", site:"Site" };
+  const labs = { instagram:"Instagram", youtube:"YouTube", x:"X", ebay:"eBay", whatnot:"Whatnot", tiktok:"TikTok", site:"Site" };
   const so = d.socials || {};
   if ($("pubSocials")) {
     $("pubSocials").innerHTML = Object.keys(labs).filter(k => so[k]).map(k =>
@@ -5970,6 +5999,8 @@ if (guestB) {
 } else if (token()) {
   $("authPage").classList.add("hidden"); $("authPage").classList.remove("on"); showApp();
   pullCloud().then(() => { paintTicker(); renderBinder(); loadMe(); });
+  const boot = (location.hash || "").replace(/^#\/?/, "");
+  if (boot && boot !== "scan") show(boot, "pop");
 }
 paintTicker();
 renderBinder();

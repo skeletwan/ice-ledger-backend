@@ -275,6 +275,21 @@ def logo_jpg():
         return FileResponse(p, media_type="image/jpeg")
     raise HTTPException(404, "no logo")
 
+@app.get("/manifest.webmanifest")
+def web_manifest():
+    return Response(
+        content=json.dumps({
+            "name": "Clappers PC",
+            "short_name": "Clappers",
+            "start_url": "/",
+            "display": "standalone",
+            "background_color": "#081118",
+            "theme_color": "#081118",
+            "icons": [{ "src": "/logo.jpg", "sizes": "180x180", "type": "image/jpeg" }],
+        }),
+        media_type="application/manifest+json",
+    )
+
 def legal_file():
     page = ROOT / "legal.html"
     if page.exists():
@@ -2117,7 +2132,7 @@ def _copy_sold(c: dict, data: dict):
 def spread_comp(ck: str, data: dict):
     """Push latest house solds onto every saved copy of this card."""
     con = db()
-    rows = con.execute("SELECT id, data FROM cards").fetchall()
+    rows = con.execute("SELECT user_id, id, data FROM cards").fetchall()
     now = time.strftime("%Y-%m-%dT%H:%M:%SZ")
     fields = (
         ("raw_cad", "rawComp", "Raw"),
@@ -2165,7 +2180,7 @@ def spread_comp(ck: str, data: dict):
                 c["comp"] = copy
                 c["compAt"] = now
         c["book"] = book
-        con.execute("UPDATE cards SET data=? WHERE id=?", (json.dumps(c), r["id"]))
+        con.execute("UPDATE cards SET data=? WHERE user_id=? AND id=?", (json.dumps(c), r["user_id"], r["id"]))
     con.commit()
     con.close()
 
@@ -2272,9 +2287,30 @@ async def img_proxy(url: str = ""):
 def db():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     PHOTO_DIR.mkdir(parents=True, exist_ok=True)
-    con = sqlite3.connect(DB_PATH)
+    con = sqlite3.connect(DB_PATH, timeout=30)
     con.row_factory = sqlite3.Row
     return con
+
+def _migrate_card_pk(con):
+    row = con.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='cards'").fetchone()
+    sql = (row["sql"] if row else "") or ""
+    compact = sql.replace(" ", "").replace("\n", "").lower()
+    if "primarykey(user_id,id)" in compact or "primarykey(user_id, id)" in compact:
+        return
+    if "idtextprimarykey" not in compact and "id text primary key" not in sql.lower():
+        return
+    con.execute("""
+    CREATE TABLE IF NOT EXISTS cards_uid (
+      user_id INTEGER NOT NULL,
+      id TEXT NOT NULL,
+      data TEXT NOT NULL,
+      PRIMARY KEY (user_id, id)
+    )
+    """)
+    con.execute("INSERT OR IGNORE INTO cards_uid(user_id, id, data) SELECT user_id, id, data FROM cards")
+    con.execute("DROP TABLE cards")
+    con.execute("ALTER TABLE cards_uid RENAME TO cards")
+    con.execute("CREATE INDEX IF NOT EXISTS cards_user ON cards(user_id)")
 
 def init_db():
     con = db()
@@ -2291,9 +2327,10 @@ def init_db():
       created TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS cards (
-      id TEXT PRIMARY KEY,
       user_id INTEGER NOT NULL,
-      data TEXT NOT NULL
+      id TEXT NOT NULL,
+      data TEXT NOT NULL,
+      PRIMARY KEY (user_id, id)
     );
     CREATE TABLE IF NOT EXISTS usage (
       user_id INTEGER NOT NULL,
@@ -2323,6 +2360,7 @@ def init_db():
     );
     CREATE INDEX IF NOT EXISTS house_solds_fp ON house_solds(fp);
     """)
+    _migrate_card_pk(con)
     try:
         con.execute("ALTER TABLE users ADD COLUMN plan TEXT DEFAULT 'free'")
     except sqlite3.OperationalError:
@@ -3442,7 +3480,7 @@ async def my_card_photo(cid: str, request: Request, x_token: str | None = Header
 async def upsert_card(payload: dict, request: Request, x_token: str | None = Header(default=None)):
     uid = require_user(request, x_token)
     card = payload.get("card") or payload
-    cid = card.get("id") or ("c" + str(int(time.time()*1000)))
+    cid = card.get("id") or ("c" + str(uid) + "_" + str(int(time.time()*1000)) + "_" + secrets.token_hex(3))
     card["id"] = cid
     blob = card.get("photo") or card.get("scan") or ""
     if save_card_photo(uid, cid, blob):
@@ -4279,12 +4317,13 @@ def _clean_banner_url(url: str) -> str:
         return ""
     return url[:300]
 
-SOCIAL_KEYS = ("instagram", "youtube", "x", "ebay", "tiktok", "site")
+SOCIAL_KEYS = ("instagram", "youtube", "x", "ebay", "whatnot", "tiktok", "site")
 SOCIAL_PREFIX = {
     "instagram": "https://instagram.com/",
     "youtube": "https://youtube.com/",
     "x": "https://x.com/",
     "ebay": "https://www.ebay.com/usr/",
+    "whatnot": "https://www.whatnot.com/user/",
     "tiktok": "https://www.tiktok.com/@",
     "site": "https://",
 }
