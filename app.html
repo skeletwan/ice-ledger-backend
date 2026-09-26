@@ -4465,19 +4465,21 @@ $("banFromHue") && ($("banFromHue").onclick = () => {
   $("banColor").value = $("pHue").value;
   paintBanDraft();
 });
-$("banColor") && ($("banColor").oninput = paintBanDraft);
-["banTitle","banBody","banUrl","banKind","banHours"].forEach(id => {
-  $(id) && ($(id).oninput = paintBanDraft);
+$("banColor") && ($("banColor").oninput = () => { stashBanDraft(window.banKindNow); paintBanDraft(); });
+["banTitle","banBody","banUrl","banKind","banHours","banStart"].forEach(id => {
+  $(id) && ($(id).oninput = () => { stashBanDraft(window.banKindNow); paintBanDraft(); });
   $(id) && ($(id).onchange = () => {
     if (id==="banKind") {
-      stashBanDraft(window.banKindNow);
-      window.banKindNow = banSlot($("banKind").value);
-      applyBanDraft(window.banKindNow);
+      const next = banSlot($("banKind").value);
+      applyBanDraft(next);
       syncBanLayout();
+    } else {
+      stashBanDraft(window.banKindNow);
     }
     paintBanDraft();
   });
 });
+$("banKind") && ($("banKind").onfocus = () => stashBanDraft(window.banKindNow));
 $("pDisplay") && ($("pDisplay").oninput = () => paintProfile($("pDisplay").value, $("pHue").value, myAvatar));
 ["pCropX","pCropY","pCropZ"].forEach(id => { $(id) && ($(id).oninput = () => paintProfile($("pDisplay").value||"Collector", $("pHue").value, myAvatar)); });
 $("pShot") && ($("pShot").onclick = () => openLive("profile"));
@@ -4676,11 +4678,11 @@ function finishBanFit(){
   if ($("banArtNote")) $("banArtNote").textContent = "Photo fitted. Save the banner to keep it.";
   paintBanDraft();
 }
-function bannerDraft(){
-  const kind = ($("banKind")&&$("banKind").value) || "stock";
+function bannerDraft(slot){
+  slot = banSlot(slot || (($("banKind")&&$("banKind").value) || "stock"));
   const startEl = $("banStart") && $("banStart").value;
   let starts = "";
-  if (kind !== "stock" && startEl) {
+  if (slot !== "stock" && startEl) {
     const d = new Date(startEl);
     if (!isNaN(+d)) starts = d.toISOString();
   }
@@ -4689,9 +4691,10 @@ function bannerDraft(){
     body: ($("banBody")&&$("banBody").value) || "",
     url: ($("banUrl")&&$("banUrl").value) || "",
     color: ($("banColor")&&$("banColor").value) || "#8fd4ee",
-    kind,
+    kind: slot === "show" ? "show" : slot === "stock" ? "stock" : "live",
     art: window.bannerArt || "ice",
     has_photo: window.bannerArt === "photo" && !!(window.bannerShot || (window.myBanner && window.myBanner.has_photo)),
+    photo: (window.bannerArt === "photo") ? (window.bannerShot || "") : "",
     starts,
     hours: +(($("banHours")&&$("banHours").value) || 4),
     off: 0
@@ -4721,11 +4724,8 @@ function banSlot(kind){
   return kind === "show" ? "show" : kind === "stock" ? "stock" : "live";
 }
 function stashBanDraft(kind){
-  const slot = banSlot(kind);
-  const d = bannerDraft();
-  d.kind = slot === "show" ? "show" : slot === "stock" ? "stock" : "live";
-  d.photo = (window.bannerArt === "photo") ? (window.bannerShot || d.photo || "") : "";
-  window.banDrafts[slot] = d;
+  const slot = banSlot(kind || window.banKindNow);
+  window.banDrafts[slot] = bannerDraft(slot);
 }
 function clearBanFields(){
   ["banTitle","banBody","banUrl"].forEach(id => { if ($(id)) $(id).value = ""; });
@@ -4859,23 +4859,28 @@ $("banAdd") && ($("banAdd").onclick = async () => {
     if (window.banFit) finishBanFit();
     stashBanDraft(window.banKindNow);
     const slots = ["stock","live","show"];
+    let n = 0;
     for (const slot of slots) {
       const d = window.banDrafts[slot];
       if (!d) continue;
-      if (slot !== "stock" && !String(d.title||"").trim() && !d.starts) continue;
+      const title = String(d.title||"").trim();
+      const body = String(d.body||"").trim();
+      const url = String(d.url||"").trim();
+      if (slot !== "stock" && !title && !body && !d.starts && !url) continue;
       await authPost("/banners", {
         kind: slot === "show" ? "show" : slot === "stock" ? "stock" : "live",
         art: d.art || "ice",
         photo: d.art === "photo" ? (d.photo || "") : "",
-        title: d.title || "",
-        body: d.body || "",
-        url: d.url || "",
+        title: title,
+        body: body,
+        url: url,
         color: d.color || "#8fd4ee",
         starts: slot === "stock" ? "" : (d.starts || ""),
         hours: +(d.hours || 4)
       });
+      n++;
     }
-    if ($("banNote")) $("banNote").textContent = "Saved";
+    if ($("banNote")) $("banNote").textContent = n ? "Saved" : "Nothing to save";
   } catch(e) { if ($("banNote")) $("banNote").textContent = e.message; }
 });
 $("banClear") && ($("banClear").onclick = async () => {
