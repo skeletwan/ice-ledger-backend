@@ -813,7 +813,7 @@ def _par_need(parallel: str) -> list:
     run = re.search(r"/\s*(\d{1,4})", p)
     color = re.sub(r"/.*", "", p).strip()
     color = re.sub(r"[^a-z0-9 /]+", " ", color).strip()
-    if color and color not in ("parallel", "color"):
+    if color and color not in ("parallel", "color") and not re.fullmatch(r"\d+", color):
         need.append(color)
     # Flagship names already mean the print run. Titles often omit /250.
     if run and color not in ("deluxe", "exclusives", "ud exclusives", "high gloss"):
@@ -831,6 +831,9 @@ def _phrase_in_title(phrase: str, t: str) -> bool:
         return True
     if p == "exclusives" and "ud exclusives" in t:
         return True
+    if re.search(r"black\s*(and|&)?\s*white|\bb\s*&\s*w\b|\bbw\b", p):
+        if re.search(r"black\s*(and|&)?\s*white|\bb\s*&\s*w\b|\bbw\b|b\/w", t):
+            return True
     return False
 
 SET_KEYS = (
@@ -922,9 +925,9 @@ def _sale_fits(title: str, q: str, player: str, parallel: str = "", number: str 
         if titled and not _season_hit(t, season):
             return False
     if "young guns" in ql or " yg" in f" {ql}":
-        if not re.search(r"young guns|\byg\b", t):
+        if "canvas" not in ql and not re.search(r"young guns|\byg\b", t):
             return False
-    elif re.search(r"young guns|\byg\b", t) and "young guns" not in (parallel or "").lower():
+    elif re.search(r"young guns|\byg\b", t) and "young guns" not in (parallel or "").lower() and "canvas" not in ql:
         return False
     if "sizzle" in ql or re.search(r"^sr-?\d+", str(number or ""), flags=re.I):
         if not re.search(r"sizzle|\bsr-?\d+", t):
@@ -935,6 +938,11 @@ def _sale_fits(title: str, q: str, player: str, parallel: str = "", number: str 
     elif re.search(r"future watch|\bfwrc\b", t) and "future watch" not in (parallel or "").lower() and "future watch" not in (q or "").lower():
         return False
     if "renewed" in t and "renewed" not in ql:
+        return False
+    want_canvas = "canvas" in ql or "canvas" in (parallel or "").lower() or re.search(r"^c\d+", str(number or ""), flags=re.I)
+    if want_canvas and not re.search(r"\bcanvas\b|\bc-?\d+", t):
+        return False
+    if re.search(r"\bcanvas\b", t) and not want_canvas:
         return False
     if re.search(r"checklist", t) and "checklist" not in ql:
         return False
@@ -1127,6 +1135,10 @@ def _q_token(s: str) -> str:
         return "(Limited Red,Limited)"
     if low in ("sp authentic", "spa"):
         return "(SP Authentic,SPA)"
+    if low in ("black and white", "black & white", "b&w", "bw"):
+        return "(B&W,BW,\"Black and White\",Black)"
+    if low == "young guns canvas":
+        return "(Canvas,\"Young Guns Canvas\")"
     return f'"{s}"' if " " in s else s
 
 
@@ -1141,6 +1153,8 @@ def search_queries(card: dict) -> list:
     par = str(card.get("parallel") or "").strip()
     if par.lower() in ("base", "none", "n/a"):
         par = ""
+    if "," in par and "base" in par.lower():
+        par = ""
     num = re.sub(r"^#+", "", str(card.get("number") or "").strip())
     run_from_num = re.search(r"/\s*(\d{1,4})", num)
     num = re.sub(r"\d+\s*/\s*\d+", " ", num)
@@ -1148,11 +1162,16 @@ def search_queries(card: dict) -> list:
     num = re.sub(r"\s+", " ", num).strip()
     blob = f"{ins} {st} {par}".lower()
     yg = bool(re.search(r"young guns|\byg\b", blob))
+    canvas = "canvas" in blob or bool(re.search(r"^c\d+", num, flags=re.I))
     chk = "checklist" in blob
     unique = bool(ins) and ins.lower() not in _GENERIC_PRODUCT and not yg
 
     if yg and chk:
         product = "Young Guns Checklist"
+    elif canvas and yg:
+        product = "Young Guns Canvas"
+    elif canvas:
+        product = "Canvas"
     elif chk and "checklist" in ins.lower():
         product = ins
     elif yg:
@@ -1168,12 +1187,12 @@ def search_queries(card: dict) -> list:
     color = re.sub(r"/.*", "", par).strip()
     run = re.search(r"/\s*(\d{1,4})", par) or run_from_num
     named_run = color.lower() in ("deluxe", "ud exclusives", "exclusives", "high gloss")
-    if color and color.lower() not in (product.lower(), "base", "parallel"):
+    if color and color.lower() not in (product.lower(), "base", "parallel") and not re.fullmatch(r"\d+", color):
         parts.append(_q_token(color))
     if run and not named_run:
         parts.append("/" + run.group(1))
-    # Base YG titles often omit #479. Number in the API q hides real raws.
-    if code and not named_run and not (yg and not color):
+    # Base YG titles often omit #479. Letter codes (C225, SR-43) stay in the q.
+    if code and not named_run and (letter_code or not (yg and not color and not canvas)):
         parts.append(code)
     q = " ".join(x for x in parts if x)
     if _card_is_auto({"insert": ins, "parallel": par, "set": st}):

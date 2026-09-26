@@ -2064,15 +2064,19 @@ function qstr(d){
   const m = num.match(/(\d+)\s*\/\s*(\d+)/);
   if (m) num = num.replace(m[0], "").trim();
   num = num.replace(/\/\s*\d+/g, "").trim();
-  const par = runOnly(d.parallel||"");
+  let par = runOnly(d.parallel||"");
+  if (/^base$/i.test(par) || /,/.test(par) && /base/i.test(par)) par = "";
+  par = par.replace(/^\d+\s*/, "").trim();
   const ins = runOnly(d.insert||"");
   const bits = [d.player];
   if (ins) bits.push(ins);
   else if (d.set) bits.push(d.set);
-  if (num) bits.push("#"+num.replace(/^#/, ""));
-  if (par && !/^base$/i.test(par)) bits.push(par);
+  if (num) bits.push(num.replace(/^#/, ""));
+  if (par && !/^base$/i.test(par)) {
+    if (/black\s*(and|&)?\s*white|\bb\s*&\s*w\b|\bbw\b/i.test(par)) bits.push("B&W");
+    else bits.push(par);
+  }
   if (d.grader && d.grader !== "Raw") bits.push([d.grader, d.grade].filter(Boolean).join(" "));
-  if (!/auto/i.test(ins+" "+par)) bits.push("-auto", "-autograph");
   return encodeURIComponent(bits.filter(Boolean).join(" ").replace(/(\d)\/(\d)/g, "$1 / $2").replace(/(\S)(\/\d+)/g, "$1 $2"));
 }
 function daysAgo(iso){
