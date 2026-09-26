@@ -4458,7 +4458,8 @@ $("banColor") && ($("banColor").oninput = paintBanDraft);
       const want = $("banKind").value;
       syncBanLayout();
       if (want === "stock" && window.myStock) fillBannerForm(window.myStock);
-      else if (want !== "stock" && window.myEvent && (window.myEvent.kind === want || (want === "live" && window.myEvent.kind === "live"))) fillBannerForm(window.myEvent);
+      else if (want === "show" && window.myShow) fillBannerForm(window.myShow);
+      else if (want === "live" && window.myEvent) fillBannerForm(window.myEvent);
     }
     paintBanDraft();
   });
@@ -4728,11 +4729,13 @@ async function loadBanners(){
   const d = await r.json();
   const rows = d.banners || [];
   window.myStock = rows.find(b => b.kind === "stock") || null;
-  window.myEvent = rows.find(b => b.kind !== "stock") || null;
+  window.myShow = rows.find(b => b.kind === "show") || null;
+  window.myEvent = rows.find(b => b.kind && b.kind !== "stock" && b.kind !== "show") || null;
   const want = ($("banKind") && $("banKind").value) || "stock";
   let b = null;
   if (want === "stock") b = window.myStock;
-  else if (window.myEvent && (window.myEvent.kind === want || (want === "live" && window.myEvent.kind === "live"))) b = window.myEvent;
+  else if (want === "show") b = window.myShow;
+  else b = window.myEvent;
   window.myBanner = b || window.myStock || null;
   if (b) fillBannerForm(b);
   else {
@@ -4742,14 +4745,13 @@ async function loadBanners(){
 }
 async function cancelMyBanner(){
   try {
-    await authPost("/banners/cancel", {});
-    window.pubBanners = [];
-    if (window.myEvent) window.myEvent.off = 1;
-    window.myEvent = null;
+    const ev = pickPubEvent() || window.myEvent || window.myShow;
+    await authPost("/banners/cancel", ev && ev.id ? { id: ev.id } : {});
+    window.pubBanners = (window.pubBanners||[]).filter(b => !ev || b.id !== ev.id);
     await loadBanners();
     if (window.myStock) window.pubCover = window.myStock;
     paintPubBanner();
-    if ($("banNote")) $("banNote").textContent = "Event cancelled. Stock is back up.";
+    if ($("banNote")) $("banNote").textContent = "That event is off. Next one is up if you have one.";
   } catch(e) {
     if ($("banNote")) $("banNote").textContent = e.message;
   }
@@ -4811,7 +4813,7 @@ $("banAdd") && ($("banAdd").onclick = async () => {
       starts,
       hours: +(($("banHours")&&$("banHours").value) || 4)
     });
-    if ($("banNote")) $("banNote").textContent = "Banner saved. It replaced the old one.";
+    if ($("banNote")) $("banNote").textContent = "Saved. Stream, card show, and stock can all be set. Live first, then the next show, then stock.";
     loadBanners();
   } catch(e) { if ($("banNote")) $("banNote").textContent = e.message; }
 });
@@ -5515,25 +5517,38 @@ $("likeBtn") && ($("likeBtn").onclick = async () => {
 function liveEvent(b){
   if (!b || b.cover || b.kind === "stock" || +b.off) return false;
   const st = bannerState(b);
+  return !st.done && !!b.starts && st.live;
+}
+function openEvent(b){
+  if (!b || b.cover || b.kind === "stock" || +b.off) return false;
+  const st = bannerState(b);
   return !st.done && !!b.starts;
 }
+function pickPubEvent(){
+  const rows = (window.pubBanners||[]).filter(openEvent);
+  return rows.find(liveEvent) || rows.slice().sort((a,b)=>Date.parse(a.starts||0)-Date.parse(b.starts||0))[0] || null;
+}
 function paintPubBanner(){
-  const ev = (window.pubBanners||[]).find(liveEvent);
-  const cover = window.pubCover || window.myStock || {};
-  if (!$("pubBanner")) return;
-  if (ev) $("pubBanner").innerHTML = bannerHtml(ev, ownBinder(), viewSlug);
-  else $("pubBanner").innerHTML = bannerHtml({
-    cover: true,
-    title: cover.title || "",
-    body: cover.body || "",
-    url: cover.url || "",
-    art: cover.art || "ice",
-    color: cover.color || "#8fd4ee",
-    has_photo: !!cover.has_photo,
-    kind: "stock",
-    starts: "",
-    off: 0
-  }, false, viewSlug);
+  try {
+    const ev = pickPubEvent();
+    const cover = window.pubCover || window.myStock || {};
+    if (!$("pubBanner")) return;
+    if (ev) $("pubBanner").innerHTML = bannerHtml(ev, ownBinder(), viewSlug);
+    else $("pubBanner").innerHTML = bannerHtml({
+      cover: true,
+      title: cover.title || "",
+      body: cover.body || "",
+      url: cover.url || "",
+      art: cover.art || "ice",
+      color: cover.color || "#8fd4ee",
+      has_photo: !!cover.has_photo,
+      kind: "stock",
+      starts: "",
+      off: 0
+    }, false, viewSlug);
+  } catch(err) {
+    if ($("pubBanner")) $("pubBanner").innerHTML = "";
+  }
 }
 async function openPublic(slug, cardId){
   viewSlug = slug;

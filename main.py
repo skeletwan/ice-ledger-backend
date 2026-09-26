@@ -3323,7 +3323,6 @@ async def list_events(request: Request, x_token: str | None = Header(default=Non
             "SELECT id,kind,title,body,url,color,created,starts,hours,off,art FROM banner_posts WHERE user_id=? ORDER BY id DESC LIMIT 8",
             (u["id"],),
         ).fetchall()
-        live_or_soon = None
         for raw in rows:
             b = banner_row(raw, u["id"])
             if str(b.get("kind") or "") == "stock":
@@ -3332,17 +3331,13 @@ async def list_events(request: Request, x_token: str | None = Header(default=Non
                 continue
             if banner_ended(b):
                 continue
-            live_or_soon = b
-            break
-        if not live_or_soon:
-            continue
-        out.append({
-            "slug": u["slug"],
-            "display": u["display"] or "Collector",
-            "hue": u["hue"] or "#8fd4ee",
-            "banner": live_or_soon,
-            "live": banner_live(live_or_soon),
-        })
+            out.append({
+                "slug": u["slug"],
+                "display": u["display"] or "Collector",
+                "hue": u["hue"] or "#8fd4ee",
+                "banner": b,
+                "live": banner_live(b),
+            })
     con.close()
     out.sort(key=lambda x: (0 if x.get("live") else 1, str((x.get("banner") or {}).get("starts") or "")))
     return {"events": out}
@@ -3889,6 +3884,7 @@ async def public_binder(slug: str, request: Request, x_token: str | None = Heade
     stocks = [b for b in rows if (b.get("kind") or "") == "stock"]
     cover = stocks[0] if stocks else next((b for b in rows if not b.get("starts")), {"art": "ice", "color": u["hue"] or "#8fd4ee", "has_photo": False, "kind": "stock"})
     events = [b for b in rows if (b.get("kind") or "") != "stock" and b.get("starts") and not banner_ended(b)]
+    events.sort(key=lambda b: str(b.get("starts") or ""))
     con.close()
     book = sum((card_market(x) or 0) for x in raws)
     grails = sum(1 for x in raws if is_grail(x))
@@ -3961,10 +3957,14 @@ def banner_live(b) -> bool:
         hrs = 4
     now = now_utc()
     return start <= now <= start + timedelta(hours=hrs)
+
+def banner_ended(b) -> bool:
     if not b:
         return False
     if int(b.get("off") or 0):
         return True
+    if str(b.get("kind") or "") == "stock":
+        return False
     raw = str(b.get("starts") or "").replace("Z", "+00:00")
     try:
         start = datetime.fromisoformat(raw)
@@ -3972,7 +3972,6 @@ def banner_live(b) -> bool:
         return False
     if start.tzinfo is None:
         start = start.replace(tzinfo=timezone.utc)
-    hrs = 4
     try:
         hrs = max(1, min(24, int(b.get("hours") or 4)))
     except (TypeError, ValueError):
@@ -4078,8 +4077,10 @@ async def add_banner(payload: dict, request: Request, x_token: str | None = Head
     con = db()
     if kind == "stock":
         con.execute("DELETE FROM banner_posts WHERE user_id=? AND kind='stock'", (uid,))
+    elif kind == "show":
+        con.execute("DELETE FROM banner_posts WHERE user_id=? AND kind='show'", (uid,))
     else:
-        con.execute("DELETE FROM banner_posts WHERE user_id=? AND IFNULL(kind,'')!='stock'", (uid,))
+        con.execute("DELETE FROM banner_posts WHERE user_id=? AND kind NOT IN ('stock','show')", (uid,))
     con.execute(
         "INSERT INTO banner_posts(user_id,kind,title,body,url,color,created,starts,hours,off,art) VALUES(?,?,?,?,?,?,?,?,?,0,?)",
         (uid, kind, title, body, url, color, time.strftime("%Y-%m-%dT%H:%M:%SZ"), starts or None, hours, art),
@@ -4099,14 +4100,28 @@ async def add_banner(payload: dict, request: Request, x_token: str | None = Head
 
 
 @app.post("/banners/cancel")
-async def cancel_banner(request: Request, x_token: str | None = Header(default=None)):
+async def cancel_banner(payload: dict | None = None, request: Request = None, x_token: str | None = Header(default=None)):
     uid = require_user(request, x_token)
+    payload = payload or {}
+    bid = int(payload.get("id") or 0)
     con = db()
-    con.execute("UPDATE banner_posts SET off=1 WHERE user_id=? AND IFNULL(kind,'')!='stock'", (uid,))
-    con.commit()
+    rows = con.execute(
+        "SELECT id,kind,title,body,url,color,created,starts,hours,off,art FROM banner_posts WHERE user_id=? AND IFNULL(kind,'')!='stock' ORDER BY id DESC",
+        (uid,),
+    ).fetchall()
+    target = None
+    if bid:
+        target = next((r for r in rows if int(r["id"]) == bid), None)
+    if target is None:
+        open_rows = [banner_row(r, uid) for r in rows]
+        live = next((b for b in open_rows if banner_live(b)), None)
+        nxt = sorted([b for b in open_rows if not banner_ended(b)], key=lambda b: str(b.get("starts") or ""))
+        target = live or (nxt[0] if nxt else None)
+        bid = int((target or {}).get("id") or 0)
+    if bid:
+        con.execute("UPDATE banner_posts SET off=1 WHERE id=? AND user_id=?", (bid, uid))
+        con.commit()
     con.close()
-    return {"ok": True}
-
     return {"ok": True}
 
 @app.get("/u/{slug}/banner/photo")
