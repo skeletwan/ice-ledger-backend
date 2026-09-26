@@ -220,14 +220,19 @@
     .socials { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
     .socials a { color:var(--ice); font-size:13px; font-weight:700; text-decoration:none; }
     .item.reply { margin-left:18px; border-left:2px solid var(--line); }
-    .board-post { display:block; border-radius:16px; padding:14px 16px; margin:10px 0 14px; background:#0e171e; border:2px solid var(--ice); overflow:hidden; }
+    .board-post { display:block; position:relative; box-sizing:border-box; height:168px; border-radius:16px; padding:14px 16px; margin:10px 0 14px; background:#0e171e; border:2px solid var(--ice); overflow:hidden; }
+    .board-post.stream, .board-post.show { height:200px; padding:16px 16px 14px; }
     .board-post .k { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin:0 0 6px; }
-    .board-post h3 { margin:0 0 4px; font-size:17px; font-weight:700; line-height:1.25; }
+    .board-post h3 { margin:0 0 4px; font-size:17px; font-weight:700; line-height:1.25; max-height:2.5em; overflow:hidden; }
     .event-card { margin:0 0 16px; }
     .event-card .pwid { margin-bottom:0; cursor:pointer; }
     .live-chip {
+      position:absolute;
+      top:10px;
+      right:10px;
+      z-index:4;
       display:inline-block;
-      margin:6px 0 4px;
+      margin:0;
       padding:4px 9px;
       border-radius:999px;
       background:#e11d2e;
@@ -239,14 +244,15 @@
       font-style:normal;
       font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
     }
-    .board-post .muted { margin:0; }
-    .board-post .when { margin:4px 0 0; font-size:13px; font-weight:700; color:#fff; }
-    .board-post .ban-go { display:inline-block; margin-top:10px; padding:8px 14px; border-radius:8px; background:#14303a; color:#fff; font-weight:800; font-size:13px; text-decoration:none; border:1px solid var(--ice); }
-    .board-post.stream { padding:16px 16px 14px; }
+    .board-post .ban-end { position:absolute; top:8px; left:8px; z-index:4; width:auto; margin:0; padding:6px 10px; font-size:12px; }
+    .board-post .ban-copy { position:relative; z-index:2; height:100%; overflow:hidden; display:flex; flex-direction:column; justify-content:flex-end; padding-right:56px; }
+    .board-post .muted { margin:0; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+    .board-post .when { margin:4px 0 0; font-size:13px; font-weight:700; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .board-post .ban-go { display:inline-block; margin-top:8px; padding:8px 14px; border-radius:8px; background:#14303a; color:#fff; font-weight:800; font-size:13px; text-decoration:none; border:1px solid var(--ice); flex:0 0 auto; }
     .board-post.stream h3 { font-size:18px; }
     .board-post.stock .k { display:none; }
     #pubBanner .k { display:none; }
-    .board-post .bio { margin:6px 0 0; font-size:13px; line-height:1.35; color:#d5e4ee; }
+    .board-post .bio { margin:6px 0 0; font-size:13px; line-height:1.35; color:#d5e4ee; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
     .ban-arts { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; margin:6px 0 8px; }
     .ban-arts span { display:block; height:36px; border-radius:8px; border:2px solid transparent; cursor:pointer; }
     .ban-arts span.on { border-color:#fff; }
@@ -255,8 +261,7 @@
     .ban-arts .foil, .board-post.art-foil { background:linear-gradient(135deg,#c4b06a,#8a7a40 40%,#2a2410); }
     .ban-arts .rip, .board-post.art-rip { background:linear-gradient(160deg,#a02838,#7a2030 40%,#18080c); }
     .ban-arts .navy, .board-post.art-navy { background:#0b1116; }
-    .board-post.art-photo { background-size:cover; background-repeat:no-repeat; background-position:center; position:relative; overflow:hidden; min-height:180px; }
-    .board-post.art-photo.fitting { height:180px; max-height:180px; }
+    .board-post.art-photo { background-size:cover; background-repeat:no-repeat; background-position:center; position:relative; overflow:hidden; }
     .board-post.art-photo:before { content:""; position:absolute; inset:0; background:rgba(0,0,0,.42); z-index:1; pointer-events:none; }
     .board-post.art-photo > *:not(.ban-cover) { position:relative; z-index:2; }
     .board-post.fitting { touch-action:none; }
@@ -265,7 +270,6 @@
     .ban-drag { display:none; }
     .board-post.fitting .ban-drag { display:block; position:absolute; inset:0; z-index:5; touch-action:none; cursor:grab; }
     .board-post.fitting .ban-drag:active { cursor:grabbing; }
-    .board-post.cover-only { min-height:140px; }
     #banFitBar { display:none; margin:0 0 12px; }
     #banFitBar.on { display:block; }
     #banFitBar input { margin-top:6px; }
@@ -375,7 +379,7 @@
     #catPicks button { margin:0; text-align:left; font-size:13px; padding:10px 12px; }
     .item.comment, .thread .item { padding:8px 10px; margin-bottom:6px; }
     .item.reply { margin-left:14px; padding:8px 10px; }
-    .board-post { border-width:1px; padding:10px 12px; border-radius:16px; overflow:hidden; }
+    .board-post { border-width:1px; }
     .dock button { display:flex; flex-direction:column; align-items:center; gap:4px; }
     header { background:var(--bg); }
     .dock { background:var(--ink); }
@@ -923,7 +927,8 @@
       </select>
       </div>
       <label id="banBodyLab">Bio</label>
-      <textarea id="banBody" maxlength="400" rows="3" placeholder="What you rip, what you collect"></textarea>
+      <textarea id="banBody" maxlength="120" rows="3" placeholder="What you rip, what you collect"></textarea>
+      <p class="muted" id="banBodyHint">Two lines on the banner. 120 characters.</p>
       <label>Link</label>
       <input id="banUrl" placeholder="https://youtube.com/@yourchannel" />
       <label>Color</label>
@@ -4565,12 +4570,12 @@ function bannerHtml(b, mine, slug){
   const kind = (b.kind === "show") ? "show" : (stock ? "stock" : "stream");
   const art = (b.art === "photo" && (b.has_photo || (mine && window.bannerShot))) ? "photo" : (b.art && b.art !== "photo" ? b.art : "ice");
   const live = st.live ? "<span class=\"live-chip\">LIVE</span>" : "";
-  const when = (!stock && st.label) ? "<div class=\"when\">"+st.label+(st.live?" · happening now":"")+"</div>" : "";
+  const when = (!stock && st.label) ? "<div class=\"when\">"+st.label+"</div>" : "";
   const body = b.body ? "<div class=\""+(stock?"bio":"muted")+"\">"+String(b.body).replace(/[<>]/g,"")+"</div>" : "";
   const goTxt = stock ? (/youtu/i.test(b.url||"") ? "YouTube" : "Visit") : (kind === "show" ? "Details" : "Watch");
   const link = b.url ? "<a class=\"ban-go\" href=\""+b.url.replace(/"/g,"")+"\" target=\"_blank\" rel=\"noopener\">"+goTxt+"</a>" : "";
   const fit = !!(mine && window.banFit && window.banFit.src);
-  const act = (!fit && mine && !st.done && b.starts && !stock) ? "<button type=\"button\" class=\"ghost\" data-ban-end=\"1\" style=\"width:auto;margin-top:10px\">Cancel</button>" : "";
+  const act = (!fit && mine && !st.done && b.starts && !stock) ? "<button type=\"button\" class=\"ghost ban-end\" data-ban-end=\"1\">Cancel</button>" : "";
   const kicker = (stock || b.cover) ? "" : (kind === "show" ? "<div class=\"k\">Card show</div>" : "<div class=\"k\">Stream / rip</div>");
   let bg = "";
   let cover = "";
@@ -4587,8 +4592,8 @@ function bannerHtml(b, mine, slug){
     ? "<div class=\"ban-copy\"><h3>"+title+"</h3></div>"
     : idle
       ? "<div class=\"ban-copy\"></div>"
-      : "<div class=\"ban-copy\">"+kicker+(title?"<h3>"+title+"</h3>":"")+live+when+body+link+act+"</div>";
-  return "<div class=\"board-post "+kind+" art-"+art+(fit?" fitting":"")+(idle?" cover-only":"")+"\" style=\"border-color:"+col+";"+bg+"\">"+cover+copy+"</div>";
+      : "<div class=\"ban-copy\">"+kicker+(title?"<h3>"+title+"</h3>":"")+when+body+link+"</div>";
+  return "<div class=\"board-post "+kind+" art-"+art+(fit?" fitting":"")+(idle?" cover-only":"")+"\" style=\"border-color:"+col+";"+bg+"\">"+cover+live+act+copy+"</div>";
 }
 function applyBanFit(){
   const img = $("banCover");
@@ -5626,7 +5631,7 @@ function paintPubBanner(){
     const cover = window.pubCover || window.myStock || {};
     if (!$("pubBanner")) return;
     if (ev) {
-      $("pubBanner").innerHTML = bannerHtml(Object.assign({}, ev, { cover: false }), ownBinder(), viewSlug);
+      $("pubBanner").innerHTML = bannerHtml(Object.assign({}, ev, { cover: false }), false, viewSlug);
     } else {
       $("pubBanner").innerHTML = bannerHtml({
         cover: true,
