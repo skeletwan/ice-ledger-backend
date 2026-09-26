@@ -884,6 +884,7 @@
       <h3 style="margin:0 0 6px;font-size:16px">Binder banner</h3>
       <p class="muted">Background stays on your public binder even when nothing is on. Add a title and start time to turn it into an event. After the window ends, the cover stays and the event drops off.</p>
       <div id="banPreview"></div>
+      <button class="ghost" type="button" id="banCancel" style="width:auto;margin:8px 0 12px;padding:8px 12px">Cancel event</button>
       <div id="banFitBar">
         <p class="muted">Drag the photo to move it. Zoom to size it. Then tap Done.</p>
         <input id="banZoom" type="range" min="80" max="280" value="100" />
@@ -4575,7 +4576,7 @@ function bannerHtml(b, mine, slug){
   const goTxt = stock ? (/youtu/i.test(b.url||"") ? "YouTube" : "Visit") : (kind === "show" ? "Details" : "Watch");
   const link = b.url ? "<a class=\"ban-go\" href=\""+b.url.replace(/"/g,"")+"\" target=\"_blank\" rel=\"noopener\">"+goTxt+"</a>" : "";
   const fit = !!(mine && window.banFit && window.banFit.src);
-  const act = (!fit && mine && !st.done && b.starts && !stock) ? "<button type=\"button\" class=\"ghost ban-end\" data-ban-end=\"1\">Cancel</button>" : "";
+  const act = "";
   const kicker = (stock || b.cover) ? "" : (kind === "show" ? "<div class=\"k\">Card show</div>" : "<div class=\"k\">Stream / rip</div>");
   let bg = "";
   let cover = "";
@@ -4751,7 +4752,12 @@ function applyBanDraft(kind){
   fillBannerForm(d);
 }
 function seedBanDraft(slot, row){
-  if (!row || window.banDrafts[slot]) return;
+  if (!row) return;
+  if (window.banDrafts[slot]) {
+    window.banDrafts[slot].id = row.id;
+    window.banDrafts[slot].off = +row.off ? 1 : 0;
+    return;
+  }
   window.banDrafts[slot] = {
     title: row.title || "",
     body: row.body || "",
@@ -4766,6 +4772,32 @@ function seedBanDraft(slot, row){
     off: +row.off ? 1 : 0
   };
 }
+function currentEventRow(){
+  const slot = banSlot(window.banKindNow);
+  if (slot === "show") return window.myShow;
+  if (slot === "live") return window.myEvent;
+  return null;
+}
+function paintBanCancel(){
+  const btn = $("banCancel");
+  if (!btn) return;
+  const slot = banSlot(window.banKindNow);
+  if (slot === "stock") {
+    btn.classList.add("hidden");
+    return;
+  }
+  btn.classList.remove("hidden");
+  const ev = currentEventRow();
+  const off = !!(ev && +ev.off);
+  const done = ev ? bannerState(ev).done : false;
+  const locked = !ev || !ev.id || off || done;
+  btn.textContent = (off || done) ? "Cancelled" : "Cancel event";
+  btn.disabled = locked;
+  btn.className = "ghost";
+  btn.style.width = "auto";
+  btn.style.margin = "8px 0 12px";
+  btn.style.padding = "8px 12px";
+}
 function syncBanLayout(){
   const stock = ($("banKind")&&$("banKind").value) === "stock";
   if ($("banWhenWrap")) $("banWhenWrap").classList.toggle("hidden", stock);
@@ -4773,6 +4805,7 @@ function syncBanLayout(){
   if ($("banBody")) $("banBody").placeholder = stock ? "What you rip, what you collect" : "Booth 14, 10am–4pm or episode notes";
   if ($("banTitle")) $("banTitle").placeholder = stock ? "Your channel or binder name" : "Saturday rip · Toronto card show";
   if ($("banUrl")) $("banUrl").placeholder = stock ? "https://youtube.com/@yourchannel" : "https://youtube.com/…";
+  paintBanCancel();
 }
 function fillBannerForm(b){
   if (!b) return;
@@ -4808,13 +4841,14 @@ async function loadBanners(){
   seedBanDraft("show", window.myShow);
   seedBanDraft("live", window.myEvent);
   applyBanDraft(want);
+  paintBanCancel();
 }
 async function cancelMyBanner(){
   try {
     const slot = banSlot(window.banKindNow);
     const ev = slot === "show" ? window.myShow : (slot === "stock" ? null : window.myEvent);
     if (!ev || !ev.id || +ev.off) {
-      if ($("banNote")) $("banNote").textContent = "Already cancelled.";
+      paintBanCancel();
       paintBanDraft();
       return;
     }
@@ -4826,7 +4860,7 @@ async function cancelMyBanner(){
     await refreshPubBanners();
     paintBanDraft();
     paintPubBanner();
-    if ($("banNote")) $("banNote").textContent = "Cancelled";
+    paintBanCancel();
   } catch(e) {
     if ($("banNote")) $("banNote").textContent = e.message;
   }
@@ -4854,6 +4888,7 @@ $("banFile") && ($("banFile").onchange = () => {
   reader.onload = () => startBanFit(reader.result);
   reader.readAsDataURL(f);
 });
+$("banCancel") && ($("banCancel").onclick = cancelMyBanner);
 $("banPreview") && ($("banPreview").onclick = ev => {
   if (ev.target.closest("[data-ban-end]")) cancelMyBanner();
 });
@@ -4898,6 +4933,7 @@ $("banAdd") && ($("banAdd").onclick = async () => {
     await loadBanners();
     await refreshPubBanners();
     paintPubBanner();
+    paintBanCancel();
   } catch(e) { if ($("banNote")) $("banNote").textContent = e.message; }
 });
 $("banClear") && ($("banClear").onclick = async () => {
