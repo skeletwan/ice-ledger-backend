@@ -1060,6 +1060,12 @@
     <button class="ghost" id="modMailAll">Email everyone</button>
     <div id="modPushList"></div>
 
+    <h3 style="font-size:15px;margin:16px 0 8px">Checklist import</h3>
+    <p class="muted">Paste a CSV you own. Columns: year, brand, set, insert, number, player, team, parallel, print_run. Do not dump a paid Beckett database into the app.</p>
+    <textarea id="catCsv" rows="6" placeholder="year,brand,set,insert,number,player,team,parallel,print_run"></textarea>
+    <button class="ghost" id="catImport">Import CSV</button>
+    <p class="muted" id="catImportNote"></p>
+
     <h3 style="font-size:15px;margin:16px 0 8px">Rip codes</h3>
     <label>IDs on the code</label>
     <input id="ripMakeScans" type="number" value="10" min="1" max="500" />
@@ -1758,6 +1764,26 @@ $("tabSet").onclick = () => { loadNotePrefs(); loadMe(); show("set"); };
 $("tabHelp") && ($("tabHelp").onclick = () => show("help"));
 $("backYou") && ($("backYou").onclick = () => show("set"));
 $("ownerToolsBtn") && ($("ownerToolsBtn").onclick = () => { show("ops"); loadRipCodes(); loadAnnounces(); if ($("modLoad")) $("modLoad").click(); });
+$("catImport") && ($("catImport").onclick = async () => {
+  const csv = ($("catCsv") && $("catCsv").value) || "";
+  if (!csv.trim()) {
+    if ($("catImportNote")) $("catImportNote").textContent = "Paste a CSV first.";
+    return;
+  }
+  try {
+    const r = await fetch("/catalog/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-token": token() },
+      body: JSON.stringify({ csv })
+    });
+    const d = await r.json().catch(()=>({}));
+    if ($("catImportNote")) $("catImportNote").textContent = d.ok
+      ? ("Added "+d.added+", skipped "+d.skipped+". Catalog rows: "+((d.stats&&d.stats.rows)||"—"))
+      : (d.detail || d.error || "Import failed");
+  } catch(e) {
+    if ($("catImportNote")) $("catImportNote").textContent = e.message;
+  }
+});
 $("backYouOps") && ($("backYouOps").onclick = () => show("set"));
 $("fxCAD").onclick = () => setFx("CAD");
 $("fxUSD").onclick = () => setFx("USD");

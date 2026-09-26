@@ -533,5 +533,59 @@ def catalog_stats(con: sqlite3.Connection):
     tot = con.execute("SELECT COUNT(*) AS n FROM catalog").fetchone()["n"]
     seed = con.execute("SELECT COUNT(*) AS n FROM catalog WHERE source='seed'").fetchone()["n"]
     voted = con.execute("SELECT COUNT(*) AS n FROM catalog WHERE source='voted'").fetchone()["n"]
+    import_n = con.execute("SELECT COUNT(*) AS n FROM catalog WHERE source='import'").fetchone()["n"]
     pending = con.execute("SELECT COUNT(DISTINCT fp) AS n FROM catalog_votes").fetchone()["n"]
-    return {"rows": tot, "seed": seed, "voted": voted, "pending": pending}
+    return {"rows": tot, "seed": seed, "voted": voted, "import": import_n, "pending": pending}
+
+
+CSV_TEMPLATE = "year,brand,set,insert,number,player,team,parallel,print_run\n2024-25,Upper Deck,Ice,Premieres,42,Example Player,Toronto Maple Leafs,Base,/99\n2024-25,Upper Deck,Clear Cut,,12,Example Player,Boston Bruins,Base,\n"
+
+
+def _csv_get(row: dict, *names):
+    low = {str(k).strip().lower(): v for k, v in row.items()}
+    for n in names:
+        if n in low and str(low[n] or "").strip():
+            return str(low[n]).strip()
+    return ""
+
+
+def import_catalog_csv(con: sqlite3.Connection, text: str) -> dict:
+    """Load player-level rows from a CSV you own. Do not paste Beckett's full paid DB as a product dump."""
+    import csv
+    import io
+    raw = (text or "").lstrip("\ufeff").strip()
+    if not raw:
+        return {"ok": False, "added": 0, "skipped": 0, "error": "empty file"}
+    reader = csv.DictReader(io.StringIO(raw))
+    if not reader.fieldnames:
+        return {"ok": False, "added": 0, "skipped": 0, "error": "need a header row"}
+    now = time.strftime("%Y-%m-%dT%H:%M:%SZ")
+    added = skipped = 0
+    for rec in reader:
+        player = _csv_get(rec, "player", "name", "player name")
+        year = _csv_get(rec, "year", "season")
+        set_name = _csv_get(rec, "set", "set_name", "set name", "product")
+        if len(player) < 3 or len(set_name) < 2:
+            skipped += 1
+            continue
+        brand = _csv_get(rec, "brand", "manufacturer")
+        ins = _csv_get(rec, "insert", "insert_name", "subset")
+        par = _csv_get(rec, "parallel", "version", "var") or "Base"
+        number = _csv_get(rec, "number", "card", "card number", "#")
+        number = re.sub(r"^#+", "", number)
+        team = _csv_get(rec, "team")
+        run = _csv_get(rec, "print_run", "print run", "serial", "run")
+        hit = con.execute(
+            """SELECT id FROM catalog WHERE lower(ifnull(player,''))=? AND year=? AND lower(set_name)=?
+               AND ifnull(number,'')=? AND lower(ifnull(parallel,''))=? AND lower(ifnull(insert_name,''))=? LIMIT 1""",
+            (player.lower(), year, set_name.lower(), number, par.lower(), ins.lower()),
+        ).fetchone()
+        if hit:
+            skipped += 1
+            continue
+        con.execute(
+            "INSERT INTO catalog(year,brand,set_name,insert_name,parallel,player,number,team,print_run,source,created) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+            (year, brand, set_name, ins, par, player, number, team, run, "import", now),
+        )
+        added += 1
+    return {"ok": True, "added": added, "skipped": skipped}

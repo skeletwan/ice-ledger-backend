@@ -13,7 +13,7 @@ from urllib.parse import urlparse, quote_plus
 from pathlib import Path
 from PIL import Image, ImageOps
 import httpx
-from catalog import ensure_catalog, catalog_matches, vote_card, catalog_stats, catalog_parallel_terms
+from catalog import ensure_catalog, catalog_matches, vote_card, catalog_stats, catalog_parallel_terms, import_catalog_csv, CSV_TEMPLATE
 
 XAI_API_KEY = os.environ.get("XAI_API_KEY", "")
 APP_SECRET = os.environ.get("APP_SECRET", "")
@@ -351,6 +351,24 @@ async def catalog_search(q: str = "", year: str = "", player: str = ""):
     hits = catalog_matches(con, {"player": player or q, "year": year, "set": q, "number": "", "parallel": "", "insert": q})
     con.close()
     return {"matches": hits}
+
+@app.get("/catalog/template.csv")
+async def catalog_template():
+    from fastapi.responses import PlainTextResponse
+    return PlainTextResponse(CSV_TEMPLATE, media_type="text/csv")
+
+@app.post("/catalog/import")
+async def catalog_import(request: Request, payload: dict = None, x_token: str | None = Header(default=None)):
+    require_operator(request, x_token or ((payload or {}).get("token")))
+    text = str((payload or {}).get("csv") or "")
+    con = db()
+    ensure_catalog(con)
+    out = import_catalog_csv(con, text)
+    con.commit()
+    stats = catalog_stats(con)
+    con.close()
+    out["stats"] = stats
+    return out
 
 def scrub_false_yg(data: dict) -> bool:
     if not isinstance(data, dict):
