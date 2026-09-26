@@ -4261,6 +4261,30 @@ async def public_binder(slug: str, request: Request, x_token: str | None = Heade
 
 BANNER_ARTS = ("ice", "rink", "foil", "rip", "navy", "photo")
 
+def banner_slot(kind: str) -> str:
+    k = str(kind or "").strip().lower()
+    if k in ("show", "card", "cardshow"):
+        return "show"
+    if k in ("live", "stream", "break", "episode", "note", "rip"):
+        return "live"
+    return "stock"
+
+def banner_photo_key(kind: str) -> str:
+    return "banner-" + banner_slot(kind)
+
+def seed_legacy_banner_photo(uid, kind: str):
+    key = banner_photo_key(kind)
+    if photo_file_exists(uid, key):
+        return
+    old = photo_path(uid, "banner")
+    try:
+        if old.is_file() and old.stat().st_size >= 32:
+            dest = photo_path(uid, key)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(old.read_bytes())
+    except Exception:
+        pass
+
 def banner_row(r, uid=None) -> dict:
     if not r:
         return {}
@@ -4275,7 +4299,11 @@ def banner_row(r, uid=None) -> dict:
     if art not in BANNER_ARTS:
         art = "ice"
     d["art"] = art
-    d["has_photo"] = art == "photo" and bool(uid and photo_file_exists(uid, "banner"))
+    kind = str(d.get("kind") or "stock")
+    if art == "photo" and uid:
+        seed_legacy_banner_photo(uid, kind)
+    d["has_photo"] = art == "photo" and bool(uid and photo_file_exists(uid, banner_photo_key(kind)))
+    d["photo_kind"] = banner_slot(kind)
     return d
 
 def banner_live(b) -> bool:
@@ -4410,9 +4438,12 @@ async def add_banner(payload: dict, request: Request, x_token: str | None = Head
         art = "ice"
     photo = payload.get("photo") or ""
     if art == "photo":
+        key = banner_photo_key(kind)
         if photo:
-            save_card_photo(uid, "banner", photo)
-        if not photo_file_exists(uid, "banner"):
+            save_card_photo(uid, key, photo)
+        elif not photo_file_exists(uid, key):
+            seed_legacy_banner_photo(uid, kind)
+        if not photo_file_exists(uid, key):
             art = "ice"
     if len(title) < 2:
         title = (body or "")[:80]
@@ -4474,22 +4505,27 @@ async def cancel_banner(payload: dict, request: Request, x_token: str | None = H
     return {"ok": True, "id": bid}
 
 @app.get("/u/{slug}/banner/photo")
-def public_banner_photo(slug: str):
+def public_banner_photo(slug: str, kind: str = "stock"):
     con = db()
     u = con.execute("SELECT id FROM users WHERE slug=?", (slug,)).fetchone()
     con.close()
     if not u:
         raise HTTPException(404, "no user")
-    path = photo_path(u["id"], "banner")
+    uid = u["id"]
+    path = photo_path(uid, banner_photo_key(kind))
     if not path.is_file():
-        raise HTTPException(404, "no photo")
+        legacy = photo_path(uid, "banner")
+        if banner_slot(kind) == "stock" and legacy.is_file():
+            path = legacy
+        else:
+            raise HTTPException(404, "no photo")
     return FileResponse(path, media_type="image/jpeg")
 
 @app.get("/me/banner/photo")
-def my_banner_photo(request: Request, x_token: str | None = Header(default=None)):
+def my_banner_photo(request: Request, x_token: str | None = Header(default=None), kind: str = "stock"):
     tok = x_token or request.query_params.get("token")
     uid = require_user(request, tok)
-    path = photo_path(uid, "banner")
+    path = photo_path(uid, banner_photo_key(kind))
     if not path.is_file():
         raise HTTPException(404, "no photo")
     return FileResponse(path, media_type="image/jpeg")

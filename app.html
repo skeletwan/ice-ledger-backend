@@ -4748,6 +4748,15 @@ function fillStartInputs(iso){
 function ownBinder(){
   return !!(mySlug && viewSlug && viewSlug === mySlug);
 }
+function bannerPhotoSrc(b, mine, slug){
+  const slot = (b && b.kind === "show") ? "show" : ((b && (b.kind === "stock" || b.cover)) ? "stock" : "live");
+  if (mine && window.banKindNow === slot && window.bannerShot && String(window.bannerShot).indexOf("data:") === 0) return window.bannerShot;
+  if (b && b.photo && String(b.photo).indexOf("data:") === 0) return b.photo;
+  const who = slug || (b && b.slug) || viewSlug || mySlug;
+  if (!who || !(b && (b.has_photo || b.art === "photo"))) return "";
+  const tick = (window.banPhotoTick && window.banPhotoTick[slot]) || 1;
+  return "/u/"+encodeURIComponent(who)+"/banner/photo?kind="+slot+"&t="+tick;
+}
 function bannerHtml(b, mine, slug){
   if (!b) return "";
   const st = bannerState(b);
@@ -4755,13 +4764,13 @@ function bannerHtml(b, mine, slug){
   const stock = b.kind === "stock" || b.cover;
   const col = b.color || "#8fd4ee";
   const kind = (b.kind === "show") ? "show" : (stock ? "stock" : "stream");
-  const art = (b.art === "photo" && (b.has_photo || (mine && window.bannerShot))) ? "photo" : (b.art && b.art !== "photo" ? b.art : "ice");
+  const art = (b.art === "photo" && (b.has_photo || b.photo || (mine && window.banKindNow === banSlot(b.kind) && window.bannerShot))) ? "photo" : (b.art && b.art !== "photo" ? b.art : "ice");
   const live = st.live ? "<span class=\"live-chip\">LIVE</span>" : "";
   const when = (!stock && st.label) ? "<div class=\"when\">"+st.label+"</div>" : "";
   const body = b.body ? "<div class=\""+(stock?"bio":"muted")+"\">"+String(b.body).replace(/[<>]/g,"")+"</div>" : "";
   const goTxt = stock ? (/youtu/i.test(b.url||"") ? "YouTube" : "Visit") : (kind === "show" ? "Details" : "Watch");
   const link = b.url ? "<a class=\"ban-go\" href=\""+b.url.replace(/"/g,"")+"\" target=\"_blank\" rel=\"noopener\">"+goTxt+"</a>" : "";
-  const fit = !!(mine && window.banFit && window.banFit.src);
+  const fit = !!(mine && window.banFit && window.banFit.src && window.banKindNow === banSlot(b.kind));
   const act = "";
   const kicker = (stock || b.cover) ? "" : (kind === "show" ? "<div class=\"k\">Card show</div>" : "<div class=\"k\">Stream / rip</div>");
   let bg = "";
@@ -4769,7 +4778,7 @@ function bannerHtml(b, mine, slug){
   if (art === "photo" && fit) {
     cover = "<img class=\"ban-cover\" id=\"banCover\" alt=\"\" draggable=\"false\" src=\""+String(window.banFit.src).replace(/"/g,"")+"\" /><div class=\"ban-drag\" id=\"banDrag\"></div>";
   } else if (art === "photo") {
-    const src = (mine && window.bannerShot) ? window.bannerShot : ((slug || viewSlug || mySlug) ? "/u/"+encodeURIComponent(slug || viewSlug || mySlug)+"/banner/photo" : "");
+    const src = bannerPhotoSrc(b, mine, slug);
     if (src) bg = "background-image:url('"+src.replace(/'/g,"")+"');";
   }
   const hasCopy = !!(String(b.title||"").trim() || String(b.body||"").trim() || b.url);
@@ -4913,6 +4922,7 @@ function paintBanArt(){
 window.bannerArt = "ice";
 window.bannerShot = "";
 window.banDrafts = { stock:null, live:null, show:null };
+window.banPhotoTick = { stock:1, live:1, show:1 };
 window.banKindNow = "stock";
 function banSlot(kind){
   kind = kind || (($("banKind")&&$("banKind").value) || "stock");
@@ -4937,7 +4947,8 @@ function applyBanDraft(kind){
   if ($("banKind")) $("banKind").value = slot === "show" ? "show" : slot === "stock" ? "stock" : "live";
   window.banKindNow = slot;
   if (!d) { clearBanFields(); syncBanLayout(); paintBanDraft(); return; }
-  if (d.photo) window.bannerShot = d.photo;
+  window.bannerShot = d.photo || "";
+  window.bannerArt = d.art || "ice";
   fillBannerForm(d);
 }
 function seedBanDraft(slot, row){
@@ -4959,7 +4970,7 @@ function seedBanDraft(slot, row){
     kind: slot === "show" ? "show" : slot === "stock" ? "stock" : "live",
     art: row.art || "ice",
     has_photo: !!row.has_photo,
-    photo: "",
+    photo: row.has_photo ? bannerPhotoSrc(row, true, mySlug) : "",
     starts: row.starts || "",
     hours: row.hours || 4,
     off: +row.off ? 1 : 0
@@ -5165,7 +5176,7 @@ $("banZoom") && ($("banZoom").oninput = () => {
 });
 $("banAdjust") && ($("banAdjust").onclick = ev => {
   ev.preventDefault();
-  const src = window.bannerShot || (mySlug ? "/u/"+encodeURIComponent(mySlug)+"/banner/photo?t="+Date.now() : "");
+  const src = window.bannerShot || bannerPhotoSrc({ kind: ($("banKind")&&$("banKind").value) || "stock", art:"photo", has_photo:true }, true, mySlug);
   if (!src) {
     if ($("banArtNote")) $("banArtNote").textContent = "Add a photo first.";
     return;
@@ -5211,6 +5222,7 @@ $("banAdd") && ($("banAdd").onclick = async () => {
         starts: slot === "stock" ? "" : (d.starts || ""),
         hours: +(d.hours || 4)
       });
+      window.banPhotoTick[slot] = Date.now();
       n++;
     }
     if ($("banNote")) $("banNote").textContent = "";
