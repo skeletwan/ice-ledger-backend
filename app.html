@@ -225,12 +225,27 @@
     .board-post h3 { margin:0 0 4px; font-size:17px; font-weight:700; line-height:1.25; }
     .event-card { margin:0 0 16px; }
     .event-card .pwid { margin-bottom:0; cursor:pointer; }
+    .live-chip {
+      display:inline-block;
+      margin:6px 0 4px;
+      padding:4px 9px;
+      border-radius:999px;
+      background:#e11d2e;
+      color:#fff !important;
+      font-size:10px;
+      font-weight:800;
+      letter-spacing:.14em;
+      line-height:1.2;
+      font-style:normal;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    }
     .board-post .muted { margin:0; }
     .board-post .when { margin:4px 0 0; font-size:13px; font-weight:700; color:#fff; }
     .board-post .ban-go { display:inline-block; margin-top:10px; padding:8px 14px; border-radius:8px; background:#14303a; color:#fff; font-weight:800; font-size:13px; text-decoration:none; border:1px solid var(--ice); }
     .board-post.stream { padding:16px 16px 14px; }
     .board-post.stream h3 { font-size:18px; }
-    .board-post.stock .k { color:var(--ice); }
+    .board-post.stock .k { display:none; }
+    #pubBanner .k { display:none; }
     .board-post .bio { margin:6px 0 0; font-size:13px; line-height:1.35; color:#d5e4ee; }
     .ban-arts { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; margin:6px 0 8px; }
     .ban-arts span { display:block; height:36px; border-radius:8px; border:2px solid transparent; cursor:pointer; }
@@ -914,7 +929,7 @@
       <label>Color</label>
       <input id="banColor" class="hue-swatch" type="color" value="#8fd4ee" />
       <button class="ghost" type="button" id="banFromHue" style="width:auto;padding:6px 10px;font-size:12px;margin-top:6px">Use profile colour</button>
-      <button id="banAdd">Save</button>
+      <button id="banAdd">Save all</button>
       <button class="ghost" id="banClear">Remove banner</button>
       <p class="muted" id="banNote"></p>
       <div id="banList"></div>
@@ -4455,11 +4470,10 @@ $("banColor") && ($("banColor").oninput = paintBanDraft);
   $(id) && ($(id).oninput = paintBanDraft);
   $(id) && ($(id).onchange = () => {
     if (id==="banKind") {
-      const want = $("banKind").value;
+      stashBanDraft(window.banKindNow);
+      window.banKindNow = banSlot($("banKind").value);
+      applyBanDraft(window.banKindNow);
       syncBanLayout();
-      if (want === "stock" && window.myStock) fillBannerForm(window.myStock);
-      else if (want === "show" && window.myShow) fillBannerForm(window.myShow);
-      else if (want === "live" && window.myEvent) fillBannerForm(window.myEvent);
     }
     paintBanDraft();
   });
@@ -4555,7 +4569,7 @@ function bannerHtml(b, mine, slug){
   const link = b.url ? "<a class=\"ban-go\" href=\""+b.url.replace(/"/g,"")+"\" target=\"_blank\" rel=\"noopener\">"+goTxt+"</a>" : "";
   const fit = !!(mine && window.banFit && window.banFit.src);
   const act = (!fit && mine && !st.done && b.starts && !stock) ? "<button type=\"button\" class=\"ghost\" data-ban-end=\"1\" style=\"width:auto;margin-top:10px\">Cancel</button>" : "";
-  const kicker = stock ? "" : (kind === "show" ? "<div class=\"k\">Card show</div>" : "<div class=\"k\">Stream / rip</div>");
+  const kicker = (stock || b.cover) ? "" : (kind === "show" ? "<div class=\"k\">Card show</div>" : "<div class=\"k\">Stream / rip</div>");
   let bg = "";
   let cover = "";
   if (art === "photo" && fit) {
@@ -4700,6 +4714,53 @@ function paintBanArt(){
 }
 window.bannerArt = "ice";
 window.bannerShot = "";
+window.banDrafts = { stock:null, live:null, show:null };
+window.banKindNow = "stock";
+function banSlot(kind){
+  kind = kind || (($("banKind")&&$("banKind").value) || "stock");
+  return kind === "show" ? "show" : kind === "stock" ? "stock" : "live";
+}
+function stashBanDraft(kind){
+  const slot = banSlot(kind);
+  const d = bannerDraft();
+  d.kind = slot === "show" ? "show" : slot === "stock" ? "stock" : "live";
+  d.photo = (window.bannerArt === "photo") ? (window.bannerShot || d.photo || "") : "";
+  window.banDrafts[slot] = d;
+}
+function clearBanFields(){
+  ["banTitle","banBody","banUrl"].forEach(id => { if ($(id)) $(id).value = ""; });
+  fillStartInputs("");
+  if ($("banHours")) $("banHours").value = "4";
+  window.bannerArt = "ice";
+  window.bannerShot = "";
+  window.banFit = null;
+  if ($("banFitBar")) $("banFitBar").classList.remove("on");
+}
+function applyBanDraft(kind){
+  const slot = banSlot(kind);
+  const d = window.banDrafts[slot];
+  if ($("banKind")) $("banKind").value = slot === "show" ? "show" : slot === "stock" ? "stock" : "live";
+  window.banKindNow = slot;
+  if (!d) { clearBanFields(); syncBanLayout(); paintBanDraft(); return; }
+  if (d.photo) window.bannerShot = d.photo;
+  fillBannerForm(d);
+}
+function seedBanDraft(slot, row){
+  if (!row || window.banDrafts[slot]) return;
+  window.banDrafts[slot] = {
+    title: row.title || "",
+    body: row.body || "",
+    url: row.url || "",
+    color: row.color || "#8fd4ee",
+    kind: slot === "show" ? "show" : slot === "stock" ? "stock" : "live",
+    art: row.art || "ice",
+    has_photo: !!row.has_photo,
+    photo: "",
+    starts: row.starts || "",
+    hours: row.hours || 4,
+    off: 0
+  };
+}
 function syncBanLayout(){
   const stock = ($("banKind")&&$("banKind").value) === "stock";
   if ($("banWhenWrap")) $("banWhenWrap").classList.toggle("hidden", stock);
@@ -4718,7 +4779,8 @@ function fillBannerForm(b){
   if ($("banColor") && b.color) $("banColor").value = b.color;
   fillStartInputs(b.starts);
   if ($("banHours")) $("banHours").value = String(b.hours || 4);
-  window.bannerArt = (b.art === "photo" && b.has_photo) ? "photo" : (b.art || "ice");
+  window.bannerArt = (b.art === "photo" && (b.has_photo || b.photo || window.bannerShot)) ? "photo" : (b.art || "ice");
+  if (b.photo) window.bannerShot = b.photo;
   if (window.bannerArt !== "photo") window.bannerShot = "";
   paintBanDraft();
 }
@@ -4737,11 +4799,10 @@ async function loadBanners(){
   else if (want === "show") b = window.myShow;
   else b = window.myEvent;
   window.myBanner = b || window.myStock || null;
-  if (b) fillBannerForm(b);
-  else {
-    syncBanLayout();
-    paintBanDraft();
-  }
+  seedBanDraft("stock", window.myStock);
+  seedBanDraft("show", window.myShow);
+  seedBanDraft("live", window.myEvent);
+  applyBanDraft(want);
 }
 async function cancelMyBanner(){
   try {
@@ -4796,25 +4857,25 @@ $("banFitDone") && ($("banFitDone").onclick = finishBanFit);
 $("banAdd") && ($("banAdd").onclick = async () => {
   try {
     if (window.banFit) finishBanFit();
-    const startEl = $("banStart") && $("banStart").value;
-    let starts = "";
-    if (startEl) {
-      const d = new Date(startEl);
-      if (!isNaN(+d)) starts = d.toISOString();
+    stashBanDraft(window.banKindNow);
+    const slots = ["stock","live","show"];
+    for (const slot of slots) {
+      const d = window.banDrafts[slot];
+      if (!d) continue;
+      if (slot !== "stock" && !String(d.title||"").trim() && !d.starts) continue;
+      await authPost("/banners", {
+        kind: slot === "show" ? "show" : slot === "stock" ? "stock" : "live",
+        art: d.art || "ice",
+        photo: d.art === "photo" ? (d.photo || "") : "",
+        title: d.title || "",
+        body: d.body || "",
+        url: d.url || "",
+        color: d.color || "#8fd4ee",
+        starts: slot === "stock" ? "" : (d.starts || ""),
+        hours: +(d.hours || 4)
+      });
     }
-    await authPost("/banners", {
-      kind: ($("banKind")&&$("banKind").value) || "stock",
-      art: window.bannerArt || "ice",
-      photo: window.bannerArt === "photo" ? (window.bannerShot || "") : "",
-      title: ($("banTitle")&&$("banTitle").value) || "",
-      body: ($("banBody")&&$("banBody").value) || "",
-      url: ($("banUrl")&&$("banUrl").value) || "",
-      color: ($("banColor")&&$("banColor").value) || "#8fd4ee",
-      starts,
-      hours: +(($("banHours")&&$("banHours").value) || 4)
-    });
-    if ($("banNote")) $("banNote").textContent = "Saved. Stream, card show, and stock can all be set. Live first, then the next show, then stock.";
-    loadBanners();
+    if ($("banNote")) $("banNote").textContent = "Saved";
   } catch(e) { if ($("banNote")) $("banNote").textContent = e.message; }
 });
 $("banClear") && ($("banClear").onclick = async () => {
@@ -5530,11 +5591,9 @@ function pickPubEvent(){
 }
 function paintPubBanner(){
   try {
-    const ev = pickPubEvent();
     const cover = window.pubCover || window.myStock || {};
     if (!$("pubBanner")) return;
-    if (ev) $("pubBanner").innerHTML = bannerHtml(ev, ownBinder(), viewSlug);
-    else $("pubBanner").innerHTML = bannerHtml({
+    $("pubBanner").innerHTML = bannerHtml({
       cover: true,
       title: cover.title || "",
       body: cover.body || "",
