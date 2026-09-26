@@ -122,7 +122,7 @@ Upper Deck hockey rules (2015–2026 especially):
 - Young Guns Deluxe / DELUXE on a UD rookie: insert stays Young Guns. Parallel is Deluxe /250 (or the printed serial). Set is Series 1, Series 2, or Extended from the back.
 - Flagship UD Series 1/2/Extended rainbow (base AND Young Guns): Outburst Silver, Clear Cut, Deluxe /250, UD Exclusives /100, Outburst Red /25, High Gloss /10, Outburst Gold 1/1, Printing Plates 1/1.
 - Common UD inserts (not parallels): UD Canvas, UD Canvas Young Guns, UD Portraits, Dazzlers (Blue/Pink/Green/Gold), Encore, Population Count, Sizzle Reel, Young Guns Renewed, Holotypes, OPC Glossy, French.
-- SP Authentic: Future Watch, Auto Patch. The Cup: Rookie Auto Patch. Stature / Premier / Allure / Synergy / Metal Universe / Chronology / Trilogy have their own numbered color rainbows — copy the name on the card.
+- SP Authentic: set is SP Authentic. Future Watch is the insert. Limited Red is a named red/pink Future Watch parallel — put "Limited Red" in parallel, never Base. Blue /399, Green, Gold, Spectrum, Auto, Auto Patch are other FW versions. Base Future Watch is the silver/holo card with no LIMITED / color name. FWA = Future Watch Auto (parallel Autograph).
 - Upper Deck Splendor: set is Splendor. Almost always numbered. Visible 12/49, /99, /25, /10, 1/1 must go in parallel. Number is checklist only. Do not return a Splendor as Base.
 - Copy set name from the back: Series 1, Series 2, Extended, SP Authentic, SP Game Used, The Cup, Stature, Premier, Allure, Synergy, Metal Universe, Chronology, Trilogy, O-Pee-Chee, Parkhurst, Choice, Fleer Ultra, Skybox Impact.
 - Vintage 1990s: never return only "Ultra" or only "Impact". Set must include the brand: Fleer Ultra, Skybox Impact, Score, Pinnacle, Donruss, Leaf, Topps, OPC, Stadium Club, Be A Player. Rookie / RC on those cards is insert "Rookie", not the set.
@@ -944,9 +944,11 @@ def _sale_fits(title: str, q: str, player: str, parallel: str = "", number: str 
             "outburst", "extravagance", "canvas", "acetate", "clear cut",
             "red rainbow", "green parallel", "blue parallel", "pink",
             "future watch", "sizzle reel", "exclusives", "high gloss",
-            "deluxe", "speckle", "holofoil",
+            "deluxe", "speckle", "holofoil", "limited red", "limited",
         )
         if any(flag in t and flag not in ql for flag in extra):
+            return False
+        if re.search(r"\blimited\s+red\b|\bfw\s+red\b", t) and "limited" not in ql and "red" not in ql:
             return False
         if re.search(r"\b(gold\s*/|gold\s+parallel|outburst\s+gold|gold\s+outburst|gold\s+vinyl)\b", t) and "gold" not in ql:
             return False
@@ -1094,6 +1096,8 @@ def _q_token(s: str) -> str:
     low = s.lower()
     if low == "future watch":
         return "(Future Watch,FW,FWRC)"
+    if low in ("limited red", "fw limited red"):
+        return "(Limited Red,Limited)"
     if low in ("sp authentic", "spa"):
         return "(SP Authentic,SPA)"
     return f'"{s}"' if " " in s else s

@@ -2033,13 +2033,18 @@ function runOnly(v){
 }
 function qstr(d){
   let num = String(d.number||"").trim();
-  let run = "";
   const m = num.match(/(\d+)\s*\/\s*(\d+)/);
-  if (m) { run = "/"+m[2]; num = num.replace(m[0], "").trim(); }
+  if (m) num = num.replace(m[0], "").trim();
   const par = runOnly(d.parallel||"");
   const ins = runOnly(d.insert||"");
-  const grade = (!d.grader || d.grader==="Raw") ? "raw" : [d.grader, d.grade].filter(Boolean).join(" ");
-  return encodeURIComponent([d.year,d.player,"hockey",d.set,num,ins,par,(!par.includes("/") && !ins.includes("/") ? run : ""),grade].filter(Boolean).join(" "));
+  const bits = [d.player];
+  if (ins) bits.push(ins);
+  else if (d.set) bits.push(d.set);
+  if (num) bits.push("#"+num.replace(/^#/, ""));
+  if (par && !/^base$/i.test(par)) bits.push(par);
+  if (d.grader && d.grader !== "Raw") bits.push([d.grader, d.grade].filter(Boolean).join(" "));
+  if (!/auto/i.test(ins+" "+par)) bits.push("-auto", "-autograph");
+  return encodeURIComponent(bits.filter(Boolean).join(" "));
 }
 function daysAgo(iso){
   if (!iso) return null;
