@@ -223,6 +223,8 @@
     .board-post { display:block; border-radius:16px; padding:14px 16px; margin:10px 0 14px; background:#0e171e; border:2px solid var(--ice); overflow:hidden; }
     .board-post .k { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin:0 0 6px; }
     .board-post h3 { margin:0 0 4px; font-size:17px; font-weight:700; line-height:1.25; }
+    .event-card { margin:0 0 16px; }
+    .event-card .pwid { margin-bottom:0; cursor:pointer; }
     .board-post .muted { margin:0; }
     .board-post .when { margin:4px 0 0; font-size:13px; font-weight:700; color:#fff; }
     .board-post .ban-go { display:inline-block; margin-top:10px; padding:8px 14px; border-radius:8px; background:#14303a; color:#fff; font-weight:800; font-size:13px; text-decoration:none; border:1px solid var(--ice); }
@@ -649,6 +651,7 @@
   <section class="page" id="findPage">
     <h2 style="font-size:18px;margin:0 0 10px">Community</h2>
     <div class="comm-row">
+      <button class="ghost" id="openEvents">Events</button>
       <button class="ghost" id="openFollowing">Following</button>
       <button class="ghost" id="openFeed">Added</button>
       <button class="ghost" id="openGrails">Grails</button>
@@ -666,6 +669,16 @@
       <option value="likes">Most liked</option>
     </select>
     <div id="findList"></div>
+  </section>
+  <section class="page" id="eventsPage">
+    <button class="ghost" id="backFindEvents">Community</button>
+    <h2 style="font-size:18px;margin:12px 0 8px">Events</h2>
+    <p class="muted">Upcoming and live streams and card shows. Profile and banner only.</p>
+    <div class="row2">
+      <button class="ghost on" id="evAll">All</button>
+      <button class="ghost" id="evFollow">Following</button>
+    </div>
+    <div id="eventsList"></div>
   </section>
   <section class="page" id="feedPage">
     <button class="ghost" id="backFindFeed">Community</button>
@@ -1662,6 +1675,7 @@ function show(id){
   if ($("pubPage")) $("pubPage").classList.toggle("on", id==="pub");
   if ($("pubDetail")) $("pubDetail").classList.toggle("on", id==="pubDetail");
   if ($("findPage")) $("findPage").classList.toggle("on", id==="find");
+  if ($("eventsPage")) $("eventsPage").classList.toggle("on", id==="events");
   if ($("feedPage")) $("feedPage").classList.toggle("on", id==="feed");
   if (id==="feed") loadFeed();
   if ($("helpPage")) $("helpPage").classList.toggle("on", id==="help");
@@ -1676,7 +1690,7 @@ function show(id){
   if (id==="set") youShow("youHub");
   if (id==="bind") { renderBinder(); paintTicker(); }
   if (id==="search") renderSearch();
-  if (id==="find" || id==="pub" || id==="notes" || id==="notesCat" || id==="feed") refreshNotesBadge();
+  if (id==="find" || id==="pub" || id==="notes" || id==="notesCat" || id==="feed" || id==="events") refreshNotesBadge();
   if (id==="feed") loadFeed();
   if (id==="find") loadFind();
   if (id!=="scan" && typeof stopLive === "function") try { stopLive(); } catch(e) {}
@@ -1685,7 +1699,7 @@ function show(id){
   document.body.classList.toggle("dock-on", true);
   document.body.classList.toggle("chart-on", id==="bind" && document.body.classList.contains("chart-open"));
   ["tabScan","tabBind","tabFind","tabSet"].forEach(tid => {
-    if ($(tid)) $(tid).classList.toggle("on", (tid==="tabScan"&&(id==="scan"||id==="result"))||(tid==="tabBind"&&(id==="bind"||id==="detail"||id==="edit"||id==="search"))||(tid==="tabFind"&&(id==="find"||id==="pub"||id==="pubDetail"||id==="notes"||id==="notesCat"||id==="feed"||id==="ledgerz"))||(tid==="tabSet"&&(id==="set"||id==="ops"||id==="help")));
+    if ($(tid)) $(tid).classList.toggle("on", (tid==="tabScan"&&(id==="scan"||id==="result"))||(tid==="tabBind"&&(id==="bind"||id==="detail"||id==="edit"||id==="search"))||(tid==="tabFind"&&(id==="find"||id==="pub"||id==="pubDetail"||id==="notes"||id==="notesCat"||id==="feed"||id==="ledgerz"||id==="events"))||(tid==="tabSet"&&(id==="set"||id==="ops"||id==="help")));
   });
   window.scrollTo(0,0);
   lastPage = id;
@@ -4441,10 +4455,10 @@ $("banColor") && ($("banColor").oninput = paintBanDraft);
   $(id) && ($(id).oninput = paintBanDraft);
   $(id) && ($(id).onchange = () => {
     if (id==="banKind") {
+      const want = $("banKind").value;
       syncBanLayout();
-      const stock = $("banKind").value === "stock";
-      const b = stock ? window.myStock : window.myEvent;
-      if (b) fillBannerForm(b);
+      if (want === "stock" && window.myStock) fillBannerForm(window.myStock);
+      else if (want !== "stock" && window.myEvent && (window.myEvent.kind === want || (want === "live" && window.myEvent.kind === "live"))) fillBannerForm(window.myEvent);
     }
     paintBanDraft();
   });
@@ -4556,7 +4570,7 @@ function bannerHtml(b, mine, slug){
     ? "<div class=\"ban-copy\"><h3>"+title+"</h3></div>"
     : idle
       ? "<div class=\"ban-copy\"></div>"
-      : "<div class=\"ban-copy\">"+kicker+(title?"<h3>"+title+live+"</h3>":"")+when+body+link+act+"</div>";
+      : "<div class=\"ban-copy\">"+kicker+(title?"<h3>"+title+"</h3>":"")+live+when+body+link+act+"</div>";
   return "<div class=\"board-post "+kind+" art-"+art+(fit?" fitting":"")+(idle?" cover-only":"")+"\" style=\"border-color:"+col+";"+bg+"\">"+cover+copy+"</div>";
 }
 function applyBanFit(){
@@ -4716,10 +4730,15 @@ async function loadBanners(){
   window.myStock = rows.find(b => b.kind === "stock") || null;
   window.myEvent = rows.find(b => b.kind !== "stock") || null;
   const want = ($("banKind") && $("banKind").value) || "stock";
-  const b = want === "stock" ? window.myStock : (window.myEvent || null);
+  let b = null;
+  if (want === "stock") b = window.myStock;
+  else if (window.myEvent && (window.myEvent.kind === want || (want === "live" && window.myEvent.kind === "live"))) b = window.myEvent;
   window.myBanner = b || window.myStock || null;
   if (b) fillBannerForm(b);
-  else paintBanDraft();
+  else {
+    syncBanLayout();
+    paintBanDraft();
+  }
 }
 async function cancelMyBanner(){
   try {
@@ -5055,7 +5074,8 @@ function renderFind(){
     const heart = "<span class=\"heart\">♥ "+(b.likes||0)+"</span>";
     const fol = following[b.slug] ? " · Following" : "";
     const bio = (b.bio||"").replace(/[<>]/g,"");
-    return "<article class=\"item\" data-slug=\""+b.slug+"\"><div class=\"pwid\"><div class=\"pava\" data-ava=\""+b.slug+"\" style=\"border-color:"+hue+";background:"+hue+"\">"+av+"</div><div><h3>"+name+" "+heart+"</h3>"+(bio?"<div class=\"muted\" style=\"color:var(--text)\">"+bio+"</div>":"")+"<div class=\"muted\">"+extra+fol+"</div></div></div></article>";
+    const live = b.live ? " <span class=\"live-chip\">LIVE</span>" : "";
+    return "<article class=\"item\" data-slug=\""+b.slug+"\"><div class=\"pwid\"><div class=\"pava\" data-ava=\""+b.slug+"\" style=\"border-color:"+hue+";background:"+hue+"\">"+av+"</div><div><h3>"+name+live+" "+heart+"</h3>"+(bio?"<div class=\"muted\" style=\"color:var(--text)\">"+bio+"</div>":"")+"<div class=\"muted\">"+extra+fol+"</div></div></div></article>";
   }).join("") : "<p class=\"muted\">"+(onlyFollow?"You’re not following anyone yet. Open a binder and tap Follow.":"No public binders yet.")+"</p>";
 }
 $("findQ") && ($("findQ").oninput = renderFind);
@@ -5186,6 +5206,7 @@ $("backFind") && ($("backFind").onclick = () => show("find"));
 $("backFindNotes") && ($("backFindNotes").onclick = () => show("find"));
 $("openNotes") && ($("openNotes").onclick = () => { show("notes"); paintNotesHub(); });
 $("youToAlerts") && ($("youToAlerts").onclick = () => openNoteCat("mgmt"));
+$("openEvents") && ($("openEvents").onclick = () => { show("events"); loadEvents(); });
 $("openFeed") && ($("openFeed").onclick = () => { window.feedGrailMode = false; show("feed"); });
 $("openGrails") && ($("openGrails").onclick = () => { window.feedGrailMode = true; show("feed"); });
 $("openLedgerz") && ($("openLedgerz").onclick = () => { show("ledgerz"); if ($("ledgerzQ")) $("ledgerzQ").focus(); });
@@ -5212,6 +5233,62 @@ $("ledgerzList") && ($("ledgerzList").onclick = e => {
   if (art) openPublic(art.getAttribute("data-lz-slug"), art.getAttribute("data-lz-card")||null);
 });
 $("backFindFeed") && ($("backFindFeed").onclick = () => show("find"));
+$("backFindEvents") && ($("backFindEvents").onclick = () => show("find"));
+let eventsCache = [];
+let eventsFollowOnly = false;
+async function loadEvents(){
+  const box = $("eventsList");
+  if (box) box.innerHTML = "<p class=\"muted\">Loading events…</p>";
+  try {
+    const r = await fetch("/events");
+    const d = await r.json();
+    eventsCache = d.events || [];
+    if (token()) {
+      const f = await fetch("/following", { headers:{ "x-token": token() } });
+      if (f.ok) {
+        const j = await f.json();
+        following = {};
+        (j.slugs||[]).forEach(s => following[s] = true);
+      }
+    }
+    renderEvents();
+  } catch(e) {
+    if (box) box.innerHTML = "<p class=\"muted\">Could not load events.</p>";
+  }
+}
+function renderEvents(){
+  const box = $("eventsList");
+  if (!box) return;
+  if ($("evAll")) $("evAll").classList.toggle("on", !eventsFollowOnly);
+  if ($("evFollow")) $("evFollow").classList.toggle("on", eventsFollowOnly);
+  let rows = eventsCache.slice();
+  if (eventsFollowOnly) rows = rows.filter(e => following[e.slug]);
+  if (!rows.length) {
+    box.innerHTML = "<p class=\"muted\">"+(eventsFollowOnly?"Nobody you follow has a stream or show up.":"No upcoming streams or card shows.")+"</p>";
+    return;
+  }
+  box.innerHTML = rows.map(e => {
+    const name = e.display || "Collector";
+    const hue = e.hue || "#8fd4ee";
+    const ini = name.slice(0,2).toUpperCase();
+    const live = e.live ? " <span class=\"live-chip\">LIVE</span>" : "";
+    const head = "<div class=\"pwid\" data-open-event=\""+e.slug+"\"><div class=\"pava\" style=\"border-color:"+hue+";background:"+hue+"\">"+ini+"<img alt=\"\" src=\"/u/"+e.slug+"/avatar\" onerror=\"this.remove()\" /></div><div><h3>"+name+live+"</h3><div class=\"muted\">Tap to open binder</div></div></div>";
+    const ban = bannerHtml(e.banner || {}, false, e.slug);
+    return "<div class=\"event-card\" data-open-event=\""+e.slug+"\">"+head+ban+"</div>";
+  }).join("");
+}
+$("evAll") && ($("evAll").onclick = () => { eventsFollowOnly = false; renderEvents(); });
+$("evFollow") && ($("evFollow").onclick = () => {
+  if (!token()) { $("eventsList").innerHTML = "<p class=\"muted\">Sign in to see people you follow.</p>"; return; }
+  eventsFollowOnly = true;
+  renderEvents();
+});
+$("eventsList") && ($("eventsList").onclick = ev => {
+  const row = ev.target.closest("[data-open-event]");
+  if (!row) return;
+  window.pubFrom = "binder";
+  openPublic(row.getAttribute("data-open-event"));
+});
 let feedCache = [];
 async function loadFeed(){
   const box = $("feedList");

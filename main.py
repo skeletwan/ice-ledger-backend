@@ -3282,6 +3282,11 @@ async def list_binders():
             if c.get("player"):
                 players.append(c["player"])
         top = max(set(teams), key=teams.count) if teams else ""
+        ban = con.execute(
+            "SELECT kind,title,starts,hours,off FROM banner_posts WHERE user_id=? ORDER BY id DESC LIMIT 8",
+            (u["id"],),
+        ).fetchall()
+        live = any(banner_live(banner_row(b)) for b in ban)
         out.append({
             "slug": u["slug"],
             "display": u["display"] or "Collector",
@@ -3296,11 +3301,51 @@ async def list_binders():
             "book": round(book, 2),
             "team": top,
             "players": " ".join(players).lower(),
+            "live": live,
         })
         likes = con.execute("SELECT COUNT(*) AS n FROM binder_likes WHERE slug=?", (u["slug"],)).fetchone()["n"]
         out[-1]["likes"] = likes
     con.close()
     return {"binders": out}
+
+
+@app.get("/events")
+async def list_events(request: Request, x_token: str | None = Header(default=None)):
+    con = db()
+    users = con.execute(
+        "SELECT id, slug, display, hue, IFNULL(suspended,0) AS suspended FROM users WHERE slug IS NOT NULL AND slug != ''"
+    ).fetchall()
+    out = []
+    for u in users:
+        if int(u["suspended"] or 0):
+            continue
+        rows = con.execute(
+            "SELECT id,kind,title,body,url,color,created,starts,hours,off,art FROM banner_posts WHERE user_id=? ORDER BY id DESC LIMIT 8",
+            (u["id"],),
+        ).fetchall()
+        live_or_soon = None
+        for raw in rows:
+            b = banner_row(raw, u["id"])
+            if str(b.get("kind") or "") == "stock":
+                continue
+            if not b.get("starts"):
+                continue
+            if banner_ended(b):
+                continue
+            live_or_soon = b
+            break
+        if not live_or_soon:
+            continue
+        out.append({
+            "slug": u["slug"],
+            "display": u["display"] or "Collector",
+            "hue": u["hue"] or "#8fd4ee",
+            "banner": live_or_soon,
+            "live": banner_live(live_or_soon),
+        })
+    con.close()
+    out.sort(key=lambda x: (0 if x.get("live") else 1, str((x.get("banner") or {}).get("starts") or "")))
+    return {"events": out}
 
 @app.get("/feed")
 async def recent_feed():
@@ -3896,7 +3941,26 @@ def banner_row(r, uid=None) -> dict:
     d["has_photo"] = art == "photo" and bool(uid and photo_file_exists(uid, "banner"))
     return d
 
-def banner_ended(b) -> bool:
+def banner_live(b) -> bool:
+    if not b:
+        return False
+    if int(b.get("off") or 0):
+        return False
+    if str(b.get("kind") or "") == "stock":
+        return False
+    raw = str(b.get("starts") or "").replace("Z", "+00:00")
+    try:
+        start = datetime.fromisoformat(raw)
+    except Exception:
+        return False
+    if start.tzinfo is None:
+        start = start.replace(tzinfo=timezone.utc)
+    try:
+        hrs = max(1, min(24, int(b.get("hours") or 4)))
+    except (TypeError, ValueError):
+        hrs = 4
+    now = now_utc()
+    return start <= now <= start + timedelta(hours=hrs)
     if not b:
         return False
     if int(b.get("off") or 0):
