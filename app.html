@@ -5839,8 +5839,6 @@ function knownEvents(){
     rows.push(b);
   };
   (window.pubBanners||[]).forEach(add);
-  add(window.myEvent);
-  add(window.myShow);
   return rows;
 }
 function pickPubEvent(){
@@ -5861,7 +5859,7 @@ async function refreshPubBanners(){
 function paintPubBanner(){
   try {
     const ev = pickPubEvent();
-    const cover = window.pubCover || window.myStock || {};
+    const cover = window.pubCover || {};
     if (!$("pubBanner")) return;
     if (ev) {
       $("pubBanner").innerHTML = bannerHtml(Object.assign({}, ev, { cover: false }), false, viewSlug);
