@@ -50,18 +50,23 @@
     .range-dot { position:absolute; top:-3px; width:12px; height:12px; margin-left:-6px; border-radius:50%; background:var(--ice); border:2px solid #10161d; }
     .pos { color:var(--good); } .neg { color:var(--bad); }
     @keyframes grail-burn {
-      0%,100% { box-shadow: 0 0 0 2px #ff2a00, 0 0 16px #ff3b00, 0 0 32px rgba(255,40,0,.55); }
-      50% { box-shadow: 0 0 0 3px #ffb347, 0 0 24px #ff4500, 0 0 40px rgba(255,80,0,.7); }
+      0%,100% { box-shadow: 0 0 0 2px #ff2a00, 0 0 14px #ff3b00, 0 0 26px rgba(255,40,0,.5); }
+      50% { box-shadow: 0 0 0 3px #ffb347, 0 0 22px #ff4500, 0 0 36px rgba(255,80,0,.65); }
     }
-    .item.grail { outline: none; }
+    .item.grail {
+      outline: none;
+      overflow: visible;
+      border-color: #ff3b1a;
+    }
     .item.grail::after {
       content:"";
       position:absolute;
-      inset:-3px;
+      inset:-4px;
       border-radius:14px;
       pointer-events:none;
       z-index:3;
       box-shadow: 0 0 0 2px #ff2a00, 0 0 16px rgba(255,45,0,.7), 0 0 28px rgba(180,20,0,.45);
+      animation: grail-burn 3.2s ease-in-out infinite;
     }
     .item.grail.grail-new::after, article.grail-new::after {
       animation: grail-burn 2.4s ease-in-out infinite;
