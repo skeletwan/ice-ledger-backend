@@ -4090,10 +4090,11 @@ async def add_banner(payload: dict, request: Request, x_token: str | None = Head
     slug = ensure_slug(uid)
     who = display_of(con, uid)
     if slug and title and starts:
+        label = "card show" if kind == "show" else "stream"
         for f in con.execute("SELECT follower FROM follows WHERE slug=?", (slug,)).fetchall():
             fid = f["follower"]
             if fid and fid != uid:
-                add_note(con, fid, slug, who + " posted a banner: " + title)
+                add_note(con, fid, slug, who + " posted a " + label + ": " + title)
     con.commit()
     con.close()
     return {"ok": True, "id": rid}

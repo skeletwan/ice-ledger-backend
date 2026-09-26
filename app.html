@@ -1325,7 +1325,7 @@ function showApp(){
   document.body.classList.add("dock-on");
   muteAuthPasswords(true);
   stopSearchAutofill();
-  loadNotePrefs(); scheduleDaily(); refreshNotesBadge(); checkGrails();
+  loadNotePrefs(); scheduleDaily(); refreshNotesBadge(); checkGrails(); checkEvents();
   Promise.resolve(refreshUsage()).catch(()=>{});
   loadMe().then(() => { paintTicker(); renderBinder(); }).catch(() => { paintTicker(); renderBinder(); });
   if (!window._noteTick) window._noteTick = setInterval(refreshNotesBadge, 25000);
@@ -3764,7 +3764,7 @@ async function maybeAutoBook(){
 function noteKind(n){
   const b = (n.body||"").toLowerCase();
   if (b.indexOf("clappers management")>=0) return "mgmt";
-  if (b.indexOf("banner")>=0) return "banner";
+  if (b.indexOf("banner")>=0 || b.indexOf("stream")>=0 || b.indexOf("card show")>=0) return "banner";
   if (b.indexOf("grail")>=0) return "grail";
   if (b.indexOf("liked")>=0) return "like";
   if (b.indexOf("comment")>=0 || b.indexOf("replied")>=0) return "comment";
@@ -3773,6 +3773,38 @@ function noteKind(n){
 function markGrailHot(on){
   if ($("tabFind")) $("tabFind").classList.toggle("grail-new", !!on);
   if ($("openGrails")) $("openGrails").classList.toggle("grail-new", !!on);
+}
+async function checkEvents(){
+  try {
+    const r = await fetch("/events");
+    const d = await r.json();
+    const live = (d.events||[]).filter(e => e.live && e.banner && e.banner.id);
+    const seen = JSON.parse(localStorage.getItem("ice-seen-live")||"[]");
+    const fresh = live.filter(e => seen.indexOf(String(e.banner.id))<0);
+    window.eventPing = fresh.length>0;
+    if ($("openEvents")) $("openEvents").classList.toggle("ping", !!window.eventPing || ($("openEvents").classList.contains("ping") && window.eventPing));
+    if (window.eventPing && $("tabFind")) $("tabFind").classList.add("ping");
+    if (window.eventPing && alertOn("ice-banner-alerts") && "Notification" in window && Notification.permission==="granted") {
+      const e = fresh[0];
+      try { new Notification("Clappers PC", { body: (e.display||"Someone")+" is live" }); } catch(err){}
+    }
+  } catch(e) {}
+}
+async function clearEventPing(){
+  window.eventPing = false;
+  if ($("openEvents")) $("openEvents").classList.remove("ping");
+  try {
+    const r = await fetch("/events");
+    const d = await r.json();
+    const ids = (d.events||[]).filter(e => e.live && e.banner && e.banner.id).map(e => String(e.banner.id));
+    localStorage.setItem("ice-seen-live", JSON.stringify(ids));
+  } catch(e) {}
+  try {
+    const notes = await fetchNotes();
+    const ids = notes.filter(x => !x.read && isEventNote(x.body||"")).map(x => x.id);
+    if (ids.length) await fetch("/notes/read", { method:"POST", headers:{ "Content-Type":"application/json", "x-token": token() }, body: JSON.stringify({ ids }) });
+  } catch(e) {}
+  refreshNotesBadge();
 }
 async function checkGrails(){
   if (!alertOn("ice-grail-alerts")) { markGrailHot(false); return; }
@@ -5339,7 +5371,7 @@ $("backFind") && ($("backFind").onclick = () => show("find"));
 $("backFindNotes") && ($("backFindNotes").onclick = () => show("find"));
 $("openNotes") && ($("openNotes").onclick = () => { show("notes"); paintNotesHub(); });
 $("youToAlerts") && ($("youToAlerts").onclick = () => openNoteCat("mgmt"));
-$("openEvents") && ($("openEvents").onclick = () => { show("events"); loadEvents(); });
+$("openEvents") && ($("openEvents").onclick = () => { show("events"); loadEvents(); clearEventPing(); });
 $("openFeed") && ($("openFeed").onclick = () => { window.feedGrailMode = false; show("feed"); });
 $("openGrails") && ($("openGrails").onclick = () => { window.feedGrailMode = true; show("feed"); });
 $("openLedgerz") && ($("openLedgerz").onclick = () => { show("ledgerz"); if ($("ledgerzQ")) $("ledgerzQ").focus(); });
@@ -5549,6 +5581,10 @@ $("followBtn") && ($("followBtn").onclick = async () => {
   const d = await r.json().catch(()=>({}));
   if (r.ok) { following[viewSlug] = !!d.following; paintFollow(); refreshNotesBadge(); }
 });
+function isEventNote(body){
+  const m = String(body||"").toLowerCase();
+  return m.indexOf("posted a stream")>=0 || m.indexOf("posted a card show")>=0 || m.indexOf("posted a banner")>=0 || m.indexOf(" is live")>=0;
+}
 async function refreshNotesBadge(){
   if (!token()) return;
   try {
@@ -5559,9 +5595,11 @@ async function refreshNotesBadge(){
     const b = $("noteBadge");
     if (b) b.textContent = n ? ("("+n+")") : "";
     const mgmt = (d.notes||[]).some(x => !x.read && /clappers management/i.test(x.body||""));
+    const evNote = (d.notes||[]).some(x => !x.read && isEventNote(x.body||""));
     const social = (d.notes||[]).some(x => !x.read && !/clappers management/i.test(x.body||""));
-    if ($("tabFind")) $("tabFind").classList.toggle("ping", social);
+    if ($("tabFind")) $("tabFind").classList.toggle("ping", social || evNote || !!window.eventPing);
     if ($("openNotes")) $("openNotes").classList.toggle("ping", social);
+    if ($("openEvents")) $("openEvents").classList.toggle("ping", evNote || !!window.eventPing);
     if ($("tabSet")) $("tabSet").classList.toggle("ping", mgmt);
     document.querySelectorAll("#youToAlerts").forEach(el => el.classList.toggle("ping", mgmt));
     const last = +(localStorage.getItem("ice-note-unread")||0);
@@ -5570,7 +5608,7 @@ async function refreshNotesBadge(){
     const allow = (msg.toLowerCase().indexOf("clappers management")>=0)
       || (msg.indexOf("liked")>=0 && alertOn("ice-like-alerts"))
       || (((msg.indexOf("commented")>=0)||(msg.indexOf("replied")>=0)) && alertOn("ice-comment-alerts"))
-      || (msg.toLowerCase().indexOf("banner")>=0 && alertOn("ice-banner-alerts"))
+      || isEventNote(msg) && alertOn("ice-banner-alerts")
       || (msg.indexOf("added")>=0 && alertOn("ice-follow-alerts"));
     if (allow && n > last && "Notification" in window && Notification.permission === "granted") {
       const title = msg.toLowerCase().indexOf("clappers management")>=0 ? "Clappers Management" : "Clappers PC";
@@ -5579,7 +5617,7 @@ async function refreshNotesBadge(){
     localStorage.setItem("ice-note-unread", String(n));
   } catch(e){}
 }
-setInterval(() => { if (token()) { refreshNotesBadge(); checkGrails(); } }, 15000);
+setInterval(() => { if (token()) { refreshNotesBadge(); checkGrails(); checkEvents(); } }, 15000);
 let notesCache = [];
 async function fetchNotes(){
   if (!token()) return [];
