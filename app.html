@@ -280,7 +280,9 @@
     .ava-full .report-box label { margin-top:0; }
     button.dead { background:#2a3d4d; color:#8aa3b5; pointer-events:none; border-color:#2a3d4d; }
     .crop-frame { width:220px; height:220px; border-radius:16px; overflow:hidden; border:3px solid var(--ice); background:#000; touch-action:none; position:relative; }
+    .crop-frame.wide { width:min(92vw,340px); height:148px; border-radius:16px; }
     .crop-frame img { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%) scale(1); max-width:none; height:220px; width:auto; pointer-events:none; border:0; }
+    .crop-frame.wide img { height:148px; }
     .heart { display:inline-block; margin-left:6px; background:#102830; color:#7ef0d2; border:1px solid #2a6a62; border-radius:999px; padding:2px 8px; font-size:12px; font-weight:800; letter-spacing:.02em; }
     .heart.big { font-size:13px; padding:0; margin:0; }
     #likeBtn { width:auto; padding:6px 10px; font-size:12px; margin:8px 0 0; }
@@ -1182,7 +1184,8 @@
 </div>
 <div class="ava-full" id="cropFull">
   <div class="crop-frame" id="cropFrame"><img id="cropImg" alt="" /></div>
-  <input id="cropZoom" type="range" min="100" max="220" value="100" style="width:220px" />
+  <p class="muted" id="cropHint" style="color:#fff;margin:0">Drag to move · slider to zoom</p>
+  <input id="cropZoom" type="range" min="100" max="220" value="100" style="width:min(92vw,340px)" />
   <button type="button" class="close" id="cropDone">Use photo</button>
   <button type="button" class="close ghost" id="cropCancel">Cancel</button>
 </div>
@@ -2345,14 +2348,11 @@ async function useReview(){
     return;
   }
   if (liveTarget === "banner") {
-    window.bannerShot = reviewData;
-    window.bannerArt = "photo";
-    if ($("banArtNote")) $("banArtNote").textContent = "Photo ready. Save the banner to keep it.";
-    reviewData = "";
     stopLive();
+    openCrop(reviewData, "banner");
+    reviewData = "";
     show("set");
     youShow("youBanner");
-    paintBanDraft();
     return;
   }
   const data = await cropToCard(reviewData);
@@ -4571,12 +4571,7 @@ $("banFile") && ($("banFile").onchange = () => {
   const f = $("banFile").files && $("banFile").files[0];
   if (!f) return;
   const reader = new FileReader();
-  reader.onload = () => {
-    window.bannerShot = reader.result;
-    window.bannerArt = "photo";
-    if ($("banArtNote")) $("banArtNote").textContent = "Photo ready. Save the banner to keep it.";
-    paintBanDraft();
-  };
+  reader.onload = () => openCrop(reader.result, "banner");
   reader.readAsDataURL(f);
 });
 $("banPreview") && ($("banPreview").onclick = ev => {
@@ -4923,16 +4918,22 @@ $("avaReportBtn") && ($("avaReportBtn").onclick = async ev => {
   $("avaReportBtn").disabled = true;
   $("avaReportNote").textContent = d.already ? "You already reported this photo." : "Reported. Thanks.";
 });
-let crop = { x:0, y:0, z:1, drag:false, sx:0, sy:0 };
+let crop = { x:0, y:0, z:1, drag:false, sx:0, sy:0, mode:"profile" };
 function applyCrop(){
   const img = $("cropImg");
   if (!img) return;
   img.style.transform = "translate(calc(-50% + "+crop.x+"px), calc(-50% + "+crop.y+"px)) scale("+crop.z+")";
 }
-function openCrop(src){
-  crop = { x:0, y:0, z:1, drag:false, sx:0, sy:0 };
+function openCrop(src, mode){
+  crop = { x:0, y:0, z:1, drag:false, sx:0, sy:0, mode: mode || "profile" };
+  if ($("cropFrame")) $("cropFrame").classList.toggle("wide", crop.mode === "banner");
   if ($("cropImg")) $("cropImg").src = src;
-  if ($("cropZoom")) $("cropZoom").value = 100;
+  if ($("cropZoom")) {
+    $("cropZoom").min = "100";
+    $("cropZoom").max = crop.mode === "banner" ? "280" : "220";
+    $("cropZoom").value = 100;
+  }
+  if ($("cropHint")) $("cropHint").textContent = crop.mode === "banner" ? "Fit the photo to the banner. Drag and zoom." : "Fit the photo to your widget.";
   applyCrop();
   if ($("cropFull")) $("cropFull").classList.add("on");
 }
@@ -4952,18 +4953,28 @@ $("cropDone") && ($("cropDone").onclick = ev => {
   ev.stopPropagation();
   const frame = $("cropFrame"), img = $("cropImg");
   if (!frame || !img) return;
+  const wide = crop.mode === "banner";
   const c = document.createElement("canvas");
-  c.width = 160; c.height = 160;
+  c.width = wide ? 900 : 160;
+  c.height = wide ? 360 : 160;
   const r = frame.getBoundingClientRect(), ir = img.getBoundingClientRect();
   const nw = img.naturalWidth || 1, nh = img.naturalHeight || 1;
   const sx = (r.left - ir.left) * (nw / ir.width);
   const sy = (r.top - ir.top) * (nh / ir.height);
   const sw = r.width * (nw / ir.width), sh = r.height * (nh / ir.height);
-  c.getContext("2d").drawImage(img, sx, sy, sw, sh, 0, 0, 160, 160);
-  myAvatar = c.toDataURL("image/jpeg", 0.85);
+  c.getContext("2d").drawImage(img, sx, sy, sw, sh, 0, 0, c.width, c.height);
+  const out = c.toDataURL("image/jpeg", 0.85);
+  $("cropFull").classList.remove("on");
+  if (wide) {
+    window.bannerShot = out;
+    window.bannerArt = "photo";
+    if ($("banArtNote")) $("banArtNote").textContent = "Photo fitted. Save the banner to keep it.";
+    paintBanDraft();
+    return;
+  }
+  myAvatar = out;
   paintProfile($("pDisplay").value||"Collector", $("pHue").value, myAvatar);
   if ($("shotProfile")) $("shotProfile").classList.add("on");
-  $("cropFull").classList.remove("on");
   if ($("pSave")) $("pSave").click();
 });
 $("cropFull") && ($("cropFull").onclick = e => { if (e.target.id === "cropFull") $("cropFull").classList.remove("on"); });
