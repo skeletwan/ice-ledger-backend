@@ -3840,6 +3840,9 @@ async def public_binder(slug: str, request: Request, x_token: str | None = Heade
         "SELECT id,kind,title,body,url,color,created,starts,hours,off,art FROM banner_posts WHERE user_id=? ORDER BY id DESC LIMIT 12",
         (u["id"],),
     ).fetchall()
+    rows = [banner_row(b, u["id"]) for b in banners]
+    cover = rows[0] if rows else {"art": "ice", "color": u["hue"] or "#8fd4ee", "has_photo": False}
+    events = [b for b in rows if b.get("starts") and not banner_ended(b)]
     con.close()
     book = sum((card_market(x) or 0) for x in raws)
     grails = sum(1 for x in raws if is_grail(x))
@@ -3860,7 +3863,8 @@ async def public_binder(slug: str, request: Request, x_token: str | None = Heade
         "liked": liked,
         "following": is_following,
         "cards": cards,
-        "banners": [banner_row(b, u["id"]) for b in banners if not banner_ended(banner_row(b, u["id"]))],
+        "cover": {"art": cover.get("art") or "ice", "color": cover.get("color") or "#8fd4ee", "has_photo": bool(cover.get("has_photo"))},
+        "banners": events,
     }
 
 
@@ -3995,7 +3999,7 @@ async def add_banner(payload: dict, request: Request, x_token: str | None = Head
     if len(title) < 2:
         title = (body or "")[:80]
     if len(title) < 2:
-        raise HTTPException(400, "give the post a title")
+        title = ""
     con = db()
     con.execute("DELETE FROM banner_posts WHERE user_id=?", (uid,))
     con.execute(
@@ -4006,7 +4010,7 @@ async def add_banner(payload: dict, request: Request, x_token: str | None = Head
     rid = con.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
     slug = ensure_slug(uid)
     who = display_of(con, uid)
-    if slug:
+    if slug and title and starts:
         for f in con.execute("SELECT follower FROM follows WHERE slug=?", (slug,)).fetchall():
             fid = f["follower"]
             if fid and fid != uid:

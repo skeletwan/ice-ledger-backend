@@ -242,6 +242,7 @@
     .ban-drag { display:none; }
     .board-post.fitting .ban-drag { display:block; position:absolute; inset:0; z-index:5; touch-action:none; cursor:grab; }
     .board-post.fitting .ban-drag:active { cursor:grabbing; }
+    .board-post.cover-only { min-height:140px; }
     #banFitBar { display:none; margin:0 0 12px; }
     #banFitBar.on { display:block; }
     #banFitBar input { margin-top:6px; }
@@ -841,7 +842,7 @@
     <button class="ghost" data-you="youHub">Back</button>
     <div class="card" id="banCard" style="margin-top:12px">
       <h3 style="margin:0 0 6px;font-size:16px">Binder banner</h3>
-      <p class="muted">One banner on your public binder. Add a start time so it can say when it goes live. After the window ends it drops off Community. A new save replaces the old one and pings people who follow you.</p>
+      <p class="muted">Background stays on your public binder even when nothing is on. Add a title and start time to turn it into an event. After the window ends, the cover stays and the event drops off.</p>
       <div id="banPreview"></div>
       <div id="banFitBar">
         <p class="muted">Drag the photo to move it. Zoom to size it. Then tap Done.</p>
@@ -4480,9 +4481,9 @@ function ownBinder(){
   return !!(mySlug && viewSlug && viewSlug === mySlug);
 }
 function bannerHtml(b, mine, slug){
-  if (!b || !b.title) return "";
+  if (!b) return "";
   const st = bannerState(b);
-  if (st.done && !mine) return "";
+  if (st.done && !mine && !b.cover) return "";
   const col = b.color || "#8fd4ee";
   const kind = (b.kind === "show") ? "show" : "stream";
   const art = (b.art === "photo" && (b.has_photo || (mine && window.bannerShot))) ? "photo" : (b.art && b.art !== "photo" ? b.art : "ice");
@@ -4492,7 +4493,7 @@ function bannerHtml(b, mine, slug){
   const goTxt = kind === "show" ? "Details" : "Watch";
   const link = b.url ? "<a class=\"ban-go\" href=\""+b.url.replace(/"/g,"")+"\" target=\"_blank\" rel=\"noopener\">"+goTxt+"</a>" : "";
   const fit = !!(mine && window.banFit && window.banFit.src);
-  const act = (!fit && mine && !st.done) ? "<button type=\"button\" class=\"ghost\" data-ban-end=\"1\" style=\"width:auto;margin-top:10px\">Cancel</button>" : "";
+  const act = (!fit && mine && !st.done && b.starts) ? "<button type=\"button\" class=\"ghost\" data-ban-end=\"1\" style=\"width:auto;margin-top:10px\">Cancel</button>" : "";
   const kicker = kind === "show" ? "<div class=\"k\">Card show</div>" : "<div class=\"k\">Stream / rip</div>";
   let bg = "";
   let cover = "";
@@ -4502,10 +4503,13 @@ function bannerHtml(b, mine, slug){
     const src = (mine && window.bannerShot) ? window.bannerShot : ((slug || viewSlug || mySlug) ? "/u/"+encodeURIComponent(slug || viewSlug || mySlug)+"/banner/photo" : "");
     if (src) bg = "background-image:url('"+src.replace(/'/g,"")+"');";
   }
+  const idle = !!(b.cover || (!b.starts && !String(b.title||"").trim()));
   const copy = fit
     ? "<div class=\"ban-copy\"><h3>"+String(b.title||"").replace(/[<>]/g,"")+"</h3></div>"
-    : "<div class=\"ban-copy\">"+kicker+"<h3>"+String(b.title||"").replace(/[<>]/g,"")+live+"</h3>"+when+body+link+act+"</div>";
-  return "<div class=\"board-post "+kind+" art-"+art+(fit?" fitting":"")+"\" style=\"border-color:"+col+";"+bg+"\">"+cover+copy+"</div>";
+    : idle
+      ? "<div class=\"ban-copy\"></div>"
+      : "<div class=\"ban-copy\">"+kicker+"<h3>"+String(b.title||"").replace(/[<>]/g,"")+live+"</h3>"+when+body+link+act+"</div>";
+  return "<div class=\"board-post "+kind+" art-"+art+(fit?" fitting":"")+(idle?" cover-only":"")+"\" style=\"border-color:"+col+";"+bg+"\">"+cover+copy+"</div>";
 }
 function applyBanFit(){
   const img = $("banCover");
@@ -4662,9 +4666,7 @@ async function cancelMyBanner(){
     if (window.myBanner) window.myBanner.off = 1;
     if (window.pubBanners && window.pubBanners[0]) window.pubBanners[0].off = 1;
     loadBanners();
-    if (ownBinder()) {
-      if ($("pubBanner")) $("pubBanner").innerHTML = "";
-    }
+    if (ownBinder()) paintPubBanner();
     if ($("banNote")) $("banNote").textContent = "Banner cancelled.";
   } catch(e) {
     if ($("banNote")) $("banNote").textContent = e.message;
@@ -5370,6 +5372,22 @@ $("likeBtn") && ($("likeBtn").onclick = async () => {
     refreshNotesBadge();
   }
 });
+function paintPubBanner(){
+  const ev = (window.pubBanners||[])[0];
+  const cover = window.pubCover || {};
+  if (!$("pubBanner")) return;
+  if (ev) $("pubBanner").innerHTML = bannerHtml(ev, ownBinder(), viewSlug);
+  else $("pubBanner").innerHTML = bannerHtml({
+    cover: true,
+    title: "",
+    art: cover.art || "ice",
+    color: cover.color || "#8fd4ee",
+    has_photo: !!cover.has_photo,
+    kind: "live",
+    starts: "",
+    off: 0
+  }, false, viewSlug);
+}
 async function openPublic(slug, cardId){
   viewSlug = slug;
   $("authPage").classList.add("hidden");
@@ -5400,7 +5418,8 @@ async function openPublic(slug, cardId){
     $("pubAva").innerHTML = ini+"<img alt=\"\" src=\"/u/"+encodeURIComponent(viewSlug)+"/avatar\" onerror=\"this.remove()\" />";
   }
   window.pubBanners = d.banners || [];
-  if ($("pubBanner")) $("pubBanner").innerHTML = bannerHtml((window.pubBanners||[])[0], ownBinder(), viewSlug);
+  window.pubCover = d.cover || {};
+  paintPubBanner();
   following[viewSlug] = !!d.following;
   paintFollow();
   paintBinderLike(d.likes||0, !!d.liked);
@@ -5466,8 +5485,7 @@ $("goneBtn") && ($("goneBtn").onclick = async () => {
   } catch(e) { if ($("goneNote")) $("goneNote").textContent = e.message; }
 });
 function tickBanners(){
-  if ($("pubBanner") && $("pubPage") && $("pubPage").classList.contains("on"))
-    $("pubBanner").innerHTML = bannerHtml((window.pubBanners||[])[0], ownBinder(), viewSlug);
+  if ($("pubBanner") && $("pubPage") && $("pubPage").classList.contains("on")) paintPubBanner();
   if ($("banPreview") && $("youBanner") && !$("youBanner").classList.contains("hidden") && !window.banFit)
     paintBanDraft();
 }
