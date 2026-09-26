@@ -232,14 +232,16 @@
     .ban-arts .foil, .board-post.art-foil { background:linear-gradient(135deg,#c4b06a,#8a7a40 40%,#2a2410); }
     .ban-arts .rip, .board-post.art-rip { background:linear-gradient(160deg,#a02838,#7a2030 40%,#18080c); }
     .ban-arts .navy, .board-post.art-navy { background:#0b1116; }
-    .board-post.art-photo { background-size:cover; background-position:center; position:relative; overflow:hidden; }
-    .board-post.art-photo.fitting { height:180px; min-height:180px; max-height:180px; }
+    .board-post.art-photo { background-size:cover; background-repeat:no-repeat; background-position:center; position:relative; overflow:hidden; min-height:180px; }
+    .board-post.art-photo.fitting { height:180px; max-height:180px; }
     .board-post.art-photo:before { content:""; position:absolute; inset:0; background:rgba(0,0,0,.42); z-index:1; pointer-events:none; }
     .board-post.art-photo > *:not(.ban-cover) { position:relative; z-index:2; }
     .board-post.fitting { touch-action:none; }
-    .ban-cover { position:absolute !important; left:50%; top:50%; width:160%; max-width:none; height:auto; z-index:0; cursor:grab; user-select:none; pointer-events:auto; -webkit-user-drag:none; }
-    .ban-cover:active { cursor:grabbing; }
+    .ban-cover { position:absolute !important; left:50%; top:50%; width:160%; max-width:none; height:auto; z-index:0; pointer-events:none; -webkit-user-drag:none; user-select:none; }
     .board-post.fitting .ban-copy { pointer-events:none; }
+    .ban-drag { display:none; }
+    .board-post.fitting .ban-drag { display:block; position:absolute; inset:0; z-index:5; touch-action:none; cursor:grab; }
+    .board-post.fitting .ban-drag:active { cursor:grabbing; }
     #banFitBar { display:none; margin:0 0 12px; }
     #banFitBar.on { display:block; }
     #banFitBar input { margin-top:6px; }
@@ -4495,7 +4497,7 @@ function bannerHtml(b, mine, slug){
   let bg = "";
   let cover = "";
   if (art === "photo" && fit) {
-    cover = "<img class=\"ban-cover\" id=\"banCover\" alt=\"\" draggable=\"false\" src=\""+String(window.banFit.src).replace(/"/g,"")+"\" />";
+    cover = "<img class=\"ban-cover\" id=\"banCover\" alt=\"\" draggable=\"false\" src=\""+String(window.banFit.src).replace(/"/g,"")+"\" /><div class=\"ban-drag\" id=\"banDrag\"></div>";
   } else if (art === "photo") {
     const src = (mine && window.bannerShot) ? window.bannerShot : ((slug || viewSlug || mySlug) ? "/u/"+encodeURIComponent(slug || viewSlug || mySlug)+"/banner/photo" : "");
     if (src) bg = "background-image:url('"+src.replace(/'/g,"")+"');";
@@ -4522,21 +4524,42 @@ function startBanFit(src){
 }
 function bindBanFit(){
   applyBanFit();
+  const pad = $("banDrag");
   const img = $("banCover");
-  const box = $("banPreview") && $("banPreview").querySelector(".board-post");
-  if (!img || !box || !window.banFit) return;
-  const f = window.banFit;
-  box.onpointerdown = e => {
-    if (!window.banFit) return;
-    f.drag = true; f.sx = e.clientX - f.x; f.sy = e.clientY - f.y;
-    try { box.setPointerCapture(e.pointerId); } catch(err){}
+  if (!pad || !img || !window.banFit) return;
+  const pt = ev => {
+    const t = (ev.touches && ev.touches[0]) || (ev.changedTouches && ev.changedTouches[0]);
+    return t ? { x:t.clientX, y:t.clientY } : { x:ev.clientX, y:ev.clientY };
   };
-  box.onpointermove = e => {
-    if (!window.banFit || !f.drag) return;
-    f.x = e.clientX - f.sx; f.y = e.clientY - f.sy;
+  const down = ev => {
+    if (!window.banFit) return;
+    ev.preventDefault();
+    const p = pt(ev);
+    window.banFit.drag = true;
+    window.banFit.sx = p.x - window.banFit.x;
+    window.banFit.sy = p.y - window.banFit.y;
+    try { pad.setPointerCapture && ev.pointerId != null && pad.setPointerCapture(ev.pointerId); } catch(err){}
+  };
+  const move = ev => {
+    if (!window.banFit || !window.banFit.drag) return;
+    ev.preventDefault();
+    const p = pt(ev);
+    window.banFit.x = p.x - window.banFit.sx;
+    window.banFit.y = p.y - window.banFit.sy;
     applyBanFit();
   };
-  box.onpointerup = () => { if (window.banFit) f.drag = false; };
+  const up = ev => {
+    if (window.banFit) window.banFit.drag = false;
+    if (ev && ev.preventDefault) ev.preventDefault();
+  };
+  pad.onpointerdown = down;
+  pad.onpointermove = move;
+  pad.onpointerup = up;
+  pad.onpointercancel = up;
+  pad.ontouchstart = down;
+  pad.ontouchmove = move;
+  pad.ontouchend = up;
+  img.onload = applyBanFit;
 }
 function finishBanFit(){
   const box = $("banPreview") && $("banPreview").querySelector(".board-post");
@@ -4545,14 +4568,26 @@ function finishBanFit(){
     if ($("banFitBar")) $("banFitBar").classList.remove("on");
     return;
   }
-  const c = document.createElement("canvas");
-  c.width = 900; c.height = 360;
   const r = box.getBoundingClientRect(), ir = img.getBoundingClientRect();
   const nw = img.naturalWidth || 1, nh = img.naturalHeight || 1;
-  const sx = (r.left - ir.left) * (nw / Math.max(ir.width,1));
-  const sy = (r.top - ir.top) * (nh / Math.max(ir.height,1));
-  const sw = r.width * (nw / Math.max(ir.width,1)), sh = r.height * (nh / Math.max(ir.height,1));
-  c.getContext("2d").drawImage(img, sx, sy, sw, sh, 0, 0, 900, 360);
+  const scaleX = nw / Math.max(ir.width, 1);
+  const scaleY = nh / Math.max(ir.height, 1);
+  let sx = (r.left - ir.left) * scaleX;
+  let sy = (r.top - ir.top) * scaleY;
+  let sw = r.width * scaleX;
+  let sh = r.height * scaleY;
+  if (sx < 0) { sw += sx; sx = 0; }
+  if (sy < 0) { sh += sy; sy = 0; }
+  if (sx + sw > nw) sw = nw - sx;
+  if (sy + sh > nh) sh = nh - sy;
+  if (sw < 8 || sh < 8) {
+    if ($("banArtNote")) $("banArtNote").textContent = "Move the photo so it fills the banner, then tap Done.";
+    return;
+  }
+  const c = document.createElement("canvas");
+  c.width = 900;
+  c.height = Math.max(180, Math.round(900 * (sh / sw)));
+  c.getContext("2d").drawImage(img, sx, sy, sw, sh, 0, 0, c.width, c.height);
   window.bannerShot = c.toDataURL("image/jpeg", 0.86);
   window.bannerArt = "photo";
   window.banFit = null;
