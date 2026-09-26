@@ -797,7 +797,8 @@ def _par_need(parallel: str) -> list:
     color = re.sub(r"[^a-z0-9 /]+", " ", color).strip()
     if color and color not in ("parallel", "color"):
         need.append(color)
-    if run:
+    # Flagship names already mean the print run. Titles often omit /250.
+    if run and color not in ("deluxe", "exclusives", "ud exclusives", "high gloss"):
         need.append("/" + run.group(1))
     return need
 
@@ -1141,11 +1142,12 @@ def search_queries(card: dict) -> list:
     parts = [_player_q(player), _q_token(product)]
     color = re.sub(r"/.*", "", par).strip()
     run = re.search(r"/\s*(\d{1,4})", par)
+    named_run = color.lower() in ("deluxe", "ud exclusives", "exclusives", "high gloss")
     if color and color.lower() not in (product.lower(), "base", "parallel"):
         parts.append(_q_token(color))
-    if run:
+    if run and not named_run:
         parts.append("/" + run.group(1))
-    if code:
+    if code and not named_run:
         parts.append(code)
     q = " ".join(x for x in parts if x)
     if _card_is_auto({"insert": ins, "parallel": par, "set": st}):
@@ -1165,6 +1167,12 @@ def search_queries(card: dict) -> list:
     else:
         q += " -(lot,checklist,reprint,bundle)"
     out = [q]
+    if "deluxe" in par.lower():
+        alt = " ".join(x for x in [_player_q(player), "Deluxe"] if x)
+        alt += " -(auto,autograph,autographed,signed,signature,rpa,inked,fwa)"
+        alt += " -(lot,checklist,reprint,bundle)"
+        if alt not in out:
+            out.append(alt)
     if "sizzle" in f"{ins} {st}".lower() and code:
         alt = " ".join(x for x in [_player_q(player), code] if x)
         alt += " -(auto,autograph,autographed,signed,signature,rpa,inked,fwa)"
@@ -3330,7 +3338,7 @@ async def list_binders():
         for c in cards:
             mv = None
             for k in ("sysComp", "sys_comp", "rawComp"):
-                if isinstance(c.get(k), (int, float)) and 1 <= float(c[k]) <= 20000:
+                if isinstance(c.get(k), (int, float)) and 1 < float(c[k]) <= 20000:
                     mv = float(c[k])
                     break
             if mv is not None:
