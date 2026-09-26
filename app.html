@@ -225,18 +225,18 @@
     .board-post.stream h3 { font-size:18px; }
     .board-post.show .k { color:var(--ice); }
     .ban-arts { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; margin:6px 0 8px; }
-    .ban-arts button { margin:0; padding:0; height:36px; border-radius:8px; border:2px solid transparent; }
-    .ban-arts button.on { border-color:#fff; }
+    .ban-arts span { display:block; height:36px; border-radius:8px; border:2px solid transparent; cursor:pointer; }
+    .ban-arts span.on { border-color:#fff; }
     .ban-arts .ice { background:linear-gradient(160deg,#1a6a82,#0b303c); }
     .ban-arts .rink { background:linear-gradient(180deg,#2a3d4d,#101820); }
     .ban-arts .foil { background:linear-gradient(135deg,#8a7a40,#2a2410); }
     .ban-arts .rip { background:linear-gradient(160deg,#7a2030,#18080c); }
     .ban-arts .navy { background:#0b1116; }
-    .board-post.art-ice { background:linear-gradient(160deg,#0b3a4a,#082028 55%,#0e171e); }
-    .board-post.art-rink { background:linear-gradient(180deg,#1a2a38,#0c141c); }
-    .board-post.art-foil { background:linear-gradient(135deg,#3a3420,#8a7a40 42%,#1a1810); }
-    .board-post.art-rip { background:linear-gradient(160deg,#3a1018,#12080c); }
-    .board-post.art-navy { background:#070c10; }
+    .board-post.art-ice { background:linear-gradient(160deg, var(--ban,#0b3a4a), #082028 55%, #0e171e); }
+    .board-post.art-rink { background:linear-gradient(180deg, var(--ban,#1a2a38), #0c141c); }
+    .board-post.art-foil { background:linear-gradient(135deg, var(--ban,#8a7a40), #1a1810); }
+    .board-post.art-rip { background:linear-gradient(160deg, var(--ban,#3a1018), #12080c); }
+    .board-post.art-navy { background:linear-gradient(180deg, var(--ban,#0b1116), #070c10); }
     .board-post.art-photo { background-size:cover; background-position:center; position:relative; }
     .board-post.art-photo:before { content:""; position:absolute; inset:0; background:rgba(0,0,0,.45); }
     .board-post.art-photo > * { position:relative; z-index:1; }
@@ -838,14 +838,13 @@
       <div id="banPreview"></div>
       <label>Background</label>
       <div class="ban-arts" id="banArts">
-        <button type="button" class="ice" data-art="ice" title="Ice"></button>
-        <button type="button" class="rink" data-art="rink" title="Rink"></button>
-        <button type="button" class="foil" data-art="foil" title="Foil"></button>
-        <button type="button" class="rip" data-art="rip" title="Rip"></button>
-        <button type="button" class="navy" data-art="navy" title="Night"></button>
+        <span class="ice" data-art="ice"></span>
+        <span class="rink" data-art="rink"></span>
+        <span class="foil" data-art="foil"></span>
+        <span class="rip" data-art="rip"></span>
+        <span class="navy" data-art="navy"></span>
       </div>
-      <button class="ghost" type="button" id="banShot" style="width:auto;padding:8px 12px;font-size:13px">Take photo</button>
-      <button class="ghost" type="button" id="banUpload" style="width:auto;padding:8px 12px;font-size:13px">Upload photo</button>
+      <button class="ghost" type="button" id="banUpload" style="width:auto;padding:8px 12px;font-size:13px">Photo</button>
       <input id="banFile" type="file" accept="image/*" class="hidden" />
       <p class="muted" id="banArtNote"></p>
       <label>Layout</label>
@@ -2353,17 +2352,12 @@ async function useReview(){
   if (liveTarget === "banner") {
     window.bannerShot = reviewData;
     window.bannerArt = "photo";
-    paintBanArt();
-    if (window.myBanner) {
-      window.myBanner.art = "photo";
-      window.myBanner.has_photo = true;
-      if ($("banPreview")) $("banPreview").innerHTML = bannerHtml(window.myBanner, true, mySlug);
-    }
     if ($("banArtNote")) $("banArtNote").textContent = "Photo ready. Save the banner to keep it.";
     reviewData = "";
     stopLive();
     show("set");
     youShow("youBanner");
+    paintBanDraft();
     return;
   }
   const data = await cropToCard(reviewData);
@@ -4392,6 +4386,12 @@ $("hueFromBan") && ($("hueFromBan").onclick = () => {
 $("banFromHue") && ($("banFromHue").onclick = () => {
   if (!$("pHue") || !$("banColor")) return;
   $("banColor").value = $("pHue").value;
+  paintBanDraft();
+});
+$("banColor") && ($("banColor").oninput = paintBanDraft);
+["banTitle","banBody","banUrl","banKind","banHours"].forEach(id => {
+  $(id) && ($(id).oninput = paintBanDraft);
+  $(id) && ($(id).onchange = paintBanDraft);
 });
 $("pDisplay") && ($("pDisplay").oninput = () => paintProfile($("pDisplay").value, $("pHue").value, myAvatar));
 ["pCropX","pCropY","pCropZ"].forEach(id => { $(id) && ($(id).oninput = () => paintProfile($("pDisplay").value||"Collector", $("pHue").value, myAvatar)); });
@@ -4455,6 +4455,7 @@ function paintBanStartShow(){
   }
   lab.textContent = bannerWhen(new Date(el.value).toISOString()) || el.value;
   lab.classList.remove("empty");
+  if ($("youBanner") && !$("youBanner").classList.contains("hidden")) paintBanDraft();
 }
 function fillStartInputs(iso){
   if (!$("banStart")) return;
@@ -4487,7 +4488,31 @@ function bannerHtml(b, mine, slug){
     const src = (mine && window.bannerShot) ? window.bannerShot : ((slug || viewSlug || mySlug) ? "/u/"+encodeURIComponent(slug || viewSlug || mySlug)+"/banner/photo" : "");
     if (src) bg = "background-image:url('"+src.replace(/'/g,"")+"');";
   }
-  return "<div class=\"board-post "+kind+" art-"+art+"\" style=\"border-color:"+col+";"+bg+"\">"+kicker+"<h3>"+String(b.title||"").replace(/[<>]/g,"")+live+"</h3>"+when+body+link+act+"</div>";
+  return "<div class=\"board-post "+kind+" art-"+art+"\" style=\"--ban:"+col+";border-color:"+col+";"+bg+"\">"+kicker+"<h3>"+String(b.title||"").replace(/[<>]/g,"")+live+"</h3>"+when+body+link+act+"</div>";
+}
+function bannerDraft(){
+  const startEl = $("banStart") && $("banStart").value;
+  let starts = "";
+  if (startEl) {
+    const d = new Date(startEl);
+    if (!isNaN(+d)) starts = d.toISOString();
+  }
+  return {
+    title: ($("banTitle")&&$("banTitle").value) || "Your event",
+    body: ($("banBody")&&$("banBody").value) || "",
+    url: ($("banUrl")&&$("banUrl").value) || "",
+    color: ($("banColor")&&$("banColor").value) || "#8fd4ee",
+    kind: ($("banKind")&&$("banKind").value) || "live",
+    art: window.bannerArt || "ice",
+    has_photo: window.bannerArt === "photo" && !!(window.bannerShot || (window.myBanner && window.myBanner.has_photo)),
+    starts,
+    hours: +(($("banHours")&&$("banHours").value) || 4),
+    off: 0
+  };
+}
+function paintBanDraft(){
+  paintBanArt();
+  if ($("banPreview")) $("banPreview").innerHTML = bannerHtml(bannerDraft(), true, mySlug);
 }
 function paintBanArt(){
   const art = window.bannerArt || "ice";
@@ -4506,7 +4531,7 @@ function fillBannerForm(b){
   if ($("banHours")) $("banHours").value = String(b.hours || 4);
   window.bannerArt = (b.art === "photo" && b.has_photo) ? "photo" : (b.art || "ice");
   if (window.bannerArt !== "photo") window.bannerShot = "";
-  paintBanArt();
+  paintBanDraft();
 }
 async function loadBanners(){
   const box = $("banPreview") || $("banList");
@@ -4516,8 +4541,8 @@ async function loadBanners(){
   const d = await r.json();
   const b = (d.banners||[])[0];
   window.myBanner = b || null;
-  if (box) box.innerHTML = b ? bannerHtml(b, true, mySlug) : "<p class=\"muted\">No banner yet.</p>";
   if (b) fillBannerForm(b);
+  else paintBanDraft();
 }
 async function cancelMyBanner(){
   try {
@@ -4534,15 +4559,19 @@ async function cancelMyBanner(){
   }
 }
 $("banArts") && ($("banArts").onclick = ev => {
-  const btn = ev.target.closest("[data-art]");
-  if (!btn) return;
-  window.bannerArt = btn.getAttribute("data-art");
+  const chip = ev.target.closest("[data-art]");
+  if (!chip) return;
+  ev.preventDefault();
+  ev.stopPropagation();
+  window.bannerArt = chip.getAttribute("data-art");
   window.bannerShot = "";
-  paintBanArt();
   if ($("banArtNote")) $("banArtNote").textContent = "";
+  paintBanDraft();
 });
-$("banShot") && ($("banShot").onclick = () => openLive("banner"));
-$("banUpload") && ($("banUpload").onclick = () => $("banFile") && $("banFile").click());
+$("banUpload") && ($("banUpload").onclick = ev => {
+  ev.preventDefault();
+  if ($("banFile")) $("banFile").click();
+});
 $("banFile") && ($("banFile").onchange = () => {
   const f = $("banFile").files && $("banFile").files[0];
   if (!f) return;
@@ -4550,13 +4579,8 @@ $("banFile") && ($("banFile").onchange = () => {
   reader.onload = () => {
     window.bannerShot = reader.result;
     window.bannerArt = "photo";
-    paintBanArt();
     if ($("banArtNote")) $("banArtNote").textContent = "Photo ready. Save the banner to keep it.";
-    if (window.myBanner) {
-      window.myBanner.art = "photo";
-      window.myBanner.has_photo = true;
-      if ($("banPreview")) $("banPreview").innerHTML = bannerHtml(window.myBanner, true, mySlug);
-    }
+    paintBanDraft();
   };
   reader.readAsDataURL(f);
 });
@@ -5310,8 +5334,8 @@ $("goneBtn") && ($("goneBtn").onclick = async () => {
 function tickBanners(){
   if ($("pubBanner") && $("pubPage") && $("pubPage").classList.contains("on"))
     $("pubBanner").innerHTML = bannerHtml((window.pubBanners||[])[0], ownBinder(), viewSlug);
-  if ($("banPreview") && $("youBanner") && !$("youBanner").classList.contains("hidden") && window.myBanner)
-    $("banPreview").innerHTML = bannerHtml(window.myBanner, true, mySlug);
+  if ($("banPreview") && $("youBanner") && !$("youBanner").classList.contains("hidden"))
+    paintBanDraft();
 }
 if (!window._banTick) window._banTick = setInterval(tickBanners, 10000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) tickBanners(); });
