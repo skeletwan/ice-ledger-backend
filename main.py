@@ -3330,9 +3330,14 @@ async def mail_test(payload: dict):
     to = (payload.get("email") or MAIL_TO or "").strip().lower()
     return _mail_test_body(to)
 
+def _clean_reset_code(code: str) -> str:
+    raw = (code or "").strip().lower()
+    bits = re.findall(r"[a-z0-9_-]{6,}", raw)
+    return bits[-1] if bits else raw
+
 def _do_reset(email: str, code: str, pw: str) -> dict:
     email = (email or "").strip().lower()
-    code = (code or "").strip().lower()
+    code = _clean_reset_code(code)
     pw = pw or ""
     if "@" not in email or len(pw) < 6 or len(code) < 4:
         raise HTTPException(400, "email, reset code, and a new password (6+)")

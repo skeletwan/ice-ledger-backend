@@ -1350,7 +1350,7 @@ function niceErr(raw){
     "email and a new password (6+ characters)": "Need the email and a new password of 6+ characters.",
     "app secret does not match": "App secret is wrong. Use the same one as on the scan page / Railway.",
     "no account with that email": "No account with that email yet. Create account first.",
-    "sign in": "Session expired. Sign in again."
+    "code is wrong or expired": "That reset code doesn’t match, or it’s older than 30 minutes. Send a new code.",
   };
   return map[msg] || msg;
 }
@@ -4297,7 +4297,12 @@ $("ripMake") && ($("ripMake").onclick = async () => {
   } catch(e) { if ($("ripMakeNoteOut")) $("ripMakeNoteOut").textContent = e.message; }
 });
 function setPwVisible(on, ids){
-  ids.forEach(id => { if ($(id)) $(id).type = on ? "text" : "password"; });
+  ids.forEach(id => {
+    const el = $(id);
+    if (!el) return;
+    el.disabled = false;
+    el.type = on ? "text" : "password";
+  });
 }
 $("showPw") && ($("showPw").onchange = () => setPwVisible($("showPw").checked, ["password"]));
 $("showNewPw") && ($("showNewPw").onchange = () => setPwVisible($("showNewPw").checked, ["newPw","newPw2"]));
@@ -4318,18 +4323,6 @@ function setAuthMode(mode){
   }
   if ($("authStatus")) { $("authStatus").className = "status"; $("authStatus").textContent = ""; }
   ["email","emailSignup","emailReset"].forEach(id => { if ($(id) && em) $(id).value = em; });
-  const forms = { signin:"formSignin", signup:"formSignup", reset:"formReset" };
-  Object.keys(forms).forEach(k => {
-    const f = $(forms[k]);
-    if (!f) return;
-    f.querySelectorAll("input,button,select,textarea").forEach(el => {
-      if (el.type === "button" || el.id === "resetSend" || el.id === "toSignup" || el.id === "showReset" || el.id === "toSignin" || el.id === "resetBack") return;
-      if (el.id && el.id.indexOf("show")===0) return;
-      if (el.id === "agreeLegal") return;
-      el.disabled = (k !== mode);
-    });
-  });
-  if ($("agreeLegal")) $("agreeLegal").disabled = mode !== "signup";
   if ($("signupBtn") && mode === "signup") lockSignup();
   else if ($("signupBtn")) $("signupBtn").disabled = true;
 }
@@ -4392,29 +4385,40 @@ $("resetSend") && ($("resetSend").onclick = async () => {
     flash("authStatus", "ok", "If that email has an account, a code is on the way.");
   } catch(e) { flash("authStatus", "err", e.message); }
 });
-$("formReset") && ($("formReset").onsubmit = ev => {
+$("formReset") && ($("formReset").onsubmit = async ev => {
+  ev.preventDefault();
   const pw = ($("resetPw") && $("resetPw").value) || "";
   const pw2 = ($("resetPw2") && $("resetPw2").value) || "";
   if (!authEmail() || authEmail().indexOf("@")<0) {
-    ev.preventDefault();
     flash("authStatus", "err", "Enter the account email.");
     return;
   }
   if ((($("resetCode") && $("resetCode").value) || "").trim().length < 4) {
-    ev.preventDefault();
     flash("authStatus", "err", "Paste the code from your email.");
     return;
   }
   if (pw.length < 6) {
-    ev.preventDefault();
     flash("authStatus", "err", "Password needs at least 6 characters.");
     return;
   }
   if (pw !== pw2) {
-    ev.preventDefault();
     flash("authStatus", "err", "Passwords have to match.");
     return;
   }
+  try {
+    await authPost("/reset-confirm", {
+      email: authEmail(),
+      code: $("resetCode").value,
+      password: pw
+    });
+    flash("authStatus", "ok", "Password updated. Sign in with the new one.");
+    if ($("password")) $("password").value = "";
+    setAuthMode("signin");
+    if ($("authStatus")) {
+      $("authStatus").textContent = "Password updated. Sign in with the new one.";
+      $("authStatus").className = "status on ok";
+    }
+  } catch(e) { flash("authStatus", "err", e.message); }
 });
 $("nSave") && ($("nSave").onclick = async () => {
   localStorage.setItem(NOTE, JSON.stringify({
