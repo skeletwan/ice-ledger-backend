@@ -157,10 +157,14 @@
     .stale { font-size:11px; color:var(--warn); margin-top:6px; }
     .chip { display:inline-block; font-size:11px; padding:2px 8px; border-radius:999px; background:#1c3340; color:var(--ice); margin:2px 4px 0 0; }
     .chip.dim { background:#24303a; color:var(--muted); }
-    .hero { background:transparent; border:0; border-radius:0; margin:12px 0 0; text-align:center; }
+    .card-cap { text-align:center; font-size:14px; font-style:italic; color:#d2dee8; margin:8px auto 2px; line-height:1.35; max-width:92%; }
+    .card-cap-box { text-align:center; margin:0 0 8px; }
+    .card-cap-box textarea { text-align:center; margin-top:8px; }
+    .card-cap-box button { width:auto; margin:8px auto 0; padding:8px 14px; font-size:13px; }
     #backPub, #backBind, #backFind, #backPub { margin-bottom:4px; }
     #pubList, #list { margin-top:14px; }
     #pubSet, #setFilter { margin-bottom:8px; }
+    .hero { background:transparent; border:0; border-radius:0; margin:12px 0 0; text-align:center; }
     .hero img { width:auto; max-width:100%; max-height:320px; height:auto; object-fit:contain; display:inline-block; background:transparent; vertical-align:middle; }
     .vals { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:12px 0; }
     .vals.one { grid-template-columns:minmax(140px, 220px); justify-content:center; }
@@ -730,9 +734,9 @@
   <section class="page" id="pubDetail">
     <button class="ghost" id="backPub">Back to binder</button>
     <div class="hero"><img id="pubHero" alt="" /></div>
+    <p class="card-cap" id="pubCap"></p>
     <h2 id="pubTitle" style="margin:12px 0 4px"></h2>
     <p class="muted" id="pubLine"></p>
-    <p class="item-ver" id="pubCap"></p>
     <div class="row2">
       <button class="ghost" id="likeBtn">Like · 0</button>
       <button class="ghost hidden" id="cardLikers" style="margin:0"></button>
@@ -1057,10 +1061,17 @@
       <button id="editCardBtn">Edit</button>
     </div>
     <div class="hero" style="margin-top:12px"><img id="dImg" alt="" /></div>
+    <div class="card-cap-box">
+      <p class="card-cap" id="dCap"></p>
+      <button type="button" class="ghost" id="dCapAdd">Add caption</button>
+      <div id="dCapEdit" class="hidden">
+        <textarea id="dCapIn" maxlength="140" rows="2" placeholder="Caption this photo"></textarea>
+        <button type="button" id="dCapSave">Save caption</button>
+      </div>
+    </div>
     <h2 id="dPlayer" style="margin:14px 0 4px"></h2>
     <div id="dChips"></div>
     <p class="muted" id="dLine"></p>
-    <p class="item-ver" id="dCap"></p>
     <button type="button" class="ghost" id="ownCmtBtn">Comments (0)</button>
     <div id="ownCmtWrap" class="hidden">
       <div id="ownComments"></div>
@@ -3004,6 +3015,9 @@ function openDetail(id){
     const cap = (c.caption || "").trim();
     $("dCap").textContent = cap;
     $("dCap").classList.toggle("hidden", !cap);
+    if ($("dCapIn")) $("dCapIn").value = cap;
+    if ($("dCapAdd")) $("dCapAdd").textContent = cap ? "Edit caption" : "Add caption";
+    if ($("dCapEdit")) $("dCapEdit").classList.add("hidden");
   }
   $("vHold").textContent = money(binderCad(c));
   const holdLbl = $("vHold") && $("vHold").nextElementSibling;
@@ -3386,6 +3400,21 @@ $("pgSvc") && ($("pgSvc").onchange = paintPubGradePick);
 $("pgNum") && ($("pgNum").onchange = paintPubGradePick);
 $("backBind").onclick = () => show("bind");
 $("editCardBtn").onclick = () => { fillEdit(); show("edit"); };
+$("dCapAdd") && ($("dCapAdd").onclick = () => {
+  if ($("dCapEdit")) $("dCapEdit").classList.toggle("hidden");
+  if ($("dCapIn")) $("dCapIn").focus();
+});
+$("dCapSave") && ($("dCapSave").onclick = () => {
+  const cards = load();
+  const i = cards.findIndex(c => c.id===openId);
+  if (i<0) return;
+  const cap = (($("dCapIn")&&$("dCapIn").value)||"").trim().slice(0,140);
+  cards[i].caption = cap;
+  saveAll(cards);
+  pushCard(cards[i]).catch(()=>{});
+  renderBinder();
+  openDetail(openId);
+});
 $("updOne") && ($("updOne").onclick = async () => {
   const cards = load();
   const c = cards.find(x => x.id===openId);
