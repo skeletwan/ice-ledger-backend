@@ -1094,6 +1094,8 @@ def _q_token(s: str) -> str:
     if not s:
         return ""
     low = s.lower()
+    if low == "sizzle reel":
+        return "(Sizzle Reel,Sizzle)"
     if low == "future watch":
         return "(Future Watch,FW,FWRC)"
     if low in ("limited red", "fw limited red"):
@@ -1133,18 +1135,15 @@ def search_queries(card: dict) -> list:
 
     code = _num_q(num)
     letter_code = bool(re.search(r"[A-Za-z]", num) and re.search(r"\d", num))
-    if letter_code and code:
-        parts = [_player_q(player), code]
-    else:
-        parts = [_player_q(player), _q_token(product)]
-        color = re.sub(r"/.*", "", par).strip()
-        run = re.search(r"/\s*(\d{1,4})", par)
-        if color and color.lower() not in (product.lower(), "base", "parallel"):
-            parts.append(_q_token(color))
-        if run:
-            parts.append("/" + run.group(1))
-        if code:
-            parts.append(code)
+    parts = [_player_q(player), _q_token(product)]
+    color = re.sub(r"/.*", "", par).strip()
+    run = re.search(r"/\s*(\d{1,4})", par)
+    if color and color.lower() not in (product.lower(), "base", "parallel"):
+        parts.append(_q_token(color))
+    if run:
+        parts.append("/" + run.group(1))
+    if code:
+        parts.append(code)
     q = " ".join(x for x in parts if x)
     if _card_is_auto({"insert": ins, "parallel": par, "set": st}):
         if "auto" not in q.lower():
