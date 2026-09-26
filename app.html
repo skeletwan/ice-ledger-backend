@@ -440,44 +440,44 @@
         </div>
         <p class="auth-tag">Your exclusive hockey card community.</p>
         <p class="muted" id="authLead">Sign in to your binder.</p>
-        <form id="formSignin" action="/login" method="post">
+        <form id="formSignin" action="#" method="post" onsubmit="return false">
           <label>Email</label>
           <input id="email" type="email" name="username" autocomplete="username" />
           <label>Password</label>
           <input id="password" type="password" name="password" autocomplete="current-password" placeholder="Password" />
-          <label class="show-pw"><input type="checkbox" id="showPw" /> Show password</label>
-          <button type="submit" id="loginBtn">Sign in</button>
+          <button type="button" class="auth-text" id="showPwBtn">Show password</button>
+          <button type="button" id="loginBtn">Sign in</button>
           <div class="auth-links">
             <button type="button" id="toSignup">Create account</button>
             <button type="button" id="showReset">Forgot password</button>
           </div>
         </form>
-        <form id="formSignup" action="/signup" method="post">
+        <form id="formSignup" action="#" method="post" onsubmit="return false">
           <label>Email</label>
           <input id="emailSignup" type="email" name="username" autocomplete="username" />
           <label>Password</label>
           <input id="newPw" type="password" name="new-password" autocomplete="new-password" placeholder="Password" />
           <label>Confirm password</label>
           <input id="newPw2" type="password" name="new-password-confirm" autocomplete="new-password" placeholder="Confirm password" />
-          <label class="show-pw"><input type="checkbox" id="showNewPw" /> Show password</label>
+          <button type="button" class="auth-text" id="showNewPwBtn">Show password</button>
           <label style="margin-top:14px"><input id="agreeLegal" type="checkbox" style="width:auto;margin-right:8px" /> I agree to the <a href="/terms#terms-of-service" target="_blank" rel="noopener">Terms</a>, <a href="/aup#acceptable-use-policy" target="_blank" rel="noopener">Acceptable Use</a>, and <a href="/privacy#privacy-policy" target="_blank" rel="noopener">Privacy Policy</a></label>
-          <button type="submit" id="signupBtn" disabled>Create account</button>
+          <button type="button" id="signupBtn" disabled>Create account</button>
           <div class="auth-links">
             <button type="button" id="toSignin">Already have an account</button>
           </div>
         </form>
-        <form id="formReset" action="/reset-confirm" method="post">
+        <form id="formReset" action="#" method="post" onsubmit="return false">
           <label>Email</label>
-          <input id="emailReset" type="email" name="username" autocomplete="username" />
+          <input id="emailReset" type="email" autocomplete="username" />
           <button type="button" class="auth-text" id="resetSend">Send reset code</button>
           <label>Code</label>
-          <input id="resetCode" type="text" name="reset-code" autocomplete="off" autocapitalize="none" spellcheck="false" inputmode="text" placeholder="Code from your email" />
+          <input id="resetCode" type="text" inputmode="numeric" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="8-digit code from email" />
           <label>New password</label>
-          <input id="resetPw" type="password" name="new-password" autocomplete="new-password" placeholder="Password" />
+          <input id="resetPw" type="password" autocomplete="new-password" placeholder="Password" />
           <label>Confirm password</label>
-          <input id="resetPw2" type="password" name="new-password-confirm" autocomplete="new-password" placeholder="Confirm password" />
-          <label class="show-pw"><input type="checkbox" id="showResetPw" /> Show password</label>
-          <button type="submit" id="resetBtn">Save password</button>
+          <input id="resetPw2" type="password" autocomplete="new-password" placeholder="Confirm password" />
+          <button type="button" class="auth-text" id="resetShowPw">Show password</button>
+          <button type="button" id="resetBtn">Save password</button>
           <div class="auth-links">
             <button type="button" id="resetBack">Back to sign in</button>
           </div>
@@ -4301,12 +4301,24 @@ function setPwVisible(on, ids){
     const el = $(id);
     if (!el) return;
     el.disabled = false;
+    el.readOnly = false;
     el.type = on ? "text" : "password";
   });
 }
-$("showPw") && ($("showPw").onchange = () => setPwVisible($("showPw").checked, ["password"]));
-$("showNewPw") && ($("showNewPw").onchange = () => setPwVisible($("showNewPw").checked, ["newPw","newPw2"]));
-$("showResetPw") && ($("showResetPw").onchange = () => setPwVisible($("showResetPw").checked, ["resetPw","resetPw2"]));
+function wireShowPw(btnId, ids){
+  const btn = $(btnId);
+  if (!btn) return;
+  btn.onclick = ev => {
+    ev.preventDefault();
+    const on = btn.getAttribute("data-on") !== "1";
+    btn.setAttribute("data-on", on ? "1" : "0");
+    btn.textContent = on ? "Hide password" : "Show password";
+    setPwVisible(on, ids);
+  };
+}
+wireShowPw("showPwBtn", ["password"]);
+wireShowPw("showNewPwBtn", ["newPw","newPw2"]);
+wireShowPw("resetShowPw", ["resetPw","resetPw2"]);
 function lockSignup(){
   if ($("signupBtn") && $("agreeLegal")) $("signupBtn").disabled = !$("agreeLegal").checked;
 }
@@ -4337,7 +4349,10 @@ $("agreeLegal") && ($("agreeLegal").onchange = lockSignup);
 $("toSignin") && ($("toSignin").onclick = ev => { ev.preventDefault(); setAuthMode("signin"); });
 $("showReset") && ($("showReset").onclick = ev => { ev.preventDefault(); setAuthMode("reset"); });
 $("resetBack") && ($("resetBack").onclick = ev => { ev.preventDefault(); setAuthMode("signin"); });
-$("signupBtn") && ($("signupBtn").onclick = null);
+$("signupBtn") && ($("signupBtn").onclick = ev => {
+  ev.preventDefault();
+  if ($("formSignup") && $("formSignup").onsubmit) $("formSignup").onsubmit(ev);
+});
 $("formSignup") && ($("formSignup").onsubmit = async ev => {
   ev.preventDefault();
   try {
@@ -4366,9 +4381,8 @@ $("formSignup") && ($("formSignup").onsubmit = async ev => {
     setToken(d.token); showApp(); await pullCloud(); paintTicker(); renderBinder();
   } catch(e) { flash("authStatus", "err", e.message); }
 });
-$("loginBtn") && ($("loginBtn").onclick = null);
-$("formSignin") && ($("formSignin").onsubmit = async ev => {
-  ev.preventDefault();
+$("loginBtn") && ($("loginBtn").onclick = async ev => {
+  if (ev) ev.preventDefault();
   try {
     if (!authEmail() || !$("password").value) {
       flash("authStatus", "err", "Email and password both needed.");
@@ -4379,14 +4393,15 @@ $("formSignin") && ($("formSignin").onsubmit = async ev => {
     setToken(d.token); showApp(); await pullCloud(); paintTicker(); renderBinder();
   } catch(e) { flash("authStatus", "err", e.message); }
 });
+$("formSignin") && ($("formSignin").onsubmit = ev => { ev.preventDefault(); if ($("loginBtn")) $("loginBtn").click(); });
 $("resetSend") && ($("resetSend").onclick = async () => {
   try {
     await authPost("/reset", { email: authEmail() });
     flash("authStatus", "ok", "If that email has an account, a code is on the way.");
   } catch(e) { flash("authStatus", "err", e.message); }
 });
-$("formReset") && ($("formReset").onsubmit = async ev => {
-  ev.preventDefault();
+$("resetBtn") && ($("resetBtn").onclick = async ev => {
+  if (ev) ev.preventDefault();
   const pw = ($("resetPw") && $("resetPw").value) || "";
   const pw2 = ($("resetPw2") && $("resetPw2").value) || "";
   if (!authEmail() || authEmail().indexOf("@")<0) {
@@ -4411,15 +4426,12 @@ $("formReset") && ($("formReset").onsubmit = async ev => {
       code: $("resetCode").value,
       password: pw
     });
-    flash("authStatus", "ok", "Password updated. Sign in with the new one.");
     if ($("password")) $("password").value = "";
     setAuthMode("signin");
-    if ($("authStatus")) {
-      $("authStatus").textContent = "Password updated. Sign in with the new one.";
-      $("authStatus").className = "status on ok";
-    }
+    flash("authStatus", "ok", "Password updated. Sign in with the new one.");
   } catch(e) { flash("authStatus", "err", e.message); }
 });
+$("formReset") && ($("formReset").onsubmit = ev => { ev.preventDefault(); if ($("resetBtn")) $("resetBtn").click(); });
 $("nSave") && ($("nSave").onclick = async () => {
   localStorage.setItem(NOTE, JSON.stringify({
     on: $("nOn").checked,

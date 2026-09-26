@@ -3289,7 +3289,7 @@ async def reset_request(payload: dict):
     con = db()
     row = con.execute("SELECT id FROM users WHERE lower(email)=?", (email,)).fetchone()
     if row:
-        token = secrets.token_urlsafe(8).lower()
+        token = f"{secrets.randbelow(90000000) + 10000000}"
         con.execute("DELETE FROM resets WHERE email=?", (email,))
         con.execute("INSERT INTO resets(email,token,created) VALUES(?,?,?)", (email, token, int(time.time())))
         con.commit()
