@@ -4806,13 +4806,14 @@ async function loadBanners(){
 }
 async function cancelMyBanner(){
   try {
-    const ev = pickPubEvent() || window.myEvent || window.myShow;
+    const ev = pickPubEvent();
     await authPost("/banners/cancel", ev && ev.id ? { id: ev.id } : {});
-    window.pubBanners = (window.pubBanners||[]).filter(b => !ev || b.id !== ev.id);
+    if (ev && window.myEvent && String(window.myEvent.id) === String(ev.id)) window.myEvent.off = 1;
+    if (ev && window.myShow && String(window.myShow.id) === String(ev.id)) window.myShow.off = 1;
+    await refreshPubBanners();
     await loadBanners();
-    if (window.myStock) window.pubCover = window.myStock;
     paintPubBanner();
-    if ($("banNote")) $("banNote").textContent = "That event is off. Next one is up if you have one.";
+    if ($("banNote")) $("banNote").textContent = "Saved";
   } catch(e) {
     if ($("banNote")) $("banNote").textContent = e.message;
   }
@@ -4881,6 +4882,9 @@ $("banAdd") && ($("banAdd").onclick = async () => {
       n++;
     }
     if ($("banNote")) $("banNote").textContent = n ? "Saved" : "Nothing to save";
+    await loadBanners();
+    await refreshPubBanners();
+    paintPubBanner();
   } catch(e) { if ($("banNote")) $("banNote").textContent = e.message; }
 });
 $("banClear") && ($("banClear").onclick = async () => {
@@ -5581,18 +5585,40 @@ $("likeBtn") && ($("likeBtn").onclick = async () => {
   }
 });
 function liveEvent(b){
-  if (!b || b.cover || b.kind === "stock" || +b.off) return false;
-  const st = bannerState(b);
-  return !st.done && !!b.starts && st.live;
+  if (!eventOpen(b)) return false;
+  return bannerState(b).live;
 }
-function openEvent(b){
+function eventOpen(b){
   if (!b || b.cover || b.kind === "stock" || +b.off) return false;
-  const st = bannerState(b);
-  return !st.done && !!b.starts;
+  if (!b.starts) return false;
+  return !bannerState(b).done;
+}
+function knownEvents(){
+  const rows = [];
+  const add = b => {
+    if (!b || !b.starts || b.kind === "stock") return;
+    if (rows.some(x => String(x.id||"") && String(x.id) === String(b.id))) return;
+    rows.push(b);
+  };
+  (window.pubBanners||[]).forEach(add);
+  add(window.myEvent);
+  add(window.myShow);
+  return rows;
 }
 function pickPubEvent(){
-  const rows = (window.pubBanners||[]).filter(openEvent);
+  const rows = knownEvents().filter(eventOpen);
   return rows.find(liveEvent) || rows.slice().sort((a,b)=>Date.parse(a.starts||0)-Date.parse(b.starts||0))[0] || null;
+}
+async function refreshPubBanners(){
+  const slug = viewSlug || mySlug;
+  if (!slug) return;
+  try {
+    const r = await fetch("/u/"+encodeURIComponent(slug), { headers: token() ? { "x-token": token() } : {} });
+    if (!r.ok) return;
+    const d = await r.json();
+    window.pubBanners = d.banners || [];
+    window.pubCover = d.cover || {};
+  } catch(e) {}
 }
 function paintPubBanner(){
   try {
@@ -5600,7 +5626,7 @@ function paintPubBanner(){
     const cover = window.pubCover || window.myStock || {};
     if (!$("pubBanner")) return;
     if (ev) {
-      $("pubBanner").innerHTML = bannerHtml(Object.assign({}, ev, { cover: false }), false, viewSlug);
+      $("pubBanner").innerHTML = bannerHtml(Object.assign({}, ev, { cover: false }), ownBinder(), viewSlug);
     } else {
       $("pubBanner").innerHTML = bannerHtml({
         cover: true,

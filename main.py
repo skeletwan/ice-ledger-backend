@@ -4100,29 +4100,33 @@ async def add_banner(payload: dict, request: Request, x_token: str | None = Head
 
 
 @app.post("/banners/cancel")
-async def cancel_banner(payload: dict | None = None, request: Request = None, x_token: str | None = Header(default=None)):
+async def cancel_banner(payload: dict, request: Request, x_token: str | None = Header(default=None)):
     uid = require_user(request, x_token)
     payload = payload or {}
-    bid = int(payload.get("id") or 0)
+    bid = 0
+    try:
+        bid = int(payload.get("id") or 0)
+    except (TypeError, ValueError):
+        bid = 0
     con = db()
-    rows = con.execute(
-        "SELECT id,kind,title,body,url,color,created,starts,hours,off,art FROM banner_posts WHERE user_id=? AND IFNULL(kind,'')!='stock' ORDER BY id DESC",
-        (uid,),
-    ).fetchall()
-    target = None
-    if bid:
-        target = next((r for r in rows if int(r["id"]) == bid), None)
-    if target is None:
+    if not bid:
+        rows = con.execute(
+            "SELECT id,kind,title,body,url,color,created,starts,hours,off,art FROM banner_posts WHERE user_id=? AND IFNULL(kind,'')!='stock' ORDER BY id DESC",
+            (uid,),
+        ).fetchall()
         open_rows = [banner_row(r, uid) for r in rows]
         live = next((b for b in open_rows if banner_live(b)), None)
         nxt = sorted([b for b in open_rows if not banner_ended(b)], key=lambda b: str(b.get("starts") or ""))
-        target = live or (nxt[0] if nxt else None)
-        bid = int((target or {}).get("id") or 0)
+        pick = live or (nxt[0] if nxt else None)
+        bid = int((pick or {}).get("id") or 0)
     if bid:
-        con.execute("UPDATE banner_posts SET off=1 WHERE id=? AND user_id=?", (bid, uid))
+        con.execute(
+            "UPDATE banner_posts SET off=1 WHERE id=? AND user_id=? AND IFNULL(kind,'')!='stock'",
+            (bid, uid),
+        )
         con.commit()
     con.close()
-    return {"ok": True}
+    return {"ok": True, "id": bid}
 
 @app.get("/u/{slug}/banner/photo")
 def public_banner_photo(slug: str):
