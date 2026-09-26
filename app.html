@@ -4639,10 +4639,11 @@ $("banFromHue") && ($("banFromHue").onclick = () => {
   $("banColor").value = $("pHue").value;
   paintBanDraft();
 });
-$("banColor") && ($("banColor").oninput = () => { stashBanDraft(window.banKindNow); paintBanDraft(); });
+$("banColor") && ($("banColor").oninput = () => { markBanDirty(); stashBanDraft(window.banKindNow); paintBanDraft(); });
 ["banTitle","banBody","banUrl","banKind","banHours","banStart"].forEach(id => {
-  $(id) && ($(id).oninput = () => { stashBanDraft(window.banKindNow); paintBanDraft(); });
+  $(id) && ($(id).oninput = () => { markBanDirty(); stashBanDraft(window.banKindNow); paintBanDraft(); });
   $(id) && ($(id).onchange = () => {
+    markBanDirty();
     if (id==="banKind") {
       const next = banSlot($("banKind").value);
       applyBanDraft(next);
@@ -5106,8 +5107,21 @@ $("banAdjust") && ($("banAdjust").onclick = ev => {
   startBanFit(src);
 });
 $("banFitDone") && ($("banFitDone").onclick = finishBanFit);
+function markBanSaved(ok){
+  const btn = $("banAdd");
+  if (!btn) return;
+  btn.textContent = ok ? "Saved" : "Save all";
+  btn.disabled = false;
+}
+function markBanDirty(){
+  const btn = $("banAdd");
+  if (!btn) return;
+  if (btn.textContent === "Saved" || btn.textContent === "Saving…") btn.textContent = "Save all";
+}
 $("banAdd") && ($("banAdd").onclick = async () => {
+  const btn = $("banAdd");
   try {
+    if (btn) { btn.textContent = "Saving…"; btn.disabled = true; }
     if (window.banFit) finishBanFit();
     stashBanDraft(window.banKindNow);
     const slots = ["stock","live","show"];
@@ -5132,12 +5146,17 @@ $("banAdd") && ($("banAdd").onclick = async () => {
       });
       n++;
     }
-    if ($("banNote")) $("banNote").textContent = n ? "Saved" : "Nothing to save";
+    if ($("banNote")) $("banNote").textContent = "";
+    if (btn) btn.disabled = false;
     await loadBanners();
     await refreshPubBanners();
     paintPubBanner();
     paintBanCancel();
-  } catch(e) { if ($("banNote")) $("banNote").textContent = e.message; }
+    markBanSaved(!!n);
+  } catch(e) {
+    if (btn) { btn.textContent = "Save all"; btn.disabled = false; }
+    if ($("banNote")) $("banNote").textContent = e.message;
+  }
 });
 $("banClear") && ($("banClear").onclick = async () => {
   const r = await fetch("/banners", { headers:{ "x-token": token() } });
