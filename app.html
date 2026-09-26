@@ -476,9 +476,11 @@
         <div class="reset-only" id="resetBox">
           <button type="button" class="auth-text" id="resetSend">Send reset code</button>
           <label>Code</label>
-          <input id="resetCode" autocomplete="one-time-code" placeholder="6-digit code" />
+          <input id="resetCode" type="text" name="reset-code" autocomplete="off" autocapitalize="none" spellcheck="false" inputmode="text" placeholder="Code from your email" />
           <label>New password</label>
           <input id="resetPw" type="password" autocomplete="new-password" placeholder="Password" />
+          <label>Confirm password</label>
+          <input id="resetPw2" type="password" autocomplete="new-password" placeholder="Confirm password" />
           <label class="show-pw"><input type="checkbox" id="showResetPw" /> Show password</label>
           <button type="button" id="resetBtn">Save password</button>
           <div class="auth-links">
@@ -4305,7 +4307,7 @@ function setPwVisible(on, ids){
 }
 $("showPw") && ($("showPw").onchange = () => setPwVisible($("showPw").checked, ["password"]));
 $("showNewPw") && ($("showNewPw").onchange = () => setPwVisible($("showNewPw").checked, ["newPw","newPw2"]));
-$("showResetPw") && ($("showResetPw").onchange = () => setPwVisible($("showResetPw").checked, ["resetPw"]));
+$("showResetPw") && ($("showResetPw").onchange = () => setPwVisible($("showResetPw").checked, ["resetPw","resetPw2"]));
 function lockSignup(){
   if ($("signupBtn") && $("agreeLegal")) $("signupBtn").disabled = !$("agreeLegal").checked;
 }
@@ -4381,10 +4383,20 @@ $("resetSend") && ($("resetSend").onclick = async () => {
 $("resetBtn") && ($("resetBtn").onclick = async ev => {
   if (ev) ev.preventDefault();
   try {
+    const pw = ($("resetPw") && $("resetPw").value) || "";
+    const pw2 = ($("resetPw2") && $("resetPw2").value) || "";
+    if (pw.length < 6) {
+      flash("authStatus", "err", "Password needs at least 6 characters.");
+      return;
+    }
+    if (pw !== pw2) {
+      flash("authStatus", "err", "Passwords have to match.");
+      return;
+    }
     const d = await authPost("/reset-confirm", {
       email: authEmail(),
       code: $("resetCode").value,
-      password: $("resetPw").value
+      password: pw
     });
     flash("authStatus", "ok", "Password updated. Signing you in…");
     clearLocalAccount();
