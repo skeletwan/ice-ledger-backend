@@ -278,7 +278,7 @@
     .board-post.art-photo:before { content:""; position:absolute; inset:0; background:rgba(0,0,0,.42); z-index:1; pointer-events:none; }
     .board-post.art-photo > *:not(.ban-cover):not(.ban-drag):not(.live-chip):not(.ban-end) { position:relative; z-index:2; }
     .board-post.fitting { touch-action:none; }
-    .ban-cover { position:absolute !important; left:50%; top:50%; width:auto; height:auto; max-width:none; max-height:none; z-index:0; pointer-events:none; -webkit-user-drag:none; user-select:none; transform-origin:center center; }
+    .ban-cover { position:absolute !important; left:50%; top:50%; width:160%; max-width:none; height:auto; z-index:0; pointer-events:none; -webkit-user-drag:none; user-select:none; }
     .board-post.fitting .ban-cover { pointer-events:auto; }
     .board-post.fitting .ban-copy { pointer-events:none; }
     .ban-drag { display:none; }
@@ -902,8 +902,8 @@
       <div id="banPreview"></div>
       <button class="ghost" type="button" id="banCancel" style="width:auto;margin:8px 0 12px;padding:8px 12px">Cancel event</button>
       <div id="banFitBar">
-        <p class="muted">Drag to move. Slide left to zoom out until the whole photo shows.</p>
-        <input id="banZoom" type="range" min="40" max="250" value="100" />
+        <p class="muted">Drag the photo to move it. Zoom to size it. Then tap Done.</p>
+        <input id="banZoom" type="range" min="60" max="280" value="100" />
         <div style="display:flex;gap:8px;margin-top:8px">
           <button type="button" id="banFitDone" style="width:auto;padding:8px 14px">Done</button>
           <button class="ghost" type="button" id="banFitCancel" style="width:auto;padding:8px 14px">Cancel</button>
@@ -4798,16 +4798,7 @@ function applyBanFit(){
   const img = $("banCover");
   const f = window.banFit;
   if (!img || !f) return;
-  const box = $("banPreview") && $("banPreview").querySelector(".board-post");
-  let z = Math.max(0.4, Math.min(2.5, f.z || 1));
-  if (box && img.naturalWidth) {
-    const br = box.getBoundingClientRect();
-    const contain = Math.min(br.width / img.naturalWidth, br.height / img.naturalHeight);
-    z = contain * z;
-    img.style.width = img.naturalWidth + "px";
-    img.style.height = img.naturalHeight + "px";
-  }
-  img.style.transform = "translate(calc(-50% + "+(f.x||0)+"px), calc(-50% + "+(f.y||0)+"px)) scale("+z+")";
+  img.style.transform = "translate(calc(-50% + "+(f.x||0)+"px), calc(-50% + "+(f.y||0)+"px)) scale("+(f.z||1)+")";
 }
 function cancelBanFit(){
   window.banFit = null;
@@ -4819,22 +4810,32 @@ function startBanFit(src){
     if ($("banArtNote")) $("banArtNote").textContent = "Add a photo first.";
     return;
   }
+  window.bannerShot = src;
   window.bannerArt = "photo";
   window.banFit = { src, x:0, y:0, z:1, drag:false, sx:0, sy:0 };
   if ($("banZoom")) $("banZoom").value = 100;
   if ($("banFitBar")) $("banFitBar").classList.add("on");
-  if ($("banArtNote")) $("banArtNote").textContent = "Slide left to shrink. Drag to move. Done keeps it, Cancel leaves.";
+  if ($("banArtNote")) $("banArtNote").textContent = "Drag and zoom the photo on the banner.";
   paintBanDraft();
   const img = $("banCover");
   if (!img) return;
-  img.onload = () => applyBanFit();
+  const ready = () => {
+    if (!window.banFit || !img.naturalWidth) return;
+    const box = $("banPreview") && $("banPreview").querySelector(".board-post");
+    if (box && img.naturalWidth / img.naturalHeight > 2) {
+      window.banFit.z = 0.63;
+      if ($("banZoom")) $("banZoom").value = 63;
+    }
+    applyBanFit();
+  };
+  img.onload = ready;
   img.onerror = () => {
     window.banFit = null;
     if ($("banFitBar")) $("banFitBar").classList.remove("on");
     if ($("banArtNote")) $("banArtNote").textContent = "No photo on this layout yet. Use Photo first.";
     paintBanDraft();
   };
-  if (img.complete && img.naturalWidth) applyBanFit();
+  if (img.complete && img.naturalWidth) ready();
 }
 function finishBanFit(){
   const box = $("banPreview") && $("banPreview").querySelector(".board-post");
@@ -5202,7 +5203,7 @@ $("banStart") && ($("banStart").onchange = paintBanStartShow);
 $("banStart") && ($("banStart").oninput = paintBanStartShow);
 $("banZoom") && ($("banZoom").oninput = () => {
   if (!window.banFit) return;
-  window.banFit.z = Math.max(0.4, Math.min(2.5, (+$("banZoom").value || 100) / 100));
+  window.banFit.z = Math.max(0.6, Math.min(2.8, (+$("banZoom").value || 100) / 100));
   applyBanFit();
 });
 $("banAdjust") && ($("banAdjust").onclick = ev => {
