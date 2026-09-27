@@ -995,6 +995,7 @@
     <p class="muted">$8 / month · 80 IDs · book updates at midnight Eastern</p>
     <button class="ghost" id="youRipBtn">Rip Night!</button>
     <p class="muted">$2.99 · 20 IDs</p>
+    <button class="ghost hidden" id="youPortalBtn">Manage billing</button>
     <label>Have a code?</label>
     <div class="row2" style="align-items:end">
       <input id="youRipCode" placeholder="RIP-XXXXXX" autocomplete="off" />
@@ -3945,6 +3946,7 @@ async function refreshUsage(){
   }
   if ($("resetLine")) $("resetLine").textContent = resetLabel(u.reset_at, u.month);
   if ($("youQuota")) $("youQuota").textContent = line;
+  if ($("youPortalBtn")) $("youPortalBtn").classList.toggle("hidden", !u.stripe);
 }
 function showPaywall(msg){
   if ($("quotaBox")) {
@@ -4166,6 +4168,16 @@ $("payBtn") && ($("payBtn").onclick = startPlusCheckout);
 $("youPayBtn") && ($("youPayBtn").onclick = startPlusCheckout);
 $("ripBtn") && ($("ripBtn").onclick = startRipCheckout);
 $("youRipBtn") && ($("youRipBtn").onclick = startRipCheckout);
+$("youPortalBtn") && ($("youPortalBtn").onclick = async () => {
+  try {
+    const r = await fetch("/billing/portal", { headers:{ "x-token": token() } });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || "billing portal failed");
+    if (d.url) location.href = d.url;
+  } catch(e) {
+    if ($("youRipNote")) $("youRipNote").textContent = e.message;
+  }
+});
 $("ripRedeem") && ($("ripRedeem").onclick = async () => {
   try {
     const d = await authPost("/rip/redeem", { code: ($("ripCode")&&$("ripCode").value) || "" });
@@ -6159,6 +6171,15 @@ if (guestB) {
   pullCloud().then(() => { paintTicker(); renderBinder(); loadMe(); });
   const boot = (location.hash || "").replace(/^#\/?/, "");
   if (boot && boot !== "scan") show(boot, "pop");
+  const paid = new URLSearchParams(location.search).get("paid");
+  if (paid && paid !== "cancel") {
+    show("set");
+    youShow("youBill");
+    if ($("youRipNote")) $("youRipNote").textContent = paid==="rip" ? "Rip Night paid. Extra IDs should show in a few seconds." : "Clappers+ is on. IDs refresh after Stripe confirms.";
+    Promise.resolve(refreshUsage()).catch(()=>{});
+    setTimeout(() => { Promise.resolve(refreshUsage()).catch(()=>{}); }, 2500);
+    history.replaceState({}, "", location.pathname);
+  }
 }
 paintTicker();
 renderBinder();

@@ -40,6 +40,10 @@ SMTP_PORT = int(_env("SMTP_PORT", "587") or "587")
 SMTP_USER = _env("SMTP_USER")
 SMTP_PASS = _env("SMTP_PASS")
 APP_URL = _env("APP_URL")
+STRIPE_SECRET_KEY = _env("STRIPE_SECRET_KEY")
+STRIPE_WEBHOOK_SECRET = _env("STRIPE_WEBHOOK_SECRET")
+STRIPE_PRICE_PLUS = _env("STRIPE_PRICE_PLUS")
+STRIPE_PRICE_RIP = _env("STRIPE_PRICE_RIP")
 CARD_API_KEY = _env("CARD_API_KEY")
 CARD_API_QUOTA = False
 EBAY_APP_ID = _env("EBAY_APP_ID")
@@ -98,6 +102,288 @@ def send_mail(subject: str, body: str, to: str | None = None) -> bool:
     if not MAIL_LAST_ERROR:
         MAIL_LAST_ERROR = "no RESEND_API_KEY and no SMTP settings"
     return False
+
+
+_stripe_prices = {"plus": "", "rip": ""}
+
+def stripe_ready() -> bool:
+    return bool(STRIPE_SECRET_KEY)
+
+def public_base(request: Request) -> str:
+    if APP_URL:
+        return APP_URL.rstrip("/")
+    proto = request.headers.get("x-forwarded-proto") or request.url.scheme or "https"
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc
+    return f"{proto}://{host}".rstrip("/")
+
+def stripe_api(method: str, path: str, data=None):
+    r = httpx.request(
+        method,
+        "https://api.stripe.com/v1" + path,
+        auth=(STRIPE_SECRET_KEY, ""),
+        data=data,
+        timeout=30,
+    )
+    try:
+        body = r.json()
+    except Exception:
+        body = {"error": {"message": (r.text or "")[:240]}}
+    if r.status_code >= 400:
+        msg = ""
+        if isinstance(body, dict):
+            err = body.get("error") or {}
+            msg = err.get("message") if isinstance(err, dict) else str(err)
+        print("STRIPE_API_FAIL", method, path, r.status_code, msg)
+        raise HTTPException(502, msg or "Stripe request failed")
+    return body
+
+def stripe_sig_ok(payload: bytes, header: str) -> bool:
+    if not STRIPE_WEBHOOK_SECRET or not header:
+        return False
+    parts = {}
+    for item in header.split(","):
+        if "=" not in item:
+            continue
+        k, v = item.split("=", 1)
+        parts.setdefault(k.strip(), []).append(v.strip())
+    t = (parts.get("t") or [""])[0]
+    if not t.isdigit():
+        return False
+    signed = f"{t}.".encode("utf-8") + payload
+    want = hmac.new(STRIPE_WEBHOOK_SECRET.encode("utf-8"), signed, hashlib.sha256).hexdigest()
+    good = False
+    for got in parts.get("v1") or []:
+        if hmac.compare_digest(want, got):
+            good = True
+    if not good:
+        return False
+    return abs(time.time() - int(t)) <= 300
+
+def stripe_ensure_prices():
+    if _stripe_prices["plus"] and _stripe_prices["rip"]:
+        return _stripe_prices
+    if STRIPE_PRICE_PLUS:
+        _stripe_prices["plus"] = STRIPE_PRICE_PLUS
+    if STRIPE_PRICE_RIP:
+        _stripe_prices["rip"] = STRIPE_PRICE_RIP
+    if _stripe_prices["plus"] and _stripe_prices["rip"]:
+        return _stripe_prices
+    prods = stripe_api("GET", "/products?limit=100&active=true")
+    found = {}
+    for prod in (prods.get("data") or []):
+        meta = prod.get("metadata") or {}
+        if meta.get("app") == "clappers" and meta.get("item") in ("plus", "rip"):
+            found[meta["item"]] = prod.get("id")
+    if "plus" not in found and not _stripe_prices["plus"]:
+        prod = stripe_api("POST", "/products", {
+            "name": "Clappers+",
+            "description": "80 IDs every 30 days. Book updates at midnight Eastern.",
+            "metadata[app]": "clappers",
+            "metadata[item]": "plus",
+        })
+        found["plus"] = prod["id"]
+    if "rip" not in found and not _stripe_prices["rip"]:
+        prod = stripe_api("POST", "/products", {
+            "name": "Rip Night",
+            "description": "20 extra IDs for 30 days.",
+            "metadata[app]": "clappers",
+            "metadata[item]": "rip",
+        })
+        found["rip"] = prod["id"]
+    prices = stripe_api("GET", "/prices?limit=100&active=true")
+    for price in (prices.get("data") or []):
+        prod = price.get("product")
+        rec = price.get("recurring") or {}
+        if not _stripe_prices["plus"] and prod == found.get("plus") and rec.get("interval") == "month" and price.get("unit_amount") == 800:
+            _stripe_prices["plus"] = price["id"]
+        if not _stripe_prices["rip"] and prod == found.get("rip") and not rec and price.get("unit_amount") == 299:
+            _stripe_prices["rip"] = price["id"]
+    if not _stripe_prices["plus"]:
+        pr = stripe_api("POST", "/prices", {
+            "product": found["plus"],
+            "unit_amount": "800",
+            "currency": "cad",
+            "recurring[interval]": "month",
+            "metadata[app]": "clappers",
+            "metadata[item]": "plus",
+        })
+        _stripe_prices["plus"] = pr["id"]
+    if not _stripe_prices["rip"]:
+        pr = stripe_api("POST", "/prices", {
+            "product": found["rip"],
+            "unit_amount": "299",
+            "currency": "cad",
+            "metadata[app]": "clappers",
+            "metadata[item]": "rip",
+        })
+        _stripe_prices["rip"] = pr["id"]
+    return _stripe_prices
+
+def stripe_customer_for(uid: int) -> str:
+    con = db()
+    row = con.execute("SELECT email, stripe_customer FROM users WHERE id=?", (uid,)).fetchone()
+    con.close()
+    if not row:
+        raise HTTPException(404, "no user")
+    cid = (row["stripe_customer"] or "").strip()
+    if cid:
+        return cid
+    cust = stripe_api("POST", "/customers", {
+        "email": row["email"],
+        "metadata[uid]": str(uid),
+        "metadata[app]": "clappers",
+    })
+    cid = cust.get("id") or ""
+    if cid:
+        con = db()
+        con.execute("UPDATE users SET stripe_customer=? WHERE id=?", (cid, uid))
+        con.commit()
+        con.close()
+    return cid
+
+def stripe_checkout_url(request: Request, uid: int, item: str) -> str:
+    prices = stripe_ensure_prices()
+    price = prices["rip"] if item == "rip" else prices["plus"]
+    base = public_base(request)
+    customer = stripe_customer_for(uid)
+    data = {
+        "mode": "payment" if item == "rip" else "subscription",
+        "success_url": base + "/?paid=" + item,
+        "cancel_url": base + "/?paid=cancel",
+        "client_reference_id": str(uid),
+        "customer": customer,
+        "allow_promotion_codes": "true",
+        "line_items[0][price]": price,
+        "line_items[0][quantity]": "1",
+        "metadata[uid]": str(uid),
+        "metadata[item]": item,
+        "metadata[app]": "clappers",
+    }
+    if item == "plus":
+        data["subscription_data[metadata][uid]"] = str(uid)
+        data["subscription_data[metadata][item]"] = "plus"
+    sess = stripe_api("POST", "/checkout/sessions", data)
+    return sess.get("url") or ""
+
+def stripe_portal_url(request: Request, uid: int) -> str:
+    con = db()
+    row = con.execute("SELECT stripe_customer FROM users WHERE id=?", (uid,)).fetchone()
+    con.close()
+    cid = ((row["stripe_customer"] if row else "") or "").strip()
+    if not cid:
+        return ""
+    sess = stripe_api("POST", "/billing_portal/sessions", {
+        "customer": cid,
+        "return_url": public_base(request) + "/",
+    })
+    return sess.get("url") or ""
+
+def grant_plus(uid: int, sub_id: str = ""):
+    until = now_utc() + timedelta(days=30)
+    mark = until.strftime("%Y-%m-%dT%H:%M:%SZ")
+    start = now_utc().strftime("%Y-%m-%dT%H:%M:%SZ")
+    con = db()
+    row = con.execute("SELECT plan FROM users WHERE id=?", (uid,)).fetchone()
+    plan = ((row["plan"] if row else "") or "").lower()
+    if plan == "creator":
+        if sub_id:
+            con.execute("UPDATE users SET stripe_sub=? WHERE id=?", (sub_id, uid))
+            con.commit()
+        con.close()
+        return
+    if sub_id:
+        con.execute("UPDATE users SET plan='plus', plus_until=?, cycle_start=?, stripe_sub=? WHERE id=?", (mark, start, sub_id, uid))
+    else:
+        con.execute("UPDATE users SET plan='plus', plus_until=?, cycle_start=? WHERE id=?", (mark, start, uid))
+    con.commit()
+    con.close()
+
+def uid_from_stripe(obj: dict) -> int:
+    if not isinstance(obj, dict):
+        return 0
+    meta = obj.get("metadata") or {}
+    raw = meta.get("uid") or obj.get("client_reference_id") or ""
+    if str(raw).isdigit():
+        return int(raw)
+    cust = obj.get("customer")
+    if isinstance(cust, dict):
+        cust = cust.get("id")
+    if cust:
+        con = db()
+        row = con.execute("SELECT id FROM users WHERE stripe_customer=?", (cust,)).fetchone()
+        con.close()
+        if row:
+            return int(row["id"])
+    return 0
+
+def handle_stripe_event(event: dict):
+    kind = event.get("type") or ""
+    obj = (event.get("data") or {}).get("object") or {}
+    if kind == "checkout.session.completed":
+        uid = uid_from_stripe(obj)
+        item = ((obj.get("metadata") or {}).get("item") or "").lower()
+        if obj.get("mode") == "subscription":
+            item = item or "plus"
+        if obj.get("mode") == "payment":
+            item = item or "rip"
+        if not uid:
+            print("STRIPE_NO_UID", kind)
+            return
+        cust = obj.get("customer")
+        if isinstance(cust, dict):
+            cust = cust.get("id")
+        if cust:
+            con = db()
+            con.execute("UPDATE users SET stripe_customer=? WHERE id=?", (cust, uid))
+            con.commit()
+            con.close()
+        if item == "rip":
+            add_credits(uid, RIP_SCANS)
+            send_mail("Clappers Rip Night paid", f"user {uid} +{RIP_SCANS} IDs")
+        else:
+            grant_plus(uid, obj.get("subscription") if isinstance(obj.get("subscription"), str) else "")
+            send_mail("Clappers+ paid", f"user {uid} plus")
+        return
+    if kind == "invoice.paid":
+        parent = ((obj.get("parent") or {}) if isinstance(obj.get("parent"), dict) else {})
+        sub = ""
+        if obj.get("subscription"):
+            sub = obj.get("subscription") if isinstance(obj.get("subscription"), str) else ""
+        uid = uid_from_stripe(obj)
+        if not uid:
+            cust = obj.get("customer")
+            if isinstance(cust, dict):
+                cust = cust.get("id")
+            if cust:
+                con = db()
+                row = con.execute("SELECT id FROM users WHERE stripe_customer=?", (cust,)).fetchone()
+                con.close()
+                uid = int(row["id"]) if row else 0
+        if uid:
+            grant_plus(uid, sub)
+        return
+    if kind in ("customer.subscription.deleted", "customer.subscription.canceled"):
+        uid = uid_from_stripe(obj)
+        if not uid:
+            cust = obj.get("customer")
+            if isinstance(cust, dict):
+                cust = cust.get("id")
+            if cust:
+                con = db()
+                row = con.execute("SELECT id, plan FROM users WHERE stripe_customer=?", (cust,)).fetchone()
+                con.close()
+                if row:
+                    uid = int(row["id"])
+        if not uid:
+            return
+        con = db()
+        row = con.execute("SELECT plan FROM users WHERE id=?", (uid,)).fetchone()
+        plan = ((row["plan"] if row else "") or "").lower()
+        # Keep plus until plus_until. plan_of() flips them to free when that date hits.
+        con.execute("UPDATE users SET stripe_sub=NULL WHERE id=?", (uid,))
+        con.commit()
+        con.close()
+
 
 app = FastAPI(title="Clappers PC Identify")
 app.add_middleware(
@@ -458,6 +744,8 @@ def health():
         "card_api": bool(CARD_API_KEY),
         "ebay_set": bool(EBAY_APP_ID and EBAY_CERT_ID),
         "ebay_market": EBAY_MARKET,
+        "stripe_set": bool(STRIPE_SECRET_KEY),
+        "stripe_hook": bool(STRIPE_WEBHOOK_SECRET),
     }
 
 async def _jpeg_part(up: UploadFile, label: str):
@@ -2369,7 +2657,7 @@ def init_db():
         con.execute("ALTER TABLE users ADD COLUMN slug TEXT")
     except sqlite3.OperationalError:
         pass
-    for col, spec in (("display", "TEXT"), ("hue", "TEXT"), ("bio", "TEXT"), ("avatar", "TEXT"), ("cropx", "TEXT"), ("cropy", "TEXT"), ("cropz", "TEXT"), ("avatar_hidden", "INTEGER NOT NULL DEFAULT 0"), ("credits", "INTEGER NOT NULL DEFAULT 0"), ("credit_month", "TEXT"), ("credit_until", "TEXT"), ("plus_until", "TEXT"), ("cycle_start", "TEXT"), ("suspended", "INTEGER NOT NULL DEFAULT 0"), ("socials", "TEXT"), ("last_book_auto", "TEXT"), ("book_hist", "TEXT"), ("creator", "INTEGER NOT NULL DEFAULT 0"), ("creator_asked", "TEXT")):
+    for col, spec in (("display", "TEXT"), ("hue", "TEXT"), ("bio", "TEXT"), ("avatar", "TEXT"), ("cropx", "TEXT"), ("cropy", "TEXT"), ("cropz", "TEXT"), ("avatar_hidden", "INTEGER NOT NULL DEFAULT 0"), ("credits", "INTEGER NOT NULL DEFAULT 0"), ("credit_month", "TEXT"), ("credit_until", "TEXT"), ("plus_until", "TEXT"), ("cycle_start", "TEXT"), ("suspended", "INTEGER NOT NULL DEFAULT 0"), ("socials", "TEXT"), ("last_book_auto", "TEXT"), ("book_hist", "TEXT"), ("creator", "INTEGER NOT NULL DEFAULT 0"), ("creator_asked", "TEXT"), ("stripe_customer", "TEXT"), ("stripe_sub", "TEXT")):
         try:
             con.execute(f"ALTER TABLE users ADD COLUMN {col} {spec}")
         except sqlite3.OperationalError:
@@ -2495,6 +2783,13 @@ def init_db():
         con.execute("ALTER TABLE reports ADD COLUMN reviewed INTEGER NOT NULL DEFAULT 0")
     except sqlite3.OperationalError:
         pass
+    con.execute("""
+    CREATE TABLE IF NOT EXISTS stripe_events (
+      id TEXT PRIMARY KEY,
+      kind TEXT,
+      created TEXT NOT NULL
+    )
+    """)
     con.execute("""
     CREATE TABLE IF NOT EXISTS resets (
       email TEXT NOT NULL,
@@ -3055,6 +3350,7 @@ def usage_of(uid: int):
         "reset_at": reset_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "rip_scans": RIP_SCANS, "rip_price": RIP_PRICE,
         "operator": is_operator(uid),
+        "stripe": bool(STRIPE_SECRET_KEY),
     }
     if is_operator(uid):
         out["book_cap"] = 9999
@@ -3209,19 +3505,77 @@ async def book_job(payload: dict, request: Request, x_token: str | None = Header
 
 @app.get("/checkout")
 async def checkout(request: Request, x_token: str | None = Header(default=None)):
-    require_user(request, x_token)
-    item = (request.query_params.get("item") if request else "") or ""
+    uid = require_user(request, x_token)
+    item = ((request.query_params.get("item") if request else "") or "plus").lower()
+    if item not in ("plus", "rip"):
+        item = "plus"
+    if STRIPE_SECRET_KEY:
+        try:
+            url = stripe_checkout_url(request, uid, item)
+            if url:
+                price = (RIP_PRICE + " · " + str(RIP_SCANS) + " IDs") if item == "rip" else "8 CAD / month · 80 IDs"
+                return {"url": url, "price": price, "scans": RIP_SCANS if item == "rip" else PLUS_SCANS, "name": "Rip Night" if item == "rip" else "Clappers+"}
+        except HTTPException:
+            raise
+        except Exception as e:
+            print("STRIPE_CHECKOUT_FAIL", e)
+            raise HTTPException(502, "Stripe checkout failed")
     if item == "rip":
         return {
             "url": STRIPE_RIP_LINK or None,
             "price": RIP_PRICE,
             "scans": RIP_SCANS,
             "name": "Rip Night",
-            "note": None if STRIPE_RIP_LINK else "Set STRIPE_RIP_LINK on Railway, or redeem a code.",
+            "note": None if STRIPE_RIP_LINK else "Stripe key missing. Redeem a code for now.",
         }
     if STRIPE_PAY_LINK:
         return {"url": STRIPE_PAY_LINK, "price": "8 CAD / month · 80 IDs"}
-    return {"url": None, "price": "8 CAD / month · 80 IDs", "note": "Set STRIPE_PAY_LINK on Railway when the Stripe Payment Link is live."}
+    return {"url": None, "price": "8 CAD / month · 80 IDs", "note": "Stripe is not live on this server yet."}
+
+@app.get("/billing/portal")
+async def billing_portal(request: Request, x_token: str | None = Header(default=None)):
+    uid = require_user(request, x_token)
+    if not STRIPE_SECRET_KEY:
+        raise HTTPException(400, "billing is not live")
+    url = stripe_portal_url(request, uid)
+    if not url:
+        raise HTTPException(400, "no card on file yet — buy Clappers+ first")
+    return {"url": url}
+
+@app.post("/stripe/webhook")
+async def stripe_webhook(request: Request):
+    raw = await request.body()
+    sig = request.headers.get("stripe-signature") or ""
+    if not STRIPE_WEBHOOK_SECRET:
+        raise HTTPException(503, "webhook secret not set")
+    if not stripe_sig_ok(raw, sig):
+        raise HTTPException(400, "bad stripe signature")
+    try:
+        event = json.loads(raw.decode("utf-8"))
+    except Exception:
+        raise HTTPException(400, "bad json")
+    eid = str(event.get("id") or "")
+    kind = str(event.get("type") or "")
+    if not eid:
+        raise HTTPException(400, "no event id")
+    con = db()
+    try:
+        con.execute("INSERT INTO stripe_events(id,kind,created) VALUES(?,?,?)", (eid, kind, now_utc().strftime("%Y-%m-%dT%H:%M:%SZ")))
+        con.commit()
+    except sqlite3.IntegrityError:
+        con.close()
+        return {"ok": True, "dup": True}
+    con.close()
+    try:
+        handle_stripe_event(event)
+    except Exception as e:
+        print("STRIPE_HOOK_FAIL", kind, e)
+        con = db()
+        con.execute("DELETE FROM stripe_events WHERE id=?", (eid,))
+        con.commit()
+        con.close()
+        raise HTTPException(500, "hook failed")
+    return {"ok": True}
 
 @app.post("/plus")
 async def plus(payload: dict, request: Request, x_token: str | None = Header(default=None)):
