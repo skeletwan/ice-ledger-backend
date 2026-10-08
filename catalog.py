@@ -89,6 +89,84 @@ SETS = [
     ("2025-26", "Upper Deck", "Allure", "Color Flow", ["Red-Orange", "Orange-Yellow", "Yellow-Green", "Green-Blue", "Blue-Purple"]),
     ("2024-25", "Upper Deck", "Allure", "Rookie", ["Base", "Black Rainbow", "Red Rainbow", "Orange Slice", "Purple Diamond /10"]),
     ("2025-26", "Upper Deck", "Allure", "Rookie", ["Base", "Black Rainbow", "Red Rainbow", "Orange Slice", "Purple Diamond /10"]),
+    # 2026-27 Series 1, hobby release 2026-10-07. Series 2 is not out.
+    ("2026-27", "Upper Deck", "Series 1", "Young Guns", ["Base", "Outburst Silver", "Clear Cut", "Deluxe /250", "UD Exclusives /100", "Outburst Red /25", "High Gloss /10", "Outburst Gold 1/1", "Green Foil"]),
+    ("2026-27", "Upper Deck", "Series 1", "", ["Base", "Outburst Silver", "Clear Cut", "Deluxe /250", "UD Exclusives /100", "Outburst Red /25", "High Gloss /10", "Outburst Gold 1/1", "Snow Spray Auto", "Green Foil"]),
+    ("2026-27", "Upper Deck", "Series 1", "UD Canvas", ["Base", "Black and White", "Printing Plate 1/1"]),
+    ("2026-27", "Upper Deck", "Series 1", "UD Canvas Young Guns", ["Base", "Black and White", "Printing Plate 1/1"]),
+    ("2026-27", "Upper Deck", "Series 1", "Oversized Young Guns", ["Base"]),
+    ("2026-27", "Upper Deck", "Series 1", "Stencils", ["Base", "Red /399", "Yellow /199", "Green /99", "Blue /50", "Purple /25"]),
+    ("2026-27", "Upper Deck", "Series 1", "Dazzlers", ["Blue", "Pink", "Gold"]),
+    ("2026-27", "Upper Deck", "Series 1", "Debut Dates", ["Base", "Speckle"]),
+    ("2026-27", "Upper Deck", "Series 1", "Here We Go!", ["Base", "Speckle"]),
+    ("2026-27", "Upper Deck", "Series 1", "Fan Faves", ["Base", "Speckle"]),
+    ("2026-27", "Upper Deck", "Series 1", "Repping", ["Base", "Speckle"]),
+    ("2026-27", "Upper Deck", "Series 1", "Vibe Check", ["Base", "Speckle"]),
+    ("2026-27", "Upper Deck", "Series 1", "Sizzle Reel", ["Base", "Speckle"]),
+    ("2026-27", "Upper Deck", "Series 1", "UD Portraits", ["Base", "Speckle"]),
+    ("2026-27", "Upper Deck", "Series 1", "Population Count", ["1000", "500", "100", "50", "25", "10", "1"]),
+    ("2026-27", "Upper Deck", "Series 1", "Holotypes", ["Base"]),
+    ("2026-27", "Upper Deck", "Series 1", "Bootleg", ["Base"]),
+    ("2026-27", "Upper Deck", "Series 1", "Electric Soul", ["Base"]),
+    ("2026-27", "Upper Deck", "Series 1", "Youthful Spirits", ["Base"]),
+    ("2026-27", "Upper Deck", "Series 1", "Fanimation", ["Base"]),
+    ("2026-27", "Upper Deck", "Series 1", "Outburst Retro Young Guns", ["Base", "Red /25", "Gold 1/1"]),
+    ("2026-27", "Upper Deck", "Series 1", "Young Guns Checklist", ["Base"]),
+]
+
+
+# 2026-27 Series 1 Young Guns. #250 is the checklist card, not a rookie.
+SERIES_1_2026_YG = [
+    ("201", "Anton Frondell", "Chicago Blackhawks"),
+    ("202", "Cole O'Hara", "Nashville Predators"),
+    ("203", "Jared Wright", "Los Angeles Kings"),
+    ("204", "Topias Vilen", "New Jersey Devils"),
+    ("205", "Tyson Hinds", "Anaheim Ducks"),
+    ("206", "James Hagens", "Boston Bruins"),
+    ("207", "Alex Bump", "Philadelphia Flyers"),
+    ("208", "William Villeneuve", "Toronto Maple Leafs"),
+    ("209", "Porter Martone", "Philadelphia Flyers"),
+    ("210", "Konsta Helenius", "Buffalo Sabres"),
+    ("211", "Mikulas Hovorka", "Florida Panthers"),
+    ("212", "Abram Wiebe", "Calgary Flames"),
+    ("213", "Felix Unger Sorum", "Carolina Hurricanes"),
+    ("214", "Danil Zhilkin", "Winnipeg Jets"),
+    ("215", "Ludvig Jansson", "Florida Panthers"),
+    ("216", "Kai Uchacz", "Vegas Golden Knights"),
+    ("217", "William Stromgren", "Calgary Flames"),
+    ("218", "Ilya Protas", "Washington Capitals"),
+    ("219", "Luke Haymes", "Toronto Maple Leafs"),
+    ("220", "Victor Eklund", "New York Islanders"),
+    ("221", "Oscar Fisker Molgaard", "Seattle Kraken"),
+    ("222", "David Reinbacher", "Montreal Canadiens"),
+    ("223", "Cole Hutson", "Washington Capitals"),
+    ("224", "Sandis Vilmanis", "Florida Panthers"),
+    ("225", "Nathan Gaucher", "Anaheim Ducks"),
+    ("226", "Viking Gustafsson Nyberg", "Minnesota Wild"),
+    ("227", "Kenny Connors", "Los Angeles Kings"),
+    ("228", "Arsenii Sergeev", "Calgary Flames"),
+    ("229", "Theo Lindstein", "St. Louis Blues"),
+    ("230", "Simon Lundmark", "Tampa Bay Lightning"),
+    ("231", "Avery Hayes", "Pittsburgh Penguins"),
+    ("232", "Jake Livanavage", "Pittsburgh Penguins"),
+    ("233", "Marek Alscher", "Florida Panthers"),
+    ("234", "Josh Samanski", "Edmonton Oilers"),
+    ("235", "Adam Sykora", "New York Rangers"),
+    ("236", "Hunter McDonald", "Philadelphia Flyers"),
+    ("237", "David Spacek", "Minnesota Wild"),
+    ("238", "Jorian Donovan", "Ottawa Senators"),
+    ("239", "Drew Fortescue", "New York Rangers"),
+    ("240", "Oliver Bonk", "Philadelphia Flyers"),
+    ("241", "Mike Benning", "Florida Panthers"),
+    ("242", "Brayden Yager", "Winnipeg Jets"),
+    ("243", "Sacha Boisvert", "Chicago Blackhawks"),
+    ("244", "Lenni Hameenaho", "New Jersey Devils"),
+    ("245", "Tyson Gross", "Calgary Flames"),
+    ("246", "Ryan Tverberg", "Toronto Maple Leafs"),
+    ("247", "Angus Booth", "Los Angeles Kings"),
+    ("248", "Ronan Seeley", "Carolina Hurricanes"),
+    ("249", "Carter Yakemchuk", "Ottawa Senators"),
+    ("250", "Anton Frondell / Porter Martone", "Chicago Blackhawks / Philadelphia Flyers"),
 ]
 
 
@@ -397,6 +475,18 @@ def ensure_catalog(con: sqlite3.Connection):
                 "INSERT INTO catalog(year,brand,set_name,insert_name,parallel,player,number,team,print_run,source,created) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
                 row,
             )
+    for number, player, team in SERIES_1_2026_YG:
+        insert = "Young Guns Checklist" if number == "250" else "Young Guns"
+        hit = con.execute(
+            "SELECT id FROM catalog WHERE year='2026-27' AND set_name='Series 1' AND number=? AND player=? AND source='seed' LIMIT 1",
+            (number, player),
+        ).fetchone()
+        if hit:
+            continue
+        con.execute(
+            "INSERT INTO catalog(year,brand,set_name,insert_name,parallel,player,number,team,print_run,source,created) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+            ("2026-27", "Upper Deck", "Series 1", insert, "Base", player, number, team, "", "seed", now),
+        )
 
 
 def _fp(player, year, set_name, number, par, ins):
